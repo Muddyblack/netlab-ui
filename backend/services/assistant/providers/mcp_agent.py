@@ -162,7 +162,7 @@ class McpAgentProvider(abc.ABC):
 
             try:
                 result = await self._call_model(self._history, self._tools, self._system_prompt)
-            except Exception as exc:  # noqa: BLE001 — any vendor SDK failure
+            except Exception as exc:
                 logger.exception("%s call failed", self.provider_id)
                 yield AgentEvent("error", {"message": describe_vendor_error(exc)})
                 yield AgentEvent("turn_done", {"stopReason": "error"})

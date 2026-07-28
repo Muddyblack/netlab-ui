@@ -223,6 +223,23 @@ def test_import_rejects_non_bundle(tmp_path):
         units.import_unit(tmp_path, {"kind": "something-else", "unit": {"name": "x"}})
 
 
+@pytest.mark.parametrize("name", ["../escape", r"..\escape", ".", "..", "nested/name"])
+def test_unit_path_rejects_traversal(tmp_path, name):
+    with pytest.raises(ValueError, match="invalid unit"):
+        units._unit_path(tmp_path, name)
+
+
+def test_unit_path_rejects_symlink_escape(tmp_path):
+    outside = tmp_path / "outside.yml"
+    outside.write_text("name: outside\n")
+    units_dir = tmp_path / "units"
+    units_dir.mkdir()
+    (units_dir / "escape.yml").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="invalid unit path"):
+        units._unit_path(units_dir, "escape")
+
+
 def test_unit_version_bumps_on_each_save(tmp_path):
     units_dir = tmp_path / "units"
     _save(units_dir, "rack", nodes=[{"name": "sw", "device": "ovs"}])

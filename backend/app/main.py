@@ -30,6 +30,8 @@ from app.shell.ws import router as shell_router
 from services import assistant, events
 from services.netlab import runner
 
+logger = logging.getLogger(__name__)
+
 
 def _app_version() -> str:
     """Return the app release identifier.
@@ -126,7 +128,8 @@ app.add_middleware(
 # and the browser reports an opaque CORS failure instead of the actual cause.
 @app.exception_handler(OSError)
 async def _os_error_handler(_request: Request, exc: OSError) -> JSONResponse:
-    return JSONResponse(status_code=500, content={"detail": f"{type(exc).__name__}: {exc}"})
+    logger.exception("Unhandled filesystem error", exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "A filesystem operation failed."})
 
 
 app.include_router(contract_router)

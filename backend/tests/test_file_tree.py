@@ -79,3 +79,12 @@ def test_file_endpoints_reject_outside_workspace(client, workspace):
         json={"path": "/etc/evil", "content": "x"},
     )
     assert res.status_code == 403
+
+
+def test_clone_rejects_parent_directory_destination(client, workspace, monkeypatch):
+    monkeypatch.setattr("app.lab.files.shutil.which", lambda _name: "/usr/bin/git")
+
+    res = client.post("/api/lab/clone", json={"repoUrl": "https://example.test/.."})
+
+    assert res.status_code == 400
+    assert workspace.is_dir()

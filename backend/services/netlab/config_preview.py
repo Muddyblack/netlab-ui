@@ -9,13 +9,21 @@ MAX_FILE_BYTES = 512 * 1024
 
 def read_node_files(topology_path: str | Path, node: str) -> list[dict[str, str]]:
     """Return textual files below ``node_files/<node>`` in stable path order."""
-    root = Path(topology_path).parent / "node_files" / node
+    if not node or node in {".", ".."} or "/" in node or "\\" in node:
+        return []
+    node_files = (Path(topology_path).resolve().parent / "node_files").resolve()
+    root = (node_files / node).resolve()
+    if not root.is_relative_to(node_files):
+        return []
     if not root.is_dir():
         return []
 
     files: list[dict[str, str]] = []
-    for candidate in sorted(path for path in root.rglob("*") if path.is_file()):
+    for path in sorted(root.rglob("*")):
         try:
+            candidate = path.resolve()
+            if not candidate.is_relative_to(root) or not candidate.is_file():
+                continue
             if candidate.stat().st_size > MAX_FILE_BYTES:
                 continue
             raw = candidate.read_bytes()

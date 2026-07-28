@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
@@ -34,6 +36,7 @@ from services import workspaces as ws_store
 from services.netlab import runner
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _count_labs(workspace_path: Path) -> int:
@@ -235,8 +238,8 @@ def make_folder(body: NewFolderRequest):
     parent = common.resolve_workspace_path(body.path)
     if not parent.is_dir():
         raise HTTPException(404, f"not a directory: {parent}")
-    name = body.name.strip().strip("/")
-    if not name or "/" in name or name in (".", ".."):
+    name = body.name.strip().strip("/\\")
+    if not name or "/" in name or "\\" in name or name in (".", ".."):
         raise HTTPException(400, "invalid folder name")
     target = parent / name
     if target.exists():
@@ -403,14 +406,20 @@ async def clone_repo(body: CloneRepoAction):
     if shutil.which("git") is None:
         raise HTTPException(503, "Git is not installed on the backend.")
     try:
-        repo_name = body.repoUrl.split("/")[-1].replace(".git", "")
-        if not repo_name:
-            repo_name = "cloned-repo"
+        repo_name = Path(urlparse(body.repoUrl).path.rstrip("/")).name
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
+        allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+        if not repo_name or repo_name in {".", ".."} or any(char not in allowed for char in repo_name):
+            raise HTTPException(400, "Repository URL has an invalid destination name.")
 
         # Clone into the chosen workspace (validated) or the primary one — never
         # the process CWD, which would leave the repo outside any workspace.
         dest_root = common.resolve_workspace_path(body.targetWorkspace) if body.targetWorkspace else common.workspace()
-        dest_path = dest_root / repo_name
+        dest_root = dest_root.resolve()
+        dest_path = (dest_root / repo_name).resolve(strict=False)
+        if dest_path.parent != dest_root:
+            raise HTTPException(400, "Repository destination is outside the workspace.")
         if dest_path.exists():
             if dest_path.is_dir():
                 shutil.rmtree(dest_path)
@@ -432,5 +441,6 @@ async def clone_repo(body: CloneRepoAction):
         return {"ok": True, "message": f"Successfully cloned into {repo_name}"}
     except HTTPException:
         raise  # don't re-wrap the 403/validation errors as a generic 500
-    except Exception as e:
-        raise HTTPException(500, str(e)) from e
+    except Exception as exc:
+        logger.exception("Git clone failed")
+        raise HTTPException(500, "Git clone failed.") from exc

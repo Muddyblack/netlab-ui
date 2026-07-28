@@ -32,7 +32,7 @@ _INF = float("inf")
 # means an in-place snapshot mutation can never surface a stale path — a changed
 # topology hashes differently and misses. LRU-bounded; no key ⇒ no caching.
 _GRAPH_CACHE_LIMIT = 8
-_graph_cache: "OrderedDict[tuple[str, str, str], dict[str, list[dict[str, Any]]]]" = OrderedDict()
+_graph_cache: OrderedDict[tuple[str, str, str], dict[str, list[dict[str, Any]]]] = OrderedDict()
 
 
 def _iface_address(interface: dict[str, Any], family: str) -> str | None:

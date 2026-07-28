@@ -162,7 +162,8 @@ async def write_workspace_file(
     relative_path: str,
     content: str,
 ) -> dict[str, Any]:
-    """Create or overwrite a file (new lab topology YAML, Jinja template, config, documentation) in the topology's workspace directory tree."""
+    """Create or overwrite a file (topology YAML, template, config, or docs)
+    in the topology's workspace directory tree."""
     session = _session(session_id)
     root = Path(session.topology_path).parent.resolve()
     target = (root / relative_path).resolve()

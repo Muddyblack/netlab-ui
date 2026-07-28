@@ -42,6 +42,7 @@ def session(tmp_path):
 def client():
     try:
         from app.assistant.router import router as assistant_router
+
         app.include_router(assistant_router)
     except ImportError:
         pytest.skip("assistant dependencies (mcp) not installed")

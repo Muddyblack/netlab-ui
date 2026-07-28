@@ -270,7 +270,7 @@ def test_agy_list_models_parses_cli_output(monkeypatch):
         returncode = 0
         stdout = "Gemini 3.6 Flash (High)\n\nClaude Sonnet 4.6 (Thinking)\n"
 
-    monkeypatch.setattr(agy_provider.subprocess, "run", lambda *a, **k: FakeResult())
+    monkeypatch.setattr(agy_provider.subprocess, "run", lambda *_args, **_kwargs: FakeResult())
     assert agy_provider.list_models() == ["Gemini 3.6 Flash (High)", "Claude Sonnet 4.6 (Thinking)"]
 
 
@@ -309,7 +309,6 @@ def test_agy_detect_available_when_cli_present(monkeypatch):
 
 
 def test_agy_args_building(monkeypatch):
-    import asyncio
     from services.assistant.providers.base import SessionSpec
 
     provider = agy.AgyProvider()

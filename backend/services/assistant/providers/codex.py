@@ -57,8 +57,6 @@ def detect() -> ProviderInfo:
     )
 
 
-
-
 class CodexProvider:
     provider_id: ClassVar[str] = "codex"
 

@@ -103,10 +103,7 @@ def _load_docs_plugins() -> dict[str, dict[str, str]]:
             except OSError:
                 continue
 
-            title = plugin_id
-            title_match = re.search(r"^#\s+(.*)$", content, re.MULTILINE)
-            if title_match:
-                title = title_match.group(1).strip()
+            title = _markdown_title(content, plugin_id)
 
             clean_content = re.sub(r"^\(.*?\)=\s*$", "", content, flags=re.MULTILINE)
             plugins[plugin_id] = {
@@ -119,8 +116,10 @@ def _load_docs_plugins() -> dict[str, dict[str, str]]:
 
 
 def _markdown_title(markdown: str, fallback: str) -> str:
-    match = re.search(r"^#\s+(.*)$", markdown, re.MULTILINE)
-    return match.group(1).strip() if match else fallback
+    for line in markdown.splitlines():
+        if line.startswith("# "):
+            return line[2:].strip() or fallback
+    return fallback
 
 
 def _is_user_facing_plugin(plugin_id: str) -> bool:

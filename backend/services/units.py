@@ -20,6 +20,7 @@ once, drop it into any lab in the workspace.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,7 @@ from services.model.topology import IncludeRef, Link, Node, Template, Topology
 from services.units_layout import instance_annotations, instance_layout  # noqa: F401
 
 _UNITS_DIR_NAME = "units"
+_UNIT_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 
 # clab-ui keeps canvas annotations in the React Flow node array. These fields
 # describe rendering/session state and can never be netlab node attributes.
@@ -99,9 +101,13 @@ def units_dir_for(topology_path: str | Path) -> Path:
 
 
 def _unit_path(units_dir: Path, name: str) -> Path:
-    if not name or "/" in name or name.startswith("."):
+    if not _UNIT_NAME_RE.fullmatch(name) or name in {".", ".."}:
         raise ValueError(f"invalid unit name: {name!r}")
-    return units_dir / f"{name}.yml"
+    root = units_dir.resolve()
+    path = (root / f"{name}.yml").resolve(strict=False)
+    if path.parent != root:
+        raise ValueError(f"invalid unit path: {name!r}")
+    return path
 
 
 def list_units(units_dir: Path) -> list[dict[str, Any]]:

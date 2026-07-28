@@ -31,9 +31,6 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 
-# CSI / OSC ANSI escape sequences (colors, cursor moves).
-_ANSI_RE = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))")
-
 # netlab log prefix: an optional "module:" then a "[LEVEL]" tag, e.g.
 # 'multiserver:  [INFO] ' or '[INFO] '. Captured so we can drop it while keeping
 # the message. Indentation *after* the tag ("  groups:") is preserved.
@@ -47,8 +44,34 @@ _EXCEPTION_LINE = re.compile(r"^(?:[A-Za-z_][\w.]*(?:Error|Exception)|[A-Za-z_][
 
 
 def strip_ansi(text: str) -> str:
-    """Remove ANSI color/cursor escape sequences from ``text``."""
-    return _ANSI_RE.sub("", text)
+    """Remove CSI/OSC ANSI escapes in one linear pass."""
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        if text[index] != "\x1b" or index + 1 >= len(text):
+            out.append(text[index])
+            index += 1
+            continue
+
+        marker = text[index + 1]
+        if marker == "[":
+            index += 2
+            while index < len(text) and not ("@" <= text[index] <= "~"):
+                index += 1
+            index += index < len(text)
+        elif marker == "]":
+            index += 2
+            while index < len(text):
+                if text[index] == "\x07":
+                    index += 1
+                    break
+                if text[index : index + 2] == "\x1b\\":
+                    index += 2
+                    break
+                index += 1
+        else:
+            index += 2
+    return "".join(out)
 
 
 class LineFilter:

@@ -124,7 +124,7 @@ export function createDemoClabUiHost(options?: { explorer?: WindowHostOptions["e
       if (!(await fsAdapter.exists(yamlPath))) {
         throw new Error(`Demo lab not found: ${topologyPath}`);
       }
-      const sessionId = `demo-session-${Math.random().toString(36).slice(2, 10)}`;
+      const sessionId = `demo-session-${crypto.randomUUID()}`;
       sessions.set(sessionId, { sessionId, yamlPath, revision: 0 });
       currentSessionId = sessionId;
       resultHost.sessionId = sessionId;

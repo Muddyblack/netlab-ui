@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 
 import pytest
+
 pytest.importorskip("mcp")
 from fastapi.testclient import TestClient
 
@@ -71,6 +73,22 @@ def _events(client, chat_id, expect_type):
     return frames
 
 
+def _wait_for_turn(client, chat_id, timeout=5.0):
+    """Read history once the background turn has finished.
+
+    ``POST /messages`` answers 202 as soon as the turn task is created, so
+    anything that looks at the turn's output — history frames, provider state —
+    has to wait for ``turn_done`` first instead of assuming the task already ran.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        frames = client.get(f"/api/assistant/chats/{chat_id}").json()["events"]
+        if any(frame["type"] == "turn_done" for frame in frames):
+            return frames
+        assert time.monotonic() < deadline, "turn did not finish"
+        time.sleep(0.01)
+
+
 def test_capabilities_lists_providers_and_mcp(client):
     body = client.get("/api/assistant/capabilities").json()
     assert body["enabled"] is True
@@ -100,9 +118,17 @@ def test_turn_streams_frames_in_order(client, scripted, session):
         client.post(f"/api/assistant/chats/{chat_id}/messages", json={"text": "what is this lab?"}).status_code == 202
     )
 
-    frames = client.get(f"/api/assistant/chats/{chat_id}").json()["events"]
+    frames = _wait_for_turn(client, chat_id)
     types = [frame["type"] for frame in frames]
-    assert types == ["user_message", "turn_started", "tool_call", "tool_result", "text_delta", "text_delta", "turn_done"]
+    assert types == [
+        "user_message",
+        "turn_started",
+        "tool_call",
+        "tool_result",
+        "text_delta",
+        "text_delta",
+        "turn_done",
+    ]
     assert frames[0]["text"] == "what is this lab?"
     assert "".join(f["text"] for f in frames if f["type"] == "text_delta") == "Two routers."
     assert all(frame["turnId"] == "t1" for frame in frames[1:])
@@ -120,6 +146,7 @@ def test_context_is_prefixed_to_the_prompt(client, scripted, session):
         f"/api/assistant/chats/{chat_id}/messages",
         json={"text": "explain the selection", "selection": ["r1"]},
     )
+    _wait_for_turn(client, chat_id)
     # The agent learns the session id and canvas selection without the user
     # having to type them.
     prompt = scripted["provider"].last_prompt
@@ -139,7 +166,7 @@ def test_provider_failure_surfaces_as_an_error_frame(client, scripted, session):
     chat_id = client.post("/api/assistant/chats", json={"providerId": "boom", "sessionId": session.id}).json()["chatId"]
     client.post(f"/api/assistant/chats/{chat_id}/messages", json={"text": "hi"})
 
-    frames = client.get(f"/api/assistant/chats/{chat_id}").json()["events"]
+    frames = _wait_for_turn(client, chat_id)
     error = next(frame for frame in frames if frame["type"] == "error")
     assert "not logged in" in error["message"]
     assert frames[-1]["type"] == "turn_done"
@@ -272,6 +299,8 @@ def test_switch_provider_keeps_history_and_updates_provider(client, scripted, se
         "/api/assistant/chats", json={"providerId": "scripted", "sessionId": session.id, "model": "m1"}
     ).json()["chatId"]
     assert client.post(f"/api/assistant/chats/{chat_id}/messages", json={"text": "hi"}).status_code == 202
+    # Switching providers is refused while a turn is in flight.
+    _wait_for_turn(client, chat_id)
 
     response = client.post(f"/api/assistant/chats/{chat_id}/provider", json={"providerId": "scripted2", "model": "m2"})
     assert response.status_code == 200
