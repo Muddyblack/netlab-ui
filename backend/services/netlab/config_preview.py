@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 MAX_FILE_BYTES = 512 * 1024
+_SAFE_NODE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def is_safe_node_name(node: str) -> bool:
+    """Return whether ``node`` is a bounded, single filesystem segment."""
+    return _SAFE_NODE_NAME_RE.fullmatch(node) is not None and node not in {".", ".."}
 
 
 def read_node_files(topology_path: str | Path, node: str) -> list[dict[str, str]]:
     """Return textual files below ``node_files/<node>`` in stable path order."""
-    if not node or node in {".", ".."} or "/" in node or "\\" in node:
+    if not is_safe_node_name(node):
         return []
     node_files = (Path(topology_path).resolve().parent / "node_files").resolve()
     root = (node_files / node).resolve()

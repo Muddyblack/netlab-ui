@@ -41,6 +41,8 @@ def put_model(body: ModelPut):
 @router.get("/nodes/{node_name}/config-preview", response_model=ConfigPreviewResult)
 async def get_node_config_preview(sessionId: str, node_name: str):
     """Generate and return the exact config artifacts for one topology node."""
+    if not config_preview.is_safe_node_name(node_name):
+        raise HTTPException(400, "invalid node name")
     session = session_or_404(sessionId)
     topo = commands.load_topology(session.topology_path)
     if topo.node(node_name) is None:
