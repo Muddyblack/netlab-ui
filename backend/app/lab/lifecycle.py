@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,7 @@ from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class LabAction(BaseModel):
@@ -108,8 +110,9 @@ async def lab_instance_force_cleanup_stream(instance_id: str):
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
         except runner.NetlabNotInstalled as exc:
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
-        except (OSError, UnicodeError, ValueError) as exc:
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        except (OSError, UnicodeError, ValueError):
+            logger.exception("Forced cleanup failed")
+            yield f"data: {json.dumps({'error': 'Forced cleanup failed.'})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=common.SSE_HEADERS)
 
@@ -324,10 +327,11 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
             if tracker:
                 tracker.finish(1)
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
-        except (OSError, UnicodeError, ValueError) as exc:
+        except (OSError, UnicodeError, ValueError):
             if tracker:
                 tracker.finish(1)
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            logger.exception("Lab deployment stream failed")
+            yield f"data: {json.dumps({'error': 'Lab deployment failed.'})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=common.SSE_HEADERS)
 
@@ -560,8 +564,9 @@ async def netlab_version():
     try:
         res = await runner.version()
         return {"version": res.stdout.strip(), "code": res.code}
-    except (runner.NetlabError, runner.NetlabNotInstalled, OSError) as exc:
-        return {"version": None, "error": str(exc)}
+    except (runner.NetlabError, runner.NetlabNotInstalled, OSError):
+        logger.exception("Could not determine the netlab version")
+        return {"version": None, "error": "Could not determine the netlab version."}
 
 
 @router.post("/initial", response_model=CommandResult)

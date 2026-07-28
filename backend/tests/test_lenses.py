@@ -11,7 +11,7 @@ from services.lenses.analyzer import build_bundle
 from services.lenses.derivation import build_derivation
 from services.lenses.service_explorer import build_service_explorer
 from services.lenses.validation_lens import build_validation
-from services.netlab import runner, validation
+from services.netlab import runner
 
 
 def _transformed() -> dict:
@@ -230,9 +230,7 @@ def test_teaching_load_discards_legacy_task_schema(tmp_path: Path):
     topology.write_text("nodes: {r1: {}}\n")
     # A pre-capture document (schemaVersion 1, tasks instead of view) can't be
     # replayed, so load() should fall back to an empty tour rather than crash.
-    teaching.document_path(topology).write_text(
-        '{"schemaVersion": 1, "steps": [{"id": "x", "tasks": []}]}'
-    )
+    teaching.document_path(topology).write_text('{"schemaVersion": 1, "steps": [{"id": "x", "tasks": []}]}')
     assert teaching.load(topology)["steps"] == []
 
 

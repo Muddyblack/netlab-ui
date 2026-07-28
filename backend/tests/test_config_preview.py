@@ -1,4 +1,16 @@
-from services.netlab.config_preview import MAX_FILE_BYTES, read_node_files
+import pytest
+
+from services.netlab.config_preview import MAX_FILE_BYTES, is_safe_node_name, read_node_files
+
+
+@pytest.mark.parametrize("node", ["r1", "router-1", "router_1", "router.example"])
+def test_accepts_safe_node_names(node):
+    assert is_safe_node_name(node)
+
+
+@pytest.mark.parametrize("node", ["", ".", "..", "../r1", r"..\r1", "/r1", "r1/config", "a" * 129])
+def test_rejects_unsafe_node_names(node):
+    assert not is_safe_node_name(node)
 
 
 def test_reads_text_node_files_and_preserves_boundaries(tmp_path):

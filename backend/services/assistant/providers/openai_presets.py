@@ -39,9 +39,30 @@ class Preset:
 
 PRESETS: tuple[Preset, ...] = (
     Preset("grok", "Grok (xAI)", "https://api.x.ai/v1", "grok-4", "console.x.ai", "https://console.x.ai/"),
-    Preset("deepseek", "DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat", "platform.deepseek.com", "https://platform.deepseek.com/api_keys"),
-    Preset("kimi", "Kimi (Moonshot)", "https://api.moonshot.ai/v1", "kimi-k2-0905-preview", "platform.moonshot.ai", "https://platform.moonshot.cn/console/api-keys"),
-    Preset("glm", "GLM (Z.ai)", "https://api.z.ai/api/paas/v4", "glm-4.6", "z.ai/manage-apikey", "https://z.ai/manage-apikey"),
+    Preset(
+        "deepseek",
+        "DeepSeek",
+        "https://api.deepseek.com/v1",
+        "deepseek-chat",
+        "platform.deepseek.com",
+        "https://platform.deepseek.com/api_keys",
+    ),
+    Preset(
+        "kimi",
+        "Kimi (Moonshot)",
+        "https://api.moonshot.ai/v1",
+        "kimi-k2-0905-preview",
+        "platform.moonshot.ai",
+        "https://platform.moonshot.cn/console/api-keys",
+    ),
+    Preset(
+        "glm",
+        "GLM (Z.ai)",
+        "https://api.z.ai/api/paas/v4",
+        "glm-4.6",
+        "z.ai/manage-apikey",
+        "https://z.ai/manage-apikey",
+    ),
 )
 
 PRESET_IDS: frozenset[str] = frozenset(preset.id for preset in PRESETS)

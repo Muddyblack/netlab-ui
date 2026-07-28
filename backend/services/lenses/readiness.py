@@ -166,9 +166,7 @@ async def build_readiness(topology_path: str) -> dict[str, Any]:
                     "These container images are not in the local Docker cache yet.",
                     items=items,
                     hint="Pull or build them (Image Manager) before deploying.",
-                    object_refs=[
-                        f"node:{name}" for names in missing_by_image.values() for name in names
-                    ],
+                    object_refs=[f"node:{name}" for names in missing_by_image.values() for name in names],
                 )
             )
         else:

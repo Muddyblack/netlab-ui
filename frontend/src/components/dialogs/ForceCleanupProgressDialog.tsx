@@ -96,7 +96,13 @@ export function ForceCleanupProgressDialog({ open, instanceId, onClose, onDone }
     }
   };
 
-  const statusLabel = running ? "Running" : exitCode === 0 ? "Succeeded" : exitCode != null ? `Failed (exit ${exitCode})` : null;
+  let statusLabel: string | null = null;
+  if (exitCode != null) statusLabel = `Failed (exit ${exitCode})`;
+  if (exitCode === 0) statusLabel = "Succeeded";
+  if (running) statusLabel = "Running";
+  let statusColor: "default" | "success" | "error" = "error";
+  if (exitCode === 0) statusColor = "success";
+  if (running) statusColor = "default";
 
   return (
     <Dialog open={open} onClose={running ? undefined : onClose} maxWidth="md" fullWidth>
@@ -110,7 +116,7 @@ export function ForceCleanupProgressDialog({ open, instanceId, onClose, onDone }
           </Box>
           {running && <CircularProgress size={18} />}
           {statusLabel && (
-            <Chip size="small" label={statusLabel} color={running ? "default" : exitCode === 0 ? "success" : "error"} variant="outlined" />
+            <Chip size="small" label={statusLabel} color={statusColor} variant="outlined" />
           )}
           <Tooltip title={copied ? "Copied" : "Copy output"}>
             <span>

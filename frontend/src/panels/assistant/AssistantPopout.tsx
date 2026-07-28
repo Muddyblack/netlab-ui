@@ -47,7 +47,10 @@ export function AssistantPopout({ sessionId }: { sessionId: string }) {
       bc.close();
     } catch { /* BroadcastChannel fallback */ }
     if (window.opener && typeof window.opener.postMessage === "function") {
-      window.opener.postMessage({ type: "netlab_topology_changed", sessionId }, "*");
+      window.opener.postMessage(
+        { type: "netlab_topology_changed", sessionId },
+        window.location.origin
+      );
     }
   }, [sessionId]);
 

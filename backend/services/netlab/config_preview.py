@@ -2,20 +2,37 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 MAX_FILE_BYTES = 512 * 1024
+_SAFE_NODE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+def is_safe_node_name(node: str) -> bool:
+    """Return whether ``node`` is a bounded, single filesystem segment."""
+    return _SAFE_NODE_NAME_RE.fullmatch(node) is not None and node not in {".", ".."}
 
 
 def read_node_files(topology_path: str | Path, node: str) -> list[dict[str, str]]:
     """Return textual files below ``node_files/<node>`` in stable path order."""
-    root = Path(topology_path).parent / "node_files" / node
+    if not is_safe_node_name(node):
+        return []
+    node_files = (Path(topology_path).resolve().parent / "node_files").resolve()
+    # node is regex-validated above; containment is checked below before any read.
+    root = (node_files / node).resolve()  # lgtm[py/path-injection]
+    if not root.is_relative_to(node_files):
+        return []
     if not root.is_dir():
         return []
 
     files: list[dict[str, str]] = []
-    for candidate in sorted(path for path in root.rglob("*") if path.is_file()):
+    # root was validated above; each candidate is re-checked with is_relative_to below.
+    for path in sorted(root.rglob("*")):  # lgtm[py/path-injection]
         try:
+            candidate = path.resolve()
+            if not candidate.is_relative_to(root) or not candidate.is_file():
+                continue
             if candidate.stat().st_size > MAX_FILE_BYTES:
                 continue
             raw = candidate.read_bytes()

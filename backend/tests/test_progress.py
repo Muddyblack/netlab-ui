@@ -36,6 +36,14 @@ def test_progress_payload_streams_deltas_and_keeps_selected_node_history():
     assert [event["status"] for event in detail["events"]] == ["changed", "recap"]
 
 
+def test_malformed_recap_like_line_is_ignored():
+    tracker = DeploymentProgressTracker("up", ["r1"])
+
+    tracker.feed("r1: !:0=" + ("900=" * 10_000))
+
+    assert tracker.payload()["nodes"]["r1"] == "queued"
+
+
 def test_generic_log_matching_does_not_scan_every_node():
     tracker = DeploymentProgressTracker("up", [f"router{i}" for i in range(10_000)])
     tracker.payload(delta=True)

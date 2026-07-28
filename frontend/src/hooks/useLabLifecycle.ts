@@ -139,9 +139,8 @@ export function useLabLifecycle({ host, fetchFiles, refreshStatus, refreshCanvas
       if (refreshFiles) void fetchFiles();
       void refreshStatus?.();
     } catch (err) {
-      const errorMessage = controller.signal.aborted
-        ? `${label} cancelled by user`
-        : err instanceof Error ? err.message : String(err);
+      let errorMessage = err instanceof Error ? err.message : String(err);
+      if (controller.signal.aborted) errorMessage = `${label} cancelled by user`;
       host.emitTopoViewerEvent({
         type: "lifecycleStatus",
         status: "error",

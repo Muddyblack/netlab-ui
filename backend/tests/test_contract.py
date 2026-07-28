@@ -10,10 +10,32 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from app.contract import snapshot
 from app.main import app
 from services import annotations as ann_store
 from services.model import serialize
 from services.netlab import runner
+
+
+@pytest.fixture(autouse=True)
+def no_netlab_cli(monkeypatch):
+    """Hold this suite to its "without netlab installed" promise.
+
+    When netlab *is* on PATH the snapshot endpoint shells out for real: a
+    `netlab status` per request, plus a background `netlab create` transform.
+    The background one is the problem — it outlives the request that started
+    it, and TestClient runs every request on its own event loop, so the task is
+    abandoned mid-flight and its subprocess transport is finalized against a
+    closed loop. asyncio reports that from `BaseSubprocessTransport.__del__`,
+    which pytest surfaces as PytestUnraisableExceptionWarning attributed to
+    whichever unrelated test happened to trigger the GC.
+    """
+
+    async def no_status(*_args, **_kwargs):
+        return {}
+
+    monkeypatch.setattr(runner, "status_for", no_status)
+    monkeypatch.setattr(snapshot, "_schedule_transform", lambda *_args, **_kwargs: None)
 
 
 @pytest.fixture
@@ -850,9 +872,7 @@ def test_plugin_pipeline_keeps_unknown_plugins_visible(client, monkeypatch, tmp_
     res = client.get("/api/plugins/pipeline?enabled=typo.plugin")
     assert res.status_code == 200
     body = res.json()
-    assert body["order"] == [
-        {"id": "typo.plugin", "known": False, "hooks": [], "missing_requires": []}
-    ]
+    assert body["order"] == [{"id": "typo.plugin", "known": False, "hooks": [], "missing_requires": []}]
 
 
 def test_plugin_import_writes_uploaded_plugin_to_search_path(client, monkeypatch, tmp_path):

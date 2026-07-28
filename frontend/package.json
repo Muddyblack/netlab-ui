@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "vite",
@@ -21,7 +21,7 @@
     "@fontsource/roboto": "^5.2.10",
     "@mui/icons-material": "^7.3.10",
     "@mui/material": "^7.3.10",
-    "@srl-labs/clab-ui": "^0.0.7",
+    "@srl-labs/clab-ui": "^0.3.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.10.2",
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.4",
     "openapi-typescript": "^7.4.0",
     "oxlint": "^1.74.0",
     "patch-package": "^8.0.1",

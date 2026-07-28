@@ -2,8 +2,8 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { applyResolvedThemeVars, readPersistedThemeMode, resolveThemeMode } from "./theme";
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker.js?worker";
-import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker.js?worker";
+import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
+import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
 import YamlWorker from "monaco-yaml/yaml.worker.js?worker";
 
 const monacoGlobal = globalThis as typeof globalThis & {
@@ -81,18 +81,24 @@ const AssistantPopout = lazy(() =>
   import("./panels/assistant/AssistantPopout").then((m) => ({ default: m.AssistantPopout }))
 );
 
+let rootContent = <App />;
+if (assistantPopout) {
+  rootContent = (
+    <Suspense fallback={null}>
+      <AssistantPopout sessionId={assistantPopout} />
+    </Suspense>
+  );
+}
+if (popout) {
+  rootContent = (
+    <Suspense fallback={null}>
+      <SessionPopout kind={popout.kind} node={popout.node} sessionId={popout.sessionId} />
+    </Suspense>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {popout ? (
-      <Suspense fallback={null}>
-        <SessionPopout kind={popout.kind} node={popout.node} sessionId={popout.sessionId} />
-      </Suspense>
-    ) : assistantPopout ? (
-      <Suspense fallback={null}>
-        <AssistantPopout sessionId={assistantPopout} />
-      </Suspense>
-    ) : (
-      <App />
-    )}
+    {rootContent}
   </StrictMode>,
 );

@@ -1060,7 +1060,7 @@ def version_at_least(installed: str, minimum: str = MIN_NETLAB_VERSION) -> bool 
     return installed_tuple >= minimum_tuple
 
 
-_version_cache: str | None | bool = False  # False = not yet checked, None = checked and unknown
+_version_cache: str | bool | None = False  # False = not yet checked, None = checked and unknown
 
 
 def cached_version() -> str | None:

@@ -14,7 +14,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 import subprocess
 import uuid
 from collections.abc import AsyncIterator
@@ -86,9 +85,9 @@ class AgyProvider:
             config_data: dict[str, Any] = {"mcpServers": {}}
             if self._config_path.exists():
                 try:
-                    with open(self._config_path, "r", encoding="utf-8") as f:
+                    with open(self._config_path, encoding="utf-8") as f:
                         config_data = json.load(f)
-                except Exception as e:
+                except (OSError, TypeError, ValueError) as e:
                     logger.warning("Failed to read existing mcp_config.json: %s", e)
 
             mcp_servers = config_data.setdefault("mcpServers", {})
@@ -101,7 +100,7 @@ class AgyProvider:
                 json.dump(config_data, f, indent=2)
 
             logger.info("Successfully registered MCP server in %s", self._config_path)
-        except Exception as e:
+        except (AttributeError, OSError, TypeError, ValueError) as e:
             logger.error("Failed to write .agents/mcp_config.json: %s", e)
 
     async def send(self, prompt: str) -> AsyncIterator[AgentEvent]:
@@ -141,6 +140,8 @@ class AgyProvider:
                 event = json.loads(stdout)
             except json.JSONDecodeError:
                 logger.warning("Failed to parse agy output as JSON: %s", stdout)
+        elif stderr:
+            logger.warning("agy produced no stdout; stderr: %s", stderr)
 
         if event.get("conversation_id"):
             self._conversation_id = str(event["conversation_id"])
@@ -197,7 +198,7 @@ class AgyProvider:
         # concurrent session's own add/remove in the meantime isn't clobbered.
         if self._config_path and self._config_path.exists():
             try:
-                with open(self._config_path, "r", encoding="utf-8") as f:
+                with open(self._config_path, encoding="utf-8") as f:
                     config_data = json.load(f)
                 mcp_servers = config_data.get("mcpServers")
                 if isinstance(mcp_servers, dict) and mcp_servers.pop(self._server_key, None) is not None:
@@ -207,7 +208,7 @@ class AgyProvider:
                     else:
                         # Nothing left in the config we or anyone else registered — clean up.
                         self._config_path.unlink(missing_ok=True)
-                        with contextlib.suppress(Exception):
+                        with contextlib.suppress(OSError):
                             self._config_path.parent.rmdir()
-            except Exception as e:
+            except (AttributeError, OSError, TypeError, ValueError) as e:
                 logger.warning("Failed to clean up .agents/mcp_config.json: %s", e)

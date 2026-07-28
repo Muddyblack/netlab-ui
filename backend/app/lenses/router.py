@@ -16,7 +16,7 @@ from app.contract.responses import (
 )
 from app.sessions.store import store
 from services.lenses import config_diff, path_explorer, readiness, reports, service, teaching
-from services.netlab import runner
+from services.netlab import config_preview, runner
 
 router = APIRouter(prefix="/api/topology", tags=["lenses"])
 
@@ -84,6 +84,8 @@ async def get_config_diff(
     left: str = Query(),
     right: str = Query(),
 ):
+    if not config_preview.is_safe_node_name(left) or not config_preview.is_safe_node_name(right):
+        raise HTTPException(400, "invalid node name")
     try:
         session = store.require(session_id)
     except KeyError as exc:

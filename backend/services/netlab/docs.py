@@ -13,7 +13,9 @@ from __future__ import annotations
 import os
 import re
 import urllib.request
+from hashlib import sha256
 from pathlib import Path
+from urllib.parse import quote
 
 from services.netlab import location
 
@@ -26,12 +28,13 @@ _cache: dict[str, str | None] = {}
 
 def _cache_dir(version: str) -> Path:
     base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
-    return Path(base) / "netlab-gui" / "docs" / f"release_{version}"
+    version_key = sha256(version.encode()).hexdigest()
+    return Path(base).expanduser().resolve() / "netlab-gui" / "docs" / version_key
 
 
 def _disk_cache_path(version: str, rel_path: str) -> Path:
-    # Flatten the doc path into a single safe filename (docs use '/' and '.').
-    return _cache_dir(version) / rel_path.lstrip("/").replace("/", "__")
+    filename = sha256(rel_path.encode()).hexdigest() + ".md"
+    return _cache_dir(version) / filename
 
 
 def _read_disk_cache(version: str, rel_path: str) -> str | None:
@@ -72,7 +75,10 @@ def fetch_doc(rel_path: str) -> str | None:
     version = netsim_version()
     if not version:
         return None
-    url = f"{_RAW_BASE}/release_{version}/docs/{rel_path.lstrip('/')}"
+    clean_path = rel_path.lstrip("/")
+    if not clean_path or ".." in Path(clean_path).parts:
+        return None
+    url = f"{_RAW_BASE}/release_{quote(version, safe='._-')}/docs/{quote(clean_path, safe='/._-')}"
     if url in _cache:
         return _cache[url]
 

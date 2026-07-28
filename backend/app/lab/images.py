@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ from services import workspaces as ws_store
 from services.netlab import location
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class PullImageRequest(BaseModel):
@@ -225,8 +227,9 @@ async def pull_image(body: PullImageRequest):
         if proc.returncode != 0:
             return {"success": False, "output": stderr.decode()}
         return {"success": True, "message": f"Successfully pulled {body.image}"}
-    except Exception as e:  # noqa: BLE001 — surface any docker failure to the panel instead of a 500
-        return {"success": False, "output": str(e)}
+    except Exception:
+        logger.exception("Docker image pull failed")
+        return {"success": False, "output": "Docker image pull failed."}
 
 
 @router.post("/images/remove", response_model=ImageOpResult)
@@ -245,5 +248,6 @@ async def remove_image(body: RemoveImageRequest):
         if proc.returncode != 0:
             return {"success": False, "output": stderr.decode()}
         return {"success": True, "message": f"Successfully removed {body.reference}"}
-    except Exception as e:  # noqa: BLE001 — surface any docker failure to the panel instead of a 500
-        return {"success": False, "output": str(e)}
+    except Exception:
+        logger.exception("Docker image removal failed")
+        return {"success": False, "output": "Docker image removal failed."}

@@ -21,10 +21,19 @@ export default defineConfig({
   },
   plugins: [react()],
   optimizeDeps: {
-    include: ["monaco-editor/esm/vs/editor/editor.worker.js"],
+    include: ["monaco-editor/editor/editor.worker.js"],
   },
   resolve: {
     dedupe: ["react", "react-dom", "@emotion/react", "@emotion/styled", "@mui/material"],
+    alias: [
+      {
+        // monaco-worker-manager (via monaco-yaml) imports the pre-0.53 deep path,
+        // which monaco-editor's "exports" map no longer resolves. Point it at the
+        // specifier the export map does understand.
+        find: "monaco-editor/esm/vs/editor/editor.worker.js",
+        replacement: "monaco-editor/editor/editor.worker.js",
+      },
+    ],
   },
   server: {
     // Keep browser traffic same-origin in development. This covers ordinary

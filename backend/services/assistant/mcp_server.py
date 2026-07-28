@@ -93,7 +93,8 @@ def build_server() -> FastMCP:
     register(tools.read_workspace_file, "Read a file from the topology's directory.")
     register(
         tools.write_workspace_file,
-        "Create or overwrite a file (new lab topology YAML, Jinja template, config, documentation) in the workspace directory.",
+        "Create or overwrite a file (new lab topology YAML, Jinja template, config, documentation) "
+        "in the workspace directory.",
     )
     register(tools.run_fcli_report, "Run a read-only fabric report (bgp-peers, ipv4-rib, lldp, …).")
     register(

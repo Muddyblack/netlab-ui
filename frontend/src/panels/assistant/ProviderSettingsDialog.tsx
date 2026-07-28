@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   Stack,
@@ -18,7 +17,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 import { api, type AssistantProvider, type AssistantProviderSettings } from "../../api/client";
 
-interface Props {
+interface DialogProps {
   open: boolean;
   onClose: () => void;
   /** All providers from capabilities. */
@@ -27,6 +26,21 @@ interface Props {
   initialProviderId?: string;
   /** Called after a save/clear so the caller can re-probe capabilities. */
   onChanged: () => void;
+}
+
+interface PanelProps {
+  /** All providers from capabilities. */
+  providers: AssistantProvider[];
+  /** Provider selected when the panel was opened. */
+  initialProviderId?: string;
+  /** Called after a save/clear so the caller can re-probe capabilities. */
+  onChanged: () => void;
+  /** True while the panel is actually visible — (re)loads the active
+   * provider's settings each time it becomes visible. */
+  active: boolean;
+  /** Omit to hide the "Close" button (e.g. embedded in a Settings tab that
+   * already has its own "Done" button). */
+  onClose?: () => void;
 }
 
 const PROVIDER_KEY_CONFIG: Record<string, { url: string; label: string }> = {
@@ -69,10 +83,12 @@ const PROVIDER_KEY_CONFIG: Record<string, { url: string; label: string }> = {
 };
 
 /**
- * The "AI providers" overview: every provider's connection status in one place,
- * plus the API-key / base-URL form for the direct-API providers. CLI providers
- * (Claude Code, Codex) have nothing to configure here — they use the login you
- * already have — so they show status and guidance only.
+ * The "AI providers" overview as a standalone dialog — thin wrapper around
+ * {@link ProviderSettingsPanel}. Also embedded directly as a Settings tab
+ * (see `SettingsDialog`'s "Assistant" tab) so provider/API-key setup stays
+ * reachable from the gear icon even when the assistant chat panel itself
+ * isn't showing (its palette tab is owned by clab-ui and isn't always
+ * selectable — see `App.tsx`'s `customPaletteTabs` comment).
  */
 export function ProviderSettingsDialog({
   open,
@@ -80,7 +96,36 @@ export function ProviderSettingsDialog({
   providers,
   initialProviderId,
   onChanged,
-}: Props) {
+}: DialogProps) {
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 3,
+            backdropFilter: "blur(16px)",
+            backgroundImage: "none",
+          },
+        },
+      }}
+    >
+      <DialogTitle sx={{ pb: 0.5, fontWeight: 600 }}>AI providers</DialogTitle>
+      <ProviderSettingsPanel
+        providers={providers}
+        initialProviderId={initialProviderId}
+        onChanged={onChanged}
+        active={open}
+        onClose={onClose}
+      />
+    </Dialog>
+  );
+}
+
+export function ProviderSettingsPanel({ providers, initialProviderId, onChanged, active, onClose }: PanelProps) {
   // Show every provider, CLI agents first so their availability is front and
   // centre; configurable API providers follow.
   const ordered = useMemo(() => {
@@ -125,13 +170,13 @@ export function ProviderSettingsDialog({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const id = ordered.some((provider) => provider.id === initialProviderId)
       ? initialProviderId!
       : ordered[0]?.id ?? "gemini";
     setProviderId(id);
     load(id);
-  }, [ordered, initialProviderId, load, open]);
+  }, [ordered, initialProviderId, load, active]);
 
   const handleSwitchProvider = (id: string) => {
     setProviderId(id);
@@ -199,23 +244,8 @@ export function ProviderSettingsDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      slotProps={{
-        paper: {
-          sx: {
-            borderRadius: 3,
-            backdropFilter: "blur(16px)",
-            backgroundImage: "none",
-          },
-        },
-      }}
-    >
-      <DialogTitle sx={{ pb: 0.5, fontWeight: 600 }}>AI providers</DialogTitle>
-      <DialogContent dividers>
+    <>
+      <DialogContent dividers sx={{ px: 0, pt: 0 }}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
           netlab drives whichever agent you set up. CLI agents (Claude Code, Codex, Antigravity CLI) use the
           login you already have; Gemini and OpenAI use an API key stored only on this machine.
@@ -300,7 +330,7 @@ export function ProviderSettingsDialog({
                 )}
                 {provider?.available && provider?.takesModel && (
                   <Typography variant="caption" color="text.secondary">
-                    Pick a model from the chat composer — leave it unset to use this CLI's own default.
+                    Pick a model from the chat composer — leave it unset to use this CLI&apos;s own default.
                   </Typography>
                 )}
                 {keyUrl && (
@@ -391,7 +421,7 @@ export function ProviderSettingsDialog({
           </Box>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+      <Stack direction="row" spacing={1} sx={{ px: 0, py: 1.5 }}>
         {isConfigurable && (
           <Button
             onClick={handleClearKey}
@@ -403,9 +433,11 @@ export function ProviderSettingsDialog({
           </Button>
         )}
         <Box sx={{ flex: 1 }} />
-        <Button onClick={onClose} disabled={saving} sx={{ textTransform: "none" }}>
-          Close
-        </Button>
+        {onClose && (
+          <Button onClick={onClose} disabled={saving} sx={{ textTransform: "none" }}>
+            Close
+          </Button>
+        )}
         {isConfigurable && (
           <Button
             variant="contained"
@@ -417,8 +449,8 @@ export function ProviderSettingsDialog({
             Save
           </Button>
         )}
-      </DialogActions>
-    </Dialog>
+      </Stack>
+    </>
   );
 }
 

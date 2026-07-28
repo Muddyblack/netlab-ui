@@ -16,6 +16,10 @@ def test_strip_ansi_removes_color_codes():
     assert strip_ansi("\x1b[32mINFO\x1b[0m ready") == "INFO ready"
 
 
+def test_strip_ansi_handles_long_unterminated_escape_in_linear_pass():
+    assert strip_ansi("\x1b]" + ("x" * 100_000)) == ""
+
+
 def test_module_level_prefix_is_dropped():
     out = run([("stdout", 'multiserver:  [INFO] Server "srv1" (192.168.168.128): 22 nodes\n')])
     assert out == ['Server "srv1" (192.168.168.128): 22 nodes']

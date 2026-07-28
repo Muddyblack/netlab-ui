@@ -46,7 +46,6 @@ import { GroupsPanel } from "./panels/Groups";
 import { NetlabLinks } from "./panels/NetlabLinks";
 import { WorkersPanel } from "./panels/Workers";
 import { AssistantPanel } from "./panels/assistant/AssistantPanel";
-import { ProviderSettingsDialog } from "./panels/assistant/ProviderSettingsDialog";
 import {
   persistAssistantOpen,
   readAssistantOpen,
@@ -124,7 +123,6 @@ export default function App() {
   // in the Nodes/Groups/Plugins strip — a conversation shouldn't get swapped
   // out just because the user switches what they're looking at on the canvas.
   const [assistantOpen, setAssistantOpen] = useState(() => readAssistantOpen());
-  const [assistantSettingsOpen, setAssistantSettingsOpen] = useState(false);
   const [assistantSettingsProviderId, setAssistantSettingsProviderId] = useState<string>();
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
@@ -441,6 +439,7 @@ export default function App() {
   // Owned here (not inside the palette tab) so lens/inspector state survives
   // switching to another dock tab and back.
   const netlabLenses = useNetlabLenses(sessionId ?? "", activeTabId ?? undefined);
+  const { applyDeploymentProgress } = netlabLenses;
   useRightPanelTabMemory();
 
   // When the tab open on the canvas is a unit file (lives in a `units/` dir),
@@ -506,11 +505,11 @@ export default function App() {
       const sameRun = Boolean(current && current.startedAt === progress.startedAt && current.action === progress.action);
       return { ...progress, nodes: sameRun && current ? { ...current.nodes, ...progress.nodes } : progress.nodes };
     });
-    netlabLenses.applyDeploymentProgress(progress);
+    applyDeploymentProgress(progress);
     if (progress.done) {
       deploymentProgressTimerRef.current = setTimeout(() => setDeploymentProgress(null), 4000);
     }
-  }, [netlabLenses.applyDeploymentProgress]);
+  }, [applyDeploymentProgress]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -876,7 +875,8 @@ export default function App() {
             onClose={() => setAssistantOpen(false)}
             onOpenSettings={(providerId) => {
               setAssistantSettingsProviderId(providerId || undefined);
-              setAssistantSettingsOpen(true);
+              setSettingsTab("assistant");
+              setSettingsOpen(true);
             }}
             onCapabilitiesChanged={refreshAssistantCapabilities}
           />
@@ -952,8 +952,13 @@ export default function App() {
         setSettingsOpen(true);
       }}
       assistantAvailable={Boolean(assistantCapabilities && sessionId)}
+      assistantHasProvider={Boolean(assistantCapabilities?.providers?.some((p) => p.available))}
       assistantOpen={assistantOpen}
       onToggleAssistant={() => setAssistantOpen((open) => !open)}
+      onSetupAssistant={() => {
+        setSettingsTab("assistant");
+        setSettingsOpen(true);
+      }}
     />
   );
 
@@ -1027,6 +1032,9 @@ export default function App() {
               void fetchFiles();
             }}
             onEnvironmentChanged={() => void checkStartup()}
+            assistantProviders={assistantCapabilities?.providers ?? []}
+            assistantInitialProviderId={assistantSettingsProviderId}
+            onAssistantChanged={refreshAssistantCapabilities}
             health={startup.health}
           />
 
@@ -1173,16 +1181,6 @@ export default function App() {
               />
             </Suspense>,
             portalContainer
-          )}
-
-          {assistantCapabilities && (
-            <ProviderSettingsDialog
-              open={assistantSettingsOpen}
-              onClose={() => setAssistantSettingsOpen(false)}
-              providers={assistantCapabilities.providers ?? []}
-              initialProviderId={assistantSettingsProviderId}
-              onChanged={refreshAssistantCapabilities}
-            />
           )}
 
           {runtime && <ContainerlabImageManagerDialog open={imageManagerOpen} runtime={runtime} onClose={() => setImageManagerOpen(false)} endpointOptions={[{ id: "local", label: "local" }]} />}

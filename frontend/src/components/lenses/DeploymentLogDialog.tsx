@@ -80,11 +80,13 @@ export function DeploymentLogDialog({
     }
   };
 
-  const exitLabel =
-    log?.running ? "Running"
-      : log?.exitCode === 0 ? "Exit 0"
-      : log?.exitCode != null ? `Exit ${log.exitCode}`
-      : null;
+  let exitLabel: string | null = null;
+  if (log?.exitCode != null) exitLabel = `Exit ${log.exitCode}`;
+  if (log?.exitCode === 0) exitLabel = "Exit 0";
+  if (log?.running) exitLabel = "Running";
+  let exitColor: "default" | "success" | "error" = "error";
+  if (log?.exitCode === 0) exitColor = "success";
+  if (log?.running) exitColor = "default";
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -104,7 +106,7 @@ export function DeploymentLogDialog({
             <Chip
               size="small"
               label={exitLabel}
-              color={log?.running ? "default" : log?.exitCode === 0 ? "success" : "error"}
+              color={exitColor}
               variant="outlined"
             />
           )}
