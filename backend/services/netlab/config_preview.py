@@ -19,14 +19,16 @@ def read_node_files(topology_path: str | Path, node: str) -> list[dict[str, str]
     if not is_safe_node_name(node):
         return []
     node_files = (Path(topology_path).resolve().parent / "node_files").resolve()
-    root = (node_files / node).resolve()
+    # node is regex-validated above; containment is checked below before any read.
+    root = (node_files / node).resolve()  # lgtm[py/path-injection]
     if not root.is_relative_to(node_files):
         return []
     if not root.is_dir():
         return []
 
     files: list[dict[str, str]] = []
-    for path in sorted(root.rglob("*")):
+    # root was validated above; each candidate is re-checked with is_relative_to below.
+    for path in sorted(root.rglob("*")):  # lgtm[py/path-injection]
         try:
             candidate = path.resolve()
             if not candidate.is_relative_to(root) or not candidate.is_file():

@@ -105,7 +105,7 @@ def _unit_path(units_dir: Path, name: str) -> Path:
         raise ValueError(f"invalid unit name: {name!r}")
     root = units_dir.resolve()
     path = (root / f"{name}.yml").resolve(strict=False)
-    if path.parent != root:
+    if not path.is_relative_to(root) or path.parent != root:
         raise ValueError(f"invalid unit path: {name!r}")
     return path
 

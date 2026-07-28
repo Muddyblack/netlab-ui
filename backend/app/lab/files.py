@@ -418,7 +418,7 @@ async def clone_repo(body: CloneRepoAction):
         dest_root = common.resolve_workspace_path(body.targetWorkspace) if body.targetWorkspace else common.workspace()
         dest_root = dest_root.resolve()
         dest_path = (dest_root / repo_name).resolve(strict=False)
-        if dest_path.parent != dest_root:
+        if not dest_path.is_relative_to(dest_root) or dest_path.parent != dest_root:
             raise HTTPException(400, "Repository destination is outside the workspace.")
         if dest_path.exists():
             if dest_path.is_dir():
