@@ -300,7 +300,7 @@ export function ProviderSettingsDialog({
                 )}
                 {provider?.available && provider?.takesModel && (
                   <Typography variant="caption" color="text.secondary">
-                    Pick a model from the chat composer — leave it unset to use this CLI's own default.
+                    Pick a model from the chat composer — leave it unset to use this CLI&apos;s own default.
                   </Typography>
                 )}
                 {keyUrl && (

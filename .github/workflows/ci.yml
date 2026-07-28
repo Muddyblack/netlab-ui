@@ -73,7 +73,7 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,netlab,assistant]"
 
       - name: Lint (ruff check)
         run: ruff check

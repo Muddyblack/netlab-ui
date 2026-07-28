@@ -81,18 +81,24 @@ const AssistantPopout = lazy(() =>
   import("./panels/assistant/AssistantPopout").then((m) => ({ default: m.AssistantPopout }))
 );
 
+let rootContent = <App />;
+if (assistantPopout) {
+  rootContent = (
+    <Suspense fallback={null}>
+      <AssistantPopout sessionId={assistantPopout} />
+    </Suspense>
+  );
+}
+if (popout) {
+  rootContent = (
+    <Suspense fallback={null}>
+      <SessionPopout kind={popout.kind} node={popout.node} sessionId={popout.sessionId} />
+    </Suspense>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {popout ? (
-      <Suspense fallback={null}>
-        <SessionPopout kind={popout.kind} node={popout.node} sessionId={popout.sessionId} />
-      </Suspense>
-    ) : assistantPopout ? (
-      <Suspense fallback={null}>
-        <AssistantPopout sessionId={assistantPopout} />
-      </Suspense>
-    ) : (
-      <App />
-    )}
+    {rootContent}
   </StrictMode>,
 );

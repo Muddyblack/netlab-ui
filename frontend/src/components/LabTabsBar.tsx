@@ -57,9 +57,16 @@ export function LabTabsBar({
           <div
             key={tab.id}
             role="tab"
+            tabIndex={active ? 0 : -1}
             aria-selected={active}
             data-testid={`lab-tab-${tab.id}`}
             onClick={() => onActivate(tab.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onActivate(tab.id);
+              }
+            }}
             onMouseDown={(event) => {
               if (event.button === 1) {
                 event.preventDefault();

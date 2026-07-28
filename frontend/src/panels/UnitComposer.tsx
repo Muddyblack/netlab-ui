@@ -173,6 +173,8 @@ export function UnitComposer({ sessionId, unitPath, refreshKey, onSaved, onToast
       </Box>
 
       <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {/* The three states share one large editor branch; keeping them inline makes that structure explicit. */}
+        {/* eslint-disable-next-line no-nested-ternary */}
         {loading && !unit ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
             <CircularProgress size={20} />

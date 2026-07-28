@@ -328,7 +328,9 @@ export function useExplorerController({
           // real draw.io export above.
           if (topoRef) {
             const sid = await resolveSession(topoRef);
-            const layout = commandId.endsWith(".horizontal") ? "horizontal" : commandId.endsWith(".vertical") ? "vertical" : "interactive";
+            let layout: "vertical" | "horizontal" | "interactive" = "interactive";
+            if (commandId.endsWith(".vertical")) layout = "vertical";
+            if (commandId.endsWith(".horizontal")) layout = "horizontal";
             if (sid) await cb.openLabGraph(sid, layout);
           }
         } else if (commandId === "containerlab.inspectOneLab") {

@@ -215,7 +215,8 @@ export function useNetlabLenses(sessionId: string, refreshKey?: string) {
   // spotlighted (a followed service, a traced path) if present, else the current
   // selection — so authoring a step is just "arrange the canvas, then capture".
   const captureView = useCallback((): TourView => {
-    const refs = presentationRefs.length ? presentationRefs : selectedRef ? [selectedRef] : [];
+    let refs = presentationRefs;
+    if (refs.length === 0) refs = selectedRef ? [selectedRef] : [];
     return {
       lens,
       family,

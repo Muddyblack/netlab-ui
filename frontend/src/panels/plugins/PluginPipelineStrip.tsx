@@ -48,15 +48,13 @@ export function PluginPipelineStrip({ pipeline }: { pipeline: PluginPipelineInfo
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.4 }}>
         {pipeline.order.map((entry, index) => {
           const broken = !entry.known || missingOf(entry).length > 0;
-          const tooltip = !entry.known
-            ? `${entry.id} was not found on netlab's plugin search path`
-            : missingOf(entry).length > 0
-              ? `Requires ${missingOf(entry).join(", ")}, which ${
-                  missingOf(entry).length === 1 ? "is" : "are"
-                } not in this topology's plugin list`
-              : hooksOf(entry).length > 0
-                ? `Runs at: ${hooksOf(entry).join(", ")}`
-                : "No transformation hooks defined";
+          let tooltip = "No transformation hooks defined";
+          if (hooksOf(entry).length > 0) tooltip = `Runs at: ${hooksOf(entry).join(", ")}`;
+          if (missingOf(entry).length > 0) {
+            const verb = missingOf(entry).length === 1 ? "is" : "are";
+            tooltip = `Requires ${missingOf(entry).join(", ")}, which ${verb} not in this topology's plugin list`;
+          }
+          if (!entry.known) tooltip = `${entry.id} was not found on netlab's plugin search path`;
 
           return (
             <Box key={entry.id} sx={{ display: "flex", alignItems: "center", gap: 0.4 }}>

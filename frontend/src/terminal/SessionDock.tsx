@@ -92,6 +92,8 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
 
   const activeTab = tabs.find((tab) => tab.key === activeKey) ?? null;
   const recentOutsideTabs = recentNodes.filter((node) => !tabs.some((tab) => tab.kind === "shell" && tab.node === node));
+  let dockHeight: number | string = "auto";
+  if (open) dockHeight = maximized ? "100%" : height;
 
   return (
     <Box
@@ -117,7 +119,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
           pointerEvents: "auto",
           display: "flex",
           flexDirection: "column",
-          height: open ? (maximized ? "100%" : height) : "auto",
+          height: dockHeight,
           borderTop: 1,
           borderColor: "divider",
           overflow: "hidden"
@@ -199,17 +201,16 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
         {/* Collapsing shrinks this to zero height instead of unmounting so
             shells and log streams keep their connections. */}
         <Box sx={{ flex: open ? 1 : "0 0 0px", minHeight: 0, position: "relative", overflow: "hidden" }}>
-          {tabs.map((tab) => (
-            <Box key={tab.key} sx={{ display: tab.key === activeKey ? "block" : "none", position: "absolute", inset: 0 }}>
-              <Suspense fallback={null}>
-                {tab.kind === "shell"
-                  ? <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />
-                  : tab.kind === "drawio"
-                  ? <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />
-                  : <NodeLogsPanel node={tab.node} sessionId={sessionId} />}
-              </Suspense>
-            </Box>
-          ))}
+          {tabs.map((tab) => {
+            let content = <NodeLogsPanel node={tab.node} sessionId={sessionId} />;
+            if (tab.kind === "shell") content = <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+            if (tab.kind === "drawio") content = <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+            return (
+              <Box key={tab.key} sx={{ display: tab.key === activeKey ? "block" : "none", position: "absolute", inset: 0 }}>
+                <Suspense fallback={null}>{content}</Suspense>
+              </Box>
+            );
+          })}
         </Box>
       </Paper>
     </Box>

@@ -441,6 +441,7 @@ export default function App() {
   // Owned here (not inside the palette tab) so lens/inspector state survives
   // switching to another dock tab and back.
   const netlabLenses = useNetlabLenses(sessionId ?? "", activeTabId ?? undefined);
+  const { applyDeploymentProgress } = netlabLenses;
   useRightPanelTabMemory();
 
   // When the tab open on the canvas is a unit file (lives in a `units/` dir),
@@ -506,11 +507,11 @@ export default function App() {
       const sameRun = Boolean(current && current.startedAt === progress.startedAt && current.action === progress.action);
       return { ...progress, nodes: sameRun && current ? { ...current.nodes, ...progress.nodes } : progress.nodes };
     });
-    netlabLenses.applyDeploymentProgress(progress);
+    applyDeploymentProgress(progress);
     if (progress.done) {
       deploymentProgressTimerRef.current = setTimeout(() => setDeploymentProgress(null), 4000);
     }
-  }, [netlabLenses.applyDeploymentProgress]);
+  }, [applyDeploymentProgress]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

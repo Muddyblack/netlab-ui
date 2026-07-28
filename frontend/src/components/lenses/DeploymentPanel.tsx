@@ -62,7 +62,9 @@ function StageTimeline({ deployment, onShowLog }: { deployment: DeploymentOvervi
         const complete = deployment.done && !failed ? true : index < activeIndex;
         const active = !deployment.done && index === activeIndex;
         const meta = STAGE_META[failed && index === activeIndex ? "failed" : stage];
-        const color = complete ? STATE_META.ready.color : active || (failed && index === activeIndex) ? meta.color : "#64748b";
+        let color = "#64748b";
+        if (active || (failed && index === activeIndex)) color = meta.color;
+        if (complete) color = STATE_META.ready.color;
         return (
           <Stack key={stage} direction="row" alignItems="flex-start" sx={{ flex: index === stages.length - 1 ? "0 0 auto" : 1, minWidth: 0 }}>
             <Tooltip title={`View ${meta.label.toLowerCase()} log`}>
@@ -105,7 +107,14 @@ function NodeInspector({ detail }: { detail: DeploymentNodeDetail }) {
       {recap.length > 0 && (
         <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 1 }}>
           {recap.map(([name, value]) => (
-            <Chip key={name} size="small" variant="outlined" label={`${name} ${value}`} color={name === "failed" || name === "unreachable" ? "error" : name === "changed" ? "warning" : "default"} />
+            <Chip
+              key={name}
+              size="small"
+              variant="outlined"
+              label={`${name} ${value}`}
+              color={name === "failed" || name === "unreachable" ? "error" : "default"}
+              sx={name === "changed" ? { color: "warning.main", borderColor: "warning.main" } : undefined}
+            />
           ))}
         </Stack>
       )}
@@ -183,8 +192,16 @@ export function DeploymentPanel({ sessionId, deployment, selectedNode, selectedD
 
   const failedNodes = Object.entries(deployment.nodes).filter(([, state]) => state === "failed").map(([node]) => node);
   const shownFailedNodes = failedNodes.slice(0, 200);
-  const statusColor = deployment.summary.failed > 0 ? STATE_META.failed.color : deployment.done ? STATE_META.ready.color : STAGE_META[deployment.stage].color;
-  const StatusIcon = deployment.summary.failed > 0 ? ErrorIcon : deployment.done ? CheckCircleIcon : deployment.running ? SyncIcon : HourglassEmptyIcon;
+  let statusColor = STAGE_META[deployment.stage].color;
+  if (deployment.done) statusColor = STATE_META.ready.color;
+  if (deployment.summary.failed > 0) statusColor = STATE_META.failed.color;
+  let StatusIcon = HourglassEmptyIcon;
+  if (deployment.running) StatusIcon = SyncIcon;
+  if (deployment.done) StatusIcon = CheckCircleIcon;
+  if (deployment.summary.failed > 0) StatusIcon = ErrorIcon;
+  let statusLabel = `Finished with exit code ${deployment.exitCode ?? "unknown"}`;
+  if (deployment.exitCode === 0) statusLabel = "Completed successfully";
+  if (deployment.running) statusLabel = "Running";
   const summaryEntries = Object.entries(deployment.summary).filter(([name, count]) => name !== "total" && count > 0);
 
   return (
@@ -195,7 +212,7 @@ export function DeploymentPanel({ sessionId, deployment, selectedNode, selectedD
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{deployment.action ? `netlab ${deployment.action}` : "Deployment"}</Typography>
             <Typography variant="caption" color="text.secondary">
-              {deployment.running ? "Running" : deployment.exitCode === 0 ? "Completed successfully" : `Finished with exit code ${deployment.exitCode ?? "unknown"}`}
+              {statusLabel}
             </Typography>
           </Box>
           <Stack direction="row" spacing={0.75} sx={{ ml: { xs: 3.5, sm: 0 } }}>

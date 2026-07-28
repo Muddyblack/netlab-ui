@@ -65,6 +65,9 @@ export function PluginCard({
   // A custom plugin has no upstream manual, so the docstring is all the
   // summary there is.
   const subtitle = plugin.description || plugin.title;
+  let borderColor = "divider";
+  if (isExpanded) borderColor = "primary.main";
+  if (plugin.error) borderColor = "error.main";
 
   return (
     <Accordion
@@ -74,7 +77,7 @@ export function PluginCard({
       onChange={(_, expanded) => onExpandedChange(expanded)}
       sx={{
         border: "1px solid",
-        borderColor: plugin.error ? "error.main" : isExpanded ? "primary.main" : "divider",
+        borderColor,
         borderRadius: "8px !important",
         overflow: "hidden",
         "&:before": { display: "none" },

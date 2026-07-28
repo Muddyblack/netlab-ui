@@ -30,6 +30,12 @@ export function AppToolbarActions({
   let notificationTooltip = "Enable system notifications for netlab jobs";
   if (notificationPermission === "denied") notificationTooltip = "Notifications blocked — allow them in this site's browser settings";
   else if (notificationsEnabled) notificationTooltip = "System notifications on — click to turn off";
+  let assistantLabel = "Assistant unavailable";
+  let assistantState: "offline" | "idle" | "sleeping" = "offline";
+  if (assistantAvailable) {
+    assistantLabel = assistantOpen ? "Close assistant" : "Open assistant";
+    assistantState = assistantOpen ? "idle" : "sleeping";
+  }
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
@@ -45,17 +51,10 @@ export function AppToolbarActions({
           size="small"
           onClick={onToggleAssistant}
           color={assistantOpen ? "warning" : "default"}
-          aria-label={
-            assistantAvailable
-              ? assistantOpen ? "Close assistant" : "Open assistant"
-              : "Assistant unavailable"
-          }
+          aria-label={assistantLabel}
           sx={{ opacity: 1, "&:hover": { opacity: 1 } }}
         >
-          <NetlabMascot
-            size={20}
-            state={!assistantAvailable ? "offline" : assistantOpen ? "idle" : "sleeping"}
-          />
+          <NetlabMascot size={20} state={assistantState} />
         </IconButton>
       </Tooltip>
 

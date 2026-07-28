@@ -135,6 +135,20 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
     }
   }, [onChanged, onToast, pending, refresh, shutDown]);
 
+  let pendingSeverity: "error" | "warning" | "info" = "info";
+  let pendingColor: "error" | "warning" | "primary" = "primary";
+  if (pending?.action === "force-cleanup") {
+    pendingSeverity = "warning";
+    pendingColor = "warning";
+  }
+  if (pending?.action === "forget") {
+    pendingSeverity = "error";
+    pendingColor = "error";
+  }
+  let confirmContent = <span>Confirm</span>;
+  if (pending) confirmContent = <span>{ACTION_COPY[pending.action].confirm}</span>;
+  if (running) confirmContent = <CircularProgress size={18} color="inherit" />;
+
   return (
     <>
       <Dialog open={open} onClose={running ? undefined : onClose} fullWidth maxWidth="md">
@@ -239,7 +253,7 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
         <DialogTitle>{pending ? ACTION_COPY[pending.action].title : "Confirm action"}</DialogTitle>
         <DialogContent>
           <Alert
-            severity={pending?.action === "forget" ? "error" : pending?.action === "force-cleanup" ? "warning" : "info"}
+            severity={pendingSeverity}
             variant="outlined"
             sx={{ color: "text.primary" }}
           >
@@ -251,11 +265,11 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
           <Button variant="text" onClick={() => setPending(null)} disabled={running} sx={{ textTransform: "none" }}>Cancel</Button>
           <Button
             variant="contained"
-            color={pending?.action === "forget" ? "error" : pending?.action === "force-cleanup" ? "warning" : "primary"}
+            color={pendingColor}
             onClick={() => void runAction()}
             disabled={running}
           >
-            {running ? <CircularProgress size={18} color="inherit" /> : pending ? ACTION_COPY[pending.action].confirm : "Confirm"}
+            {confirmContent}
           </Button>
         </DialogActions>
       </Dialog>

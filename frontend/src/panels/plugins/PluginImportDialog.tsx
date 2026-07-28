@@ -123,7 +123,7 @@ export function PluginImportDialog({
       <DialogContent sx={{ display: "grid", gap: 2, pt: 1 }}>
         <Typography variant="caption" color="text.secondary">
           netlab plugins are Python files that transform the topology before it
-          is deployed. Anything you add here lands on netlab's plugin search
+          is deployed. Anything you add here lands on netlab&apos;s plugin search
           path and appears in this panel alongside the built-in ones.
         </Typography>
 
