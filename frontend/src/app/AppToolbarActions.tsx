@@ -13,8 +13,10 @@ interface AppToolbarActionsProps {
   onToggleNotifications: () => void;
   onOpenSettings: () => void;
   assistantAvailable: boolean;
+  assistantHasProvider: boolean;
   assistantOpen: boolean;
   onToggleAssistant: () => void;
+  onSetupAssistant: () => void;
 }
 
 export function AppToolbarActions({
@@ -24,24 +26,29 @@ export function AppToolbarActions({
   onToggleNotifications,
   onOpenSettings,
   assistantAvailable,
+  assistantHasProvider,
   assistantOpen,
-  onToggleAssistant
+  onToggleAssistant,
+  onSetupAssistant
 }: AppToolbarActionsProps) {
   let notificationTooltip = "Enable system notifications for netlab jobs";
   if (notificationPermission === "denied") notificationTooltip = "Notifications blocked — allow them in this site's browser settings";
   else if (notificationsEnabled) notificationTooltip = "System notifications on — click to turn off";
   let assistantLabel = "Assistant unavailable";
   let assistantState: "offline" | "idle" | "sleeping" = "offline";
-  if (assistantAvailable) {
+  if (assistantAvailable && assistantHasProvider) {
     assistantLabel = assistantOpen ? "Close assistant" : "Open assistant";
     assistantState = assistantOpen ? "idle" : "sleeping";
+  } else if (assistantAvailable) {
+    assistantLabel = "Set up an AI provider";
+    assistantState = "sleeping";
   }
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
       <Tooltip
         title={
-          assistantAvailable
+          assistantAvailable && assistantHasProvider
             ? `${assistantOpen ? "Close" : "Open"} AI assistant (Ctrl+I)`
             : "AI assistant — set up a provider to wake Nettie"
         }
@@ -49,7 +56,7 @@ export function AppToolbarActions({
       >
         <IconButton
           size="small"
-          onClick={onToggleAssistant}
+          onClick={assistantHasProvider ? onToggleAssistant : onSetupAssistant}
           color={assistantOpen ? "warning" : "default"}
           aria-label={assistantLabel}
           sx={{ opacity: 1, "&:hover": { opacity: 1 } }}

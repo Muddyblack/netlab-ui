@@ -32,19 +32,21 @@ import LightModeIcon from "@mui/icons-material/LightMode";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 
-import { api, HttpError, type HealthStatus, type NetlabEnvironment } from "../../api/client";
+import { api, HttpError, type AssistantProvider, type HealthStatus, type NetlabEnvironment } from "../../api/client";
 import type { WorkspaceEntry } from "../../lifecycle/types";
 import type { AppThemeMode } from "../../theme";
 import { FolderBrowserDialog } from "./FolderBrowserDialog";
 import { NetlabAboutContent, RuntimeInfo } from "../NetlabAboutModal";
+import { ProviderSettingsPanel } from "../../panels/assistant/ProviderSettingsDialog";
 
-export type SettingsTab = "general" | "workspaces" | "environment" | "about";
+export type SettingsTab = "general" | "workspaces" | "environment" | "assistant" | "about";
 
 const TAB_INDEX_MAP: Record<SettingsTab, number> = {
   general: 0,
   workspaces: 1,
   environment: 2,
-  about: 3
+  assistant: 3,
+  about: 4
 };
 
 const TEXT_SECONDARY = "text.secondary";
@@ -86,6 +88,11 @@ export interface SettingsDialogProps {
   // Environment
   onEnvironmentChanged: () => void;
 
+  // Assistant
+  assistantProviders: AssistantProvider[];
+  assistantInitialProviderId?: string;
+  onAssistantChanged: () => void;
+
   // Health / About
   health: HealthStatus | null;
 }
@@ -104,6 +111,9 @@ export function SettingsDialog({
   onAddWorkspace,
   onRemoveWorkspace,
   onEnvironmentChanged,
+  assistantProviders,
+  assistantInitialProviderId,
+  onAssistantChanged,
   health
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<number>(TAB_INDEX_MAP[initialTab] ?? 0);
@@ -243,9 +253,20 @@ export function SettingsDialog({
           <Tab label="General" />
           <Tab label="Workspaces" />
           <Tab label="Environment" />
+          <Tab label="Assistant" />
           <Tab label="About" />
         </Tabs>
 
+        {activeTab === 3 ? (
+          <Box sx={{ px: 3 }}>
+            <ProviderSettingsPanel
+              providers={assistantProviders}
+              initialProviderId={assistantInitialProviderId}
+              onChanged={onAssistantChanged}
+              active={open && activeTab === 3}
+            />
+          </Box>
+        ) : (
         <DialogContent dividers sx={{ px: 3, py: 2.5, minHeight: 380 }}>
           {/* TAB 0: GENERAL (Theme & Notifications) */}
           {activeTab === 0 && (
@@ -485,11 +506,12 @@ export function SettingsDialog({
             </Stack>
           )}
 
-          {/* TAB 3: ABOUT */}
-          {activeTab === 3 && (
+          {/* TAB 4: ABOUT */}
+          {activeTab === 4 && (
             <NetlabAboutContent />
           )}
         </DialogContent>
+        )}
 
         <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={onClose} variant="contained">
