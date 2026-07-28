@@ -130,16 +130,20 @@ class DeploymentProgressTracker:
         self.stage = "configuring"
         self._record_event(node, status, message)
 
-    def _feed_recap(self, node: str, recap_text: str) -> None:
+    def _feed_recap(self, node: str, recap_text: str) -> bool:
+        """Update ``node``'s recap counters from a ``node : k=v k=v`` line.
+        Returns whether it actually looked like a recap line, so callers can
+        fall back to generic parsing for ordinary ``label: message`` lines."""
         if node not in self._nodes:
-            return
+            return False
         values = {name.lower(): int(value) for name, value in _RECAP_VALUE.findall(recap_text)}
         if not values:
-            return
+            return False
         self._nodes[node].recap.update(values)
         failed = values.get("failed", 0) or values.get("unreachable", 0)
         self._set_state(node, "failed" if failed else "ready")
         self._record_event(node, "recap", recap_text.strip())
+        return True
 
     def _feed_generic(self, line: str) -> None:
         lowered = line.lower()
@@ -174,9 +178,7 @@ class DeploymentProgressTracker:
             recap = bool(separator and node and not any(char.isspace() for char in node))
             if event:
                 self._feed_ansible_event(event)
-            elif recap:
-                self._feed_recap(node, recap_text)
-            else:
+            elif not (recap and self._feed_recap(node, recap_text)):
                 self._feed_generic(line)
             return bool(self._delta_nodes) or self.stage != before_stage or task is not None
 

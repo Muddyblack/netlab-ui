@@ -131,7 +131,7 @@ class AgyProvider:
             return
 
         stdout = stdout_bytes.decode(errors="replace").strip()
-        stderr_bytes.decode(errors="replace").strip()
+        stderr = stderr_bytes.decode(errors="replace").strip()
 
         # Parse JSON output
         event = {}
@@ -140,6 +140,8 @@ class AgyProvider:
                 event = json.loads(stdout)
             except json.JSONDecodeError:
                 logger.warning("Failed to parse agy output as JSON: %s", stdout)
+        elif stderr:
+            logger.warning("agy produced no stdout; stderr: %s", stderr)
 
         if event.get("conversation_id"):
             self._conversation_id = str(event["conversation_id"])
