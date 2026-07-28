@@ -1,0 +1,46 @@
+frontend/.npmrc
+.npmrc
+
+.vscode/
+
+.vite
+
+.vnode/
+.kiro/
+./agents
+.vagrant/
+srl-telemetry-lab-main/
+tree.txt
+
+*.qcow2
+*.iso
+
+.claude
+
+# node / frontend
+node_modules/
+frontend/dist/
+frontend/.jscpd/
+desktop/release/
+
+# python / backend
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# netlab generated artifacts (kept out of the repo)
+clab.yml
+*.clab.yml
+netlab.snapshot.yml
+ansible.cfg
+hosts.yml
+Vagrantfile
+
+# UI layout sidecars are per-user view state, not source
+*.netlab-ui.json
+
+# labs/ holds user-specific lab data; only the sample lab is tracked
+labs/*
+!labs/sample.yml

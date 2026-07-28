@@ -1,0 +1,646 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://netlab.tools/schema/netlab.schema.json",
+  "title": "netlab topology",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Topology name."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Default virtualization provider such as clab or libvirt."
+    },
+    "plugin": {
+      "description": "Enabled netlab plugins.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "module": {
+      "description": "Enabled netlab modules.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Topology-wide defaults applied to nodes, links, and providers.",
+      "additionalProperties": true
+    },
+    "addressing": {
+      "type": "object",
+      "description": "Address pool definitions.",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "null"},
+          {
+            "type": "object",
+            "properties": {
+              "ipv4": {
+                "type": "string",
+                "description": "IPv4 address prefix/pool."
+              },
+              "ipv6": {
+                "type": "string",
+                "description": "IPv6 address prefix/pool."
+              },
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "prefix": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              },
+              "prefix6": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 128
+              },
+              "allocation": {
+                "type": "string",
+                "enum": ["p2p", "sequential", "id_based"]
+              },
+              "mac": {
+                "type": "string"
+              },
+              "unnumbered": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "prefix": {
+      "type": "object",
+      "description": "Custom prefix pools.",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "null"},
+          {
+            "type": "object",
+            "properties": {
+              "ipv4": {
+                "type": "string"
+              },
+              "ipv6": {
+                "type": "string"
+              },
+              "allocation": {
+                "type": "string",
+                "enum": ["p2p", "sequential", "id_based"]
+              },
+              "pool": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "groups": {
+      "type": "object",
+      "description": "Node groups and shared settings.",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "null"},
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["node", "vlan", "vrf"]
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "module": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "device": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "vars": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "config": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "node_data": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "_auto_create": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "description": "Topology nodes keyed by node name.",
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "null"},
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "device": {
+                "type": "string",
+                "description": "Device type used by netlab."
+              },
+              "provider": {
+                "type": "string",
+                "description": "Virtualization provider override for this node."
+              },
+              "mgmt": {
+                "type": "object",
+                "properties": {
+                  "ipv4": {
+                    "oneOf": [{"type": "string"}, {"type": "boolean"}]
+                  },
+                  "ipv6": {
+                    "oneOf": [{"type": "string"}, {"type": "boolean"}]
+                  },
+                  "mac": {
+                    "type": "string"
+                  },
+                  "ifname": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": true
+              },
+              "interfaces": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "module": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "box": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "config": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "skip_config": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "group": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "role": {
+                "type": "string",
+                "enum": ["router", "host", "bridge", "gateway"]
+              },
+              "router_id": {
+                "type": "string"
+              },
+              "mtu": {
+                "type": "integer",
+                "minimum": 64,
+                "maximum": 9216
+              },
+              "loopback": {
+                "oneOf": [
+                  {"type": "boolean"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "ipv4": {
+                        "oneOf": [{"type": "string"}, {"type": "boolean"}]
+                      },
+                      "ipv6": {
+                        "oneOf": [{"type": "string"}, {"type": "boolean"}]
+                      },
+                      "pool": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "cpu": {
+                "type": "integer"
+              },
+              "memory": {
+                "type": "integer"
+              },
+              "unmanaged": {
+                "type": "boolean"
+              },
+              "vlans": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/definitions/node_vlan"
+                }
+              },
+              "vrfs": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/definitions/vrf"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Link definitions between nodes.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["lan", "p2p", "stub", "loopback", "tunnel", "vlan_member"]
+              },
+              "interfaces": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "node": {
+                      "type": "string"
+                    },
+                    "ifname": {
+                      "type": "string"
+                    },
+                    "ifindex": {
+                      "type": "integer"
+                    },
+                    "ipv4": {
+                      "oneOf": [{"type": "string"}, {"type": "boolean"}, {"type": "object"}]
+                    },
+                    "ipv6": {
+                      "oneOf": [{"type": "string"}, {"type": "boolean"}, {"type": "object"}]
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              },
+              "bandwidth": {
+                "type": "integer"
+              },
+              "bridge": {
+                "type": "string"
+              },
+              "disable": {
+                "type": "boolean"
+              },
+              "shutdown": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "prefix": {
+                "oneOf": [
+                  {"type": "string"},
+                  {"type": "boolean"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "ipv4": {"type": "string"},
+                      "ipv6": {"type": "string"},
+                      "allocation": {"type": "string", "enum": ["p2p", "sequential", "id_based"]}
+                    },
+                    "additionalProperties": true
+                  }
+                ]
+              },
+              "role": {
+                "type": "string"
+              },
+              "pool": {
+                "type": "string"
+              },
+              "mtu": {
+                "type": "integer",
+                "minimum": 64,
+                "maximum": 9216
+              },
+              "unnumbered": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
+      }
+    },
+    "vlans": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/vlan"
+      }
+    },
+    "vrfs": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/vrf"
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "validate": {
+      "type": "object",
+      "description": "Validation test cases.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "fail": {
+            "type": "string"
+          },
+          "pass": {
+            "type": "string"
+          },
+          "wait": {
+            "oneOf": [{"type": "integer"}, {"type": "string"}]
+          },
+          "wait_msg": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exec": {
+            "oneOf": [{"type": "string"}, {"type": "object", "additionalProperties": true}]
+          },
+          "show": {
+            "oneOf": [{"type": "string"}, {"type": "object", "additionalProperties": true}]
+          },
+          "config": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "properties": {
+                  "template": {"type": "string"},
+                  "variable": {"type": "object", "additionalProperties": true}
+                },
+                "additionalProperties": true
+              }
+            ]
+          },
+          "valid": {
+            "oneOf": [{"type": "string"}, {"type": "object", "additionalProperties": true}]
+          },
+          "suzieq": {
+            "oneOf": [
+              {"type": "string"},
+              {
+                "type": "object",
+                "properties": {
+                  "show": {"type": "string"},
+                  "expect": {"type": "string", "enum": ["empty"]},
+                  "valid": {"type": "string", "enum": ["all", "any"]}
+                },
+                "additionalProperties": true
+              }
+            ]
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "stop_on_error": {
+            "type": "boolean"
+          },
+          "level": {
+            "type": "string",
+            "enum": ["warning"]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "version": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "number"}
+      ],
+      "description": "Lab topology version / netlab version check."
+    }
+  },
+  "definitions": {
+    "vlan": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4095
+            },
+            "vni": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777215
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["bridge", "irb", "route"]
+            },
+            "links": {
+              "type": "array"
+            },
+            "prefix": {
+              "oneOf": [
+                {"type": "string"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "ipv4": {"type": "string"},
+                    "ipv6": {"type": "string"},
+                    "allocation": {"type": "string", "enum": ["p2p", "sequential", "id_based"]}
+                  },
+                  "additionalProperties": true
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "node_vlan": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4095
+            },
+            "vni": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16777215
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["bridge", "irb", "route"]
+            },
+            "links": {
+              "type": "array"
+            },
+            "prefix": {
+              "oneOf": [
+                {"type": "string"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "ipv4": {"type": "string"},
+                    "ipv6": {"type": "string"},
+                    "allocation": {"type": "string", "enum": ["p2p", "sequential", "id_based"]}
+                  },
+                  "additionalProperties": true
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "vrf": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "properties": {
+            "rd": {
+              "type": "string"
+            },
+            "import": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "export": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "links": {
+              "type": "array"
+            },
+            "loopback": {
+              "oneOf": [
+                {"type": "boolean"},
+                {"type": "string"},
+                {"type": "null"},
+                {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

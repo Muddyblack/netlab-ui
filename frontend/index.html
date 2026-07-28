@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>netlab web</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="alternate icon" type="image/png" href="/favicon.png" />
+  <style>
+    html,
+    body,
+    #root {
+      margin: 0;
+      height: 100%;
+      font-family: system-ui, sans-serif;
+    }
+
+    /* Replace clab logo with our icon */
+    .containerlab-logo-svg path,
+    .containerlab-logo-svg circle,
+    .containerlab-logo-svg div {
+      display: none !important;
+    }
+
+    .containerlab-logo-svg {
+      background-image: url("/favicon.svg") !important;
+      background-size: contain !important;
+      background-repeat: no-repeat !important;
+      background-position: center !important;
+    }
+
+    :root {
+      --clab-ui-button-background: #ff9800 !important;
+      --vscode-button-background: #ff9800 !important;
+      --vscode-focusBorder: #ff9800 !important;
+      --clab-ui-focus-border: #ff9800 !important;
+      --vscode-badge-background: rgba(255, 152, 0, 0.2) !important;
+      --vscode-textLink-foreground: #ffb300 !important;
+      --vscode-textLink-activeForeground: #ffc247 !important;
+      --vscode-progressBar-background: #ff9800 !important;
+      --vscode-list-focusOutline: #ff9800 !important;
+    }
+  </style>
+  <!-- Override clab-ui's default node icon color (read by DEFAULT_ICON_COLOR before the bundle loads). -->
+  <script>
+    window.__CLAB_UI_DEFAULT_ICON_COLOR__ = "#ff9800";
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>

@@ -1,0 +1,142 @@
+diff --git a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
+index ec79e53..743da04 100644
+--- a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
++++ b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
+@@ -14870,7 +14870,12 @@ var PaletteSection = ({
+         return true;
+       }).map((t) => ({ id: t.id, label: paletteTabLabels?.[t.id] ?? t.label }));
+       const custom = (customPaletteTabs ?? []).map((t) => ({ id: t.id, label: t.label })).filter((t) => !disabledTabIds?.includes(t.id));
+-      return [...base, ...custom];
++      const LEAD_TAB_IDS = ["netlab-assistant"];
++      const lead = custom.filter((t) => LEAD_TAB_IDS.includes(t.id));
++      const rest = custom.filter((t) => !LEAD_TAB_IDS.includes(t.id));
++      const yamlStart = base.findIndex((t) => t.id === "yaml" || t.id === "json");
++      const body = yamlStart === -1 ? [...base, ...rest] : [...base.slice(0, yamlStart), ...rest, ...base.slice(yamlStart)];
++      return [...lead, ...body];
+     },
+     [showInfoTab, showEditTab, customPaletteTabs, disabledTabIds, paletteTabLabels]
+   );
+@@ -14885,8 +14890,10 @@ var PaletteSection = ({
+     if (showEditTab && !showInfoTab) setUserTab("edit");
+   }, [showEditTab, showInfoTab]);
+   useEffect19(() => {
+-    if (showInfoTab) setUserTab("info");
+-  }, [showInfoTab]);
++    if (showInfoTab) {
++      setUserTab((prev) => (customPaletteTabs ?? []).some((t) => t.id === prev) ? prev : "info");
++    }
++  }, [showInfoTab, customPaletteTabs]);
+   useEffect19(() => {
+     if (visibleTabs.some((t) => t.id === userTab)) return;
+     setUserTab(visibleTabs[0]?.id ?? "");
+@@ -22525,5 +22532,6 @@ var App = ({ initialData, runtime, chrome }) => {
+ 
+ export {
+   subscribeToWebviewMessages,
++  IconSelectorModal,
+   App
+ };
+diff --git a/node_modules/@srl-labs/clab-ui/dist/index.d.ts b/node_modules/@srl-labs/clab-ui/dist/index.d.ts
+index 1dbde0b..99d6ead 100644
+--- a/node_modules/@srl-labs/clab-ui/dist/index.d.ts
++++ b/node_modules/@srl-labs/clab-ui/dist/index.d.ts
+@@ -2,4 +2,26 @@ import "./types/globals";
+ export { App } from "./App";
+ export { subscribeToWebviewMessages } from "./messaging/webviewMessageBus";
+ export { log } from "./utils/logger";
+-export { useTopoViewerStore } from "./stores/topoViewerStore";
++export { useIsLocked, useTopoViewerActions, useTopoViewerStore } from "./stores/topoViewerStore";
++export { useEdges } from "./stores/graphStore";
++export declare const useNodes: () => import("@xyflow/react").Node[];
++export type { TabConfig } from "./components/ui/editor/EditorPanel";
++export type { TabProps as NodeEditorTabProps, NodeEditorData } from "./components/panels/node-editor/types";
++export { IconSelectorModal } from "./components/ui/IconSelectorModal";
++export type { NodeType } from "./icons/SvgGenerator";
++export { generateEncodedSVG } from "./icons/SvgGenerator";
++export { DEFAULT_ICON_COLOR } from "./core/types/graph";
++export {
++  InputField,
++  SelectField,
++  type SelectOption,
++  ColorField,
++  DynamicList,
++  KeyValueList,
++  FilterableDropdown,
++  type FilterableDropdownOption,
++  IconPreview,
++  PanelSection,
++  PanelAddSection,
++  PanelSectionHeader
++} from "./components/ui/form";
+diff --git a/node_modules/@srl-labs/clab-ui/dist/index.js b/node_modules/@srl-labs/clab-ui/dist/index.js
+index d3406d7..fe6563b 100644
+--- a/node_modules/@srl-labs/clab-ui/dist/index.js
++++ b/node_modules/@srl-labs/clab-ui/dist/index.js
+@@ -1,5 +1,6 @@
+ import {
+   App,
++  IconSelectorModal,
+   subscribeToWebviewMessages
+ } from "./chunks/chunk-XB5UYPDR.js";
+ import "./chunks/chunk-TEX73Q7H.js";
+@@ -14,8 +15,32 @@ import "./chunks/chunk-5ODV6KJE.js";
+ import "./chunks/chunk-5WUTGIEL.js";
+ import "./chunks/chunk-KS5ITECV.js";
+ import {
++  useIsLocked,
++  useTopoViewerActions,
+   useTopoViewerStore
+ } from "./chunks/chunk-BBTDNLBI.js";
++import {
++  useEdges,
++  useGraphStore
++} from "./chunks/chunk-OIXEGNKJ.js";
++import {
++  ColorField,
++  DynamicList,
++  FilterableDropdown,
++  IconPreview,
++  InputField,
++  KeyValueList,
++  PanelAddSection,
++  PanelSection,
++  PanelSectionHeader,
++  SelectField
++} from "./chunks/chunk-KJJC3NVL.js";
++import {
++  generateEncodedSVG
++} from "./chunks/chunk-6VHPVQZV.js";
++import {
++  DEFAULT_ICON_COLOR
++} from "./chunks/chunk-6GFODFMI.js";
+ import "./chunks/chunk-OIXEGNKJ.js";
+ import "./chunks/chunk-EB3IUBDZ.js";
+ import "./chunks/chunk-AS72J43G.js";
+@@ -29,9 +54,27 @@ import "./chunks/chunk-DFN4YP4A.js";
+ import "./chunks/chunk-L4UBGSCA.js";
+ import "./chunks/chunk-CPW4U4ZI.js";
+ import "./chunks/chunk-LBHJ2GVG.js";
++const useNodes = () => useGraphStore((state) => state.nodes);
+ export {
+   App,
++  ColorField,
++  DEFAULT_ICON_COLOR,
++  DynamicList,
++  FilterableDropdown,
++  IconPreview,
++  IconSelectorModal,
++  InputField,
++  KeyValueList,
++  PanelAddSection,
++  PanelSection,
++  PanelSectionHeader,
++  SelectField,
++  generateEncodedSVG,
+   log,
+   subscribeToWebviewMessages,
++  useEdges,
++  useIsLocked,
++  useNodes,
++  useTopoViewerActions,
+   useTopoViewerStore
+ };

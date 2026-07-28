@@ -1,0 +1,61 @@
+[project]
+name = "netlab-gui-backend"
+dynamic = ["version"]
+description = "Backend adapter/BFF for a netlab APP — drives the netlab CLI and speaks the clab-ui ClabUiHost contract"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "ruamel.yaml>=0.18",
+    "ptyprocess>=0.7",
+    # Optional at runtime (guarded import): powers push-based workspace events;
+    # without it the frontend falls back to interval polling.
+    "watchfiles>=0.21",
+]
+
+[project.optional-dependencies]
+# netlab itself, for environments that don't already have it (e.g. the Docker
+# image — see backend/Dockerfile). Left out of core deps so local dev against
+# an existing system/pipx `netlab` install isn't forced onto a pip-managed
+# copy or fought over version pins.
+netlab = [
+    # PyPI name `networklab`, importable as `netsim`. The adapter both shells
+    # out to the `netlab` CLI and reads plugins straight from the installed
+    # `netsim/extra/` package directory; MIN_NETLAB_VERSION in
+    # services/netlab/runner.py tracks the floor the adapter relies on.
+    "networklab>=26.07",
+    # Not imported by the adapter — required by the `netlab` CLI it shells out
+    # to, which deploys device config through Ansible. Without it `netlab
+    # version` reports its Ansible components as "not installed" and config
+    # deployment fails. `ansible` pulls in `ansible-core`; `ansible-pylibssh`
+    # is the faster SSH transport.
+    "ansible>=9",
+    "ansible-pylibssh>=1.2",
+]
+# Optional AI assistant (services/assistant/, app/assistant/). Without it the
+# feature is simply absent — see NETLAB_APP_ASSISTANT in services/assistant.
+assistant = [
+    "mcp>=1.9",
+    "claude-agent-sdk>=0.1",
+    "google-genai>=1.0",
+    "openai>=1.99",
+]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.10.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = { find = {} }
+
+[tool.setuptools_scm]
+fallback_version = "0.0+unknown"

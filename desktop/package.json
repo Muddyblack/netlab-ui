@@ -1,0 +1,74 @@
+{
+  "name": "netlab-ui-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron shell for netlab-ui — points at a running netlab-ui backend (local or remote), bundles no backend of its own.",
+  "author": {
+    "name": "Muddyblack",
+    "url": "https://github.com/Muddyblack"
+  },
+  "main": "src/main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "electron .",
+    "check": "npm run lint && npm test",
+    "lint": "oxlint src test",
+    "test": "node --test",
+    "build:linux": "electron-builder --linux",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "oxlint": "^1.74.0"
+  },
+  "build": {
+    "appId": "app.netlab.desktop",
+    "productName": "netlab-ui",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!src/**/*.map"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Network",
+      "icon": "build/icon.png"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": "universal"
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

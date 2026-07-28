@@ -1,0 +1,11 @@
+name: sample
+provider: clab
+defaults:
+  device: frr
+nodes:
+  r1:
+  r2:
+  r3:
+links:
+  - r1-r2
+  - r2-r3

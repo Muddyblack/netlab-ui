@@ -1,0 +1,18 @@
+netlab-ui
+Copyright 2024-2026 Muddyblack and contributors
+
+This product includes software developed by third parties:
+
+- @srl-labs/clab-ui (https://github.com/srl-labs/clab-ui)
+  Copyright SRL Labs / Nokia
+  Licensed under the Apache License, Version 2.0.
+  Consumed as an npm dependency; the frontend build bundles its compiled
+  output. See frontend/node_modules/@srl-labs/clab-ui/LICENSE for the
+  full license text of the version in use.
+
+- netlab (https://github.com/ipspace/netlab)
+  Copyright (c) 2020-2025 Ivan Pepelnjak, Jeroen van Bemmel, Stefano Sasso,
+  Dan Partelly, Pete Crocker, Julien Dhaille, Jody Lemoine, and others.
+  Licensed under the MIT License.
+  Invoked as an external CLI (netlab create/up/down/status/...); not
+  bundled or redistributed as part of this software.

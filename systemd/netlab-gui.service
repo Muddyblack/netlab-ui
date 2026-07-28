@@ -1,0 +1,15 @@
+[Unit]
+Description=netlab-gui Service (Autostart on boot)
+After=network.target docker.service
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/projects/netlab_gui
+ExecStart=/usr/bin/env nix run
+Restart=always
+RestartSec=5s
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=default.target
