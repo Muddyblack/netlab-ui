@@ -29,6 +29,7 @@ def test_tree_lists_sources_and_flags_generated(client, workspace):
     (workspace / "hosts.yml").write_text("{}\n")
     (workspace / "ansible.cfg").write_text("[defaults]\n")
     (workspace / "topo.netlab-ui.json").write_text("{}\n")
+    (workspace / "topo.yml.annotations.json").write_text("{}\n")
     (workspace / "group_vars").mkdir()
     (workspace / "configs").mkdir()
     (workspace / ".hidden").write_text("x")
@@ -42,7 +43,14 @@ def test_tree_lists_sources_and_flags_generated(client, workspace):
     assert entries["notes.md"]["generated"] is False
     assert entries["configs"]["kind"] == "dir"
     assert entries["configs"]["generated"] is False
-    for name in ("clab.yml", "hosts.yml", "ansible.cfg", "topo.netlab-ui.json", "group_vars"):
+    for name in (
+        "clab.yml",
+        "hosts.yml",
+        "ansible.cfg",
+        "topo.netlab-ui.json",
+        "topo.yml.annotations.json",
+        "group_vars",
+    ):
         assert entries[name]["generated"] is True, name
 
     # Directories sort before files

@@ -62,16 +62,45 @@ def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list
 
     async def _work() -> None:
         try:
-            try:
-                result = await runner.create(topology_path)
-                clab = result.get("clab")
-            except (runner.NetlabError, runner.NetlabNotInstalled):
-                # `netlab create` cannot run while the lab is deployed
-                # (netlab.lock). Use the clab.yml written at deploy time so a
-                # backend restart doesn't blank the canvas — vital for
-                # plugin-generated topologies whose raw YAML has no nodes.
-                clab = runner.read_existing_clab(topology_path)
-            nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
+            locked = (Path(topology_path).parent / "netlab.lock").exists()
+            if locked:
+                # `netlab create` refuses to run while the lab is deployed, and
+                # `runner.create()` transparently substitutes `netlab inspect`
+                # (the *running* instance) instead of raising. That reflects
+                # containers as deployed, not the edit that was just made but
+                # not yet redeployed — caching it here would overwrite the
+                # correct, just-edited `fallback` a few seconds later and make
+                # in-progress edits appear to silently revert. Keep serving the
+                # model-derived fallback until the lab is redeployed (new
+                # netlab.lock state) or torn down.
+                nodes, edges = fallback
+            else:
+                try:
+                    result = await runner.create(topology_path)
+                    clab = result.get("clab")
+                    nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
+                except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
+                    if topology_path not in _clab_cache:
+                        # Never built successfully for this path yet (e.g. right
+                        # after a backend restart, before any snapshot request
+                        # has run `netlab create`). Use the clab.yml written at
+                        # the last deploy so the canvas isn't blank — vital for
+                        # plugin-generated topologies whose raw YAML has no
+                        # nodes.
+                        clab = runner.read_existing_clab(topology_path)
+                        nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
+                    else:
+                        # We've built successfully before, so this failure means
+                        # the edit that was just made is what broke `netlab
+                        # create` (e.g. a bad interface assignment on a new
+                        # link). Silently substituting the old deployed
+                        # projection would drop that edit's node/link from the
+                        # canvas with no indication anything is wrong — keep
+                        # serving the live model-derived fallback instead (it at
+                        # least reflects the edit) and surface the real error.
+                        nodes, edges = fallback
+                        if isinstance(exc, runner.NetlabError):
+                            validation_store.store_failure(topology_path, exc.stderr or str(exc))
             _store_cache(topology_path, yaml_hash, nodes, edges)
         finally:
             _transform_tasks.pop(topology_path, None)
@@ -266,19 +295,15 @@ async def build(
 
     # Sidecar view-state, applied back onto the canvas nodes so drags/icons/
     # group membership actually persist across reloads (the YAML stays clean).
-    saved_positions = annotations.get("positions") or {}
-    saved_icons = annotations.get("icons") or {}
-    node_group: dict[str, str] = {
-        n["id"]: n["groupId"]
-        for n in (annotations.get("nodeAnnotations") or [])
-        if isinstance(n, dict) and n.get("id") and n.get("groupId")
+    node_view: dict[str, dict[str, Any]] = {
+        n["id"]: n for n in (annotations.get("nodeAnnotations") or []) if isinstance(n, dict) and n.get("id")
     }
 
     # Reconcile node fields for the canvas
     for node in nodes:
         node_id = node["id"]
         node["type"] = "topology-node"
-        saved_pos = saved_positions.get(node_id)
+        saved_pos = node_view.get(node_id, {}).get("position")
         if isinstance(saved_pos, dict) and "x" in saved_pos and "y" in saved_pos:
             node["position"] = {"x": saved_pos["x"], "y": saved_pos["y"]}
         elif "position" not in node:
@@ -296,13 +321,22 @@ async def build(
         if "label" not in node["data"]:
             node["data"]["label"] = node_id
         if "role" not in node["data"]:
-            node["data"]["role"] = node.get("kind") or "router"
-        if node_id in saved_icons:
-            node["data"]["topoViewerRole"] = saved_icons[node_id]
-            node["data"]["role"] = saved_icons[node_id]
-        if node_id in node_group:
-            node["data"]["groupId"] = node_group[node_id]
-            node["data"]["group"] = node_group[node_id]
+            # The netlab device name (e.g. "frr") vs. its clab projection's
+            # kind (e.g. "linux" — see test_kind_image_references.py) diverge
+            # for many devices. Deriving the default icon from whichever
+            # projection happens to be active makes it flip when the
+            # background `netlab create` transform swaps the fallback
+            # rendering for the real one. Anchor it to the stable netlab
+            # device name instead so the icon never changes across that swap.
+            node["data"]["role"] = (source_node.device if source_node else None) or node.get("kind") or "router"
+        saved_icon = node_view.get(node_id, {}).get("icon")
+        if saved_icon:
+            node["data"]["topoViewerRole"] = saved_icon
+            node["data"]["role"] = saved_icon
+        saved_group = node_view.get(node_id, {}).get("groupId")
+        if saved_group:
+            node["data"]["groupId"] = saved_group
+            node["data"]["group"] = saved_group
         node["data"]["state"] = deployment_state.get(node_id, "undeployed")
         if node_id in node_issues:
             node["data"].setdefault("extraData", {})["validationIssues"] = node_issues[node_id]
@@ -425,11 +459,16 @@ STATIC_FIXTURE: dict[str, Any] = {
             "data": {"sourceEndpoint": "", "targetEndpoint": ""},
         }
     ],
-    "annotations": {"positions": {"r1": {"x": 0, "y": 0}, "r2": {"x": 240, "y": 0}}},
+    "annotations": {
+        "nodeAnnotations": [{"id": "r1", "position": {"x": 0, "y": 0}}, {"id": "r2", "position": {"x": 240, "y": 0}}]
+    },
     "yamlFileName": "lab.yml",
     "annotationsFileName": "lab.yml.annotations.json",
     "yamlContent": "name: spike\nnodes:\n  r1:\n    device: frr\n  r2:\n    device: frr\nlinks:\n  - r1-r2\n",
-    "annotationsContent": '{"positions": {"r1": {"x": 0, "y": 0}, "r2": {"x": 240, "y": 0}}}',
+    "annotationsContent": (
+        '{"nodeAnnotations": [{"id": "r1", "position": {"x": 0, "y": 0}}, '
+        '{"id": "r2", "position": {"x": 240, "y": 0}}]}'
+    ),
     "labName": "spike",
     "mode": "edit",
     "deploymentState": "undeployed",

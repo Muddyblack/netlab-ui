@@ -49,7 +49,8 @@ _FLAG_SKIP = {
 @dataclass
 class _HistoryEntry:
     yaml_text: str
-    annotations_text: str | None  # ``None`` == sidecar file absent
+    clab_annotations_text: str | None  # ``None`` == file absent
+    gui_annotations_text: str | None  # ``None`` == file absent
 
 
 @dataclass
@@ -116,18 +117,24 @@ class NetlabTopologyHost:
     # --------------------------------------------------------------- capture
     def _capture(self) -> _HistoryEntry:
         yaml_text = Path(self.path).read_text() if Path(self.path).exists() else ""
-        sidecar = ann_store.sidecar_path(self.path)
-        annotations_text = sidecar.read_text() if sidecar.exists() else None
-        return _HistoryEntry(yaml_text=yaml_text, annotations_text=annotations_text)
+        clab_path = ann_store.clab_annotations_path(self.path)
+        gui_path = ann_store.sidecar_path(self.path)
+        return _HistoryEntry(
+            yaml_text=yaml_text,
+            clab_annotations_text=clab_path.read_text() if clab_path.exists() else None,
+            gui_annotations_text=gui_path.read_text() if gui_path.exists() else None,
+        )
 
     def _restore(self, entry: _HistoryEntry) -> None:
         Path(self.path).write_text(entry.yaml_text)
-        sidecar = ann_store.sidecar_path(self.path)
-        if entry.annotations_text is None:
-            if sidecar.exists():
-                sidecar.unlink()
-        else:
-            sidecar.write_text(entry.annotations_text)
+        for text, path in (
+            (entry.clab_annotations_text, ann_store.clab_annotations_path(self.path)),
+            (entry.gui_annotations_text, ann_store.sidecar_path(self.path)),
+        ):
+            if text is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_text(text)
 
     def _push(self, entry: _HistoryEntry) -> None:
         self._past.append(entry)

@@ -77,6 +77,6 @@ def test_save_positions_and_annotations_payload(tmp_path):
     from services import annotations as ann_store
 
     ann = ann_store.load(topo_file)
-    assert ann["positions"]["r1"] == {"x": 120, "y": 240}
+    assert ann_store.get_node_annotation(ann, "r1")["position"] == {"x": 120, "y": 240}
     assert ann["freeTextAnnotations"] == [{"id": "note-1", "text": "hello"}]
     assert ann["groupStyleAnnotations"] == [{"id": "group-1", "label": "Group 1"}]

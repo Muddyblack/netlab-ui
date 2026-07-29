@@ -62,7 +62,7 @@ GENERATED_DIRS = {
     "monitoring",
     "grafana",
 }
-GENERATED_SUFFIXES = (".clab.yml", ".netlab-ui.json", ".log")
+GENERATED_SUFFIXES = (".clab.yml", ".netlab-ui.json", ".annotations.json", ".log")
 
 
 def is_generated(entry: Path, is_dir: bool) -> bool:

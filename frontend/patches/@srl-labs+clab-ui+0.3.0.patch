@@ -1,8 +1,8 @@
 diff --git a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
-index ec79e53..743da04 100644
+index ec79e53..9955805 100644
 --- a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
 +++ b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
-@@ -14870,7 +14870,12 @@ var PaletteSection = ({
+@@ -14870,27 +14870,43 @@ var PaletteSection = ({
          return true;
        }).map((t) => ({ id: t.id, label: paletteTabLabels?.[t.id] ?? t.label }));
        const custom = (customPaletteTabs ?? []).map((t) => ({ id: t.id, label: t.label })).filter((t) => !disabledTabIds?.includes(t.id));
@@ -16,7 +16,14 @@ index ec79e53..743da04 100644
      },
      [showInfoTab, showEditTab, customPaletteTabs, disabledTabIds, paletteTabLabels]
    );
-@@ -14885,8 +14890,10 @@ var PaletteSection = ({
+   const [userTab, setUserTab] = useState12("nodes");
+-  useEffect19(() => {
+-    const requestedTabId = requestedTab?.tabId;
+-    if (requestedTabId !== void 0 && requestedTabId.length > 0 && visibleTabs.some((t) => t.id === requestedTabId)) {
+-      setUserTab(requestedTabId);
+-    }
+-  }, [requestedTab, visibleTabs]);
+   useEffect19(() => {
      if (showEditTab && !showInfoTab) setUserTab("edit");
    }, [showEditTab, showInfoTab]);
    useEffect19(() => {
@@ -29,7 +36,26 @@ index ec79e53..743da04 100644
    useEffect19(() => {
      if (visibleTabs.some((t) => t.id === userTab)) return;
      setUserTab(visibleTabs[0]?.id ?? "");
-@@ -22525,5 +22532,6 @@ var App = ({ initialData, runtime, chrome }) => {
+   }, [visibleTabs, userTab]);
++  // An explicit tab request (e.g. the "Toggle YAML Split View" button) must
++  // win over the fallback-to-first-tab effect above when both fire in the
++  // same commit (e.g. a plugin tab registering async right as the button is
++  // clicked shifts `visibleTabs` at the same moment) — same-commit effects
++  // apply their setState calls in declaration order, so this has to be the
++  // LAST userTab-setting effect to guarantee it isn't clobbered. Previously
++  // this ran first, so that race could land on the fallback's tab
++  // (netlab-assistant, since our patch above makes it visibleTabs[0])
++  // instead of the requested "yaml" tab.
++  useEffect19(() => {
++    const requestedTabId = requestedTab?.tabId;
++    if (requestedTabId !== void 0 && requestedTabId.length > 0 && visibleTabs.some((t) => t.id === requestedTabId)) {
++      setUserTab(requestedTabId);
++    }
++  }, [requestedTab, visibleTabs]);
+   const activeTab = userTab;
+   useEffect19(() => {
+     let idleCallbackId = null;
+@@ -22525,5 +22541,6 @@ var App = ({ initialData, runtime, chrome }) => {
  
  export {
    subscribeToWebviewMessages,

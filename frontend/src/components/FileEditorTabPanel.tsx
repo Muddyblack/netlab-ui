@@ -129,7 +129,7 @@ export function FileEditorTabPanel({
       editor.dispose();
       editorRef.current = null;
     };
-  }, [handleSave, onChange, tab.content, tab.id, tab.path]);
+  }, [handleSave, onChange, tab.id, tab.path]);
 
   useEffect(() => {
     if (!editorRef.current) return;

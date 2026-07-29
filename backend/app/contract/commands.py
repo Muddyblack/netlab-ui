@@ -20,6 +20,7 @@ documented/expected set and are easy to extend.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -106,9 +107,11 @@ def _set_yaml_content(path: str, cmd: dict[str, Any]) -> bool:
 
 
 def _set_annotations_content(path: str, cmd: dict[str, Any]) -> bool:
-    """Replace the annotations sidecar content (from direct JSON editing)."""
+    """Replace the annotations content (from direct JSON editing). Routes
+    through the normal save path so the result still splits across clab-ui's
+    own annotations file and the netlab-gui-only sidecar."""
     content = cmd.get("content", "").strip() or "{}"
-    ann_store.sidecar_path(path).write_text(content)
+    ann_store.save(path, json.loads(content))
     return False
 
 
@@ -381,10 +384,6 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
     node_name = node_to_update.name
 
     if old_name and old_name != node_name:
-        if old_name in ann.get("positions", {}):
-            ann["positions"][node_name] = ann["positions"].pop(old_name)
-        if old_name in ann.get("icons", {}):
-            ann["icons"][node_name] = ann["icons"].pop(old_name)
         for entry in ann.get("nodeAnnotations", []):
             if entry.get("id") == old_name:
                 entry["id"] = node_name
@@ -394,9 +393,11 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
         if key in ui_keys:
             if key == "topoViewerRole":
                 if val:
-                    ann.setdefault("icons", {})[node_name] = val
+                    ann_store.ensure_node_annotation(ann, node_name)["icon"] = val
                 else:
-                    ann.setdefault("icons", {}).pop(node_name, None)
+                    entry = ann_store.get_node_annotation(ann, node_name)
+                    if entry:
+                        entry.pop("icon", None)
         else:
             if val is not None and val != "":
                 node_to_update.attrs[key] = val

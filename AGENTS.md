@@ -99,7 +99,10 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 
 `@srl-labs/clab-ui/monaco/core` exports are **pre-built dist** and register Monaco contributions on load. If anything in `frontend/src/` also imports from `@srl-labs/clab-ui/monaco/core`, Monaco contributions register twice → crash. Always import `monaco-editor` directly from `frontend/src/` code.
 
----
+### Known gotchas (fixed, but watch for regressions)
+
+- **`ruamel.yaml` `YAML()` instances are stateful — never share one across load calls for unrelated documents.** `services/model/serialize.py` used one module-level `_yaml = YAML()` for every load *and* dump. Loading a single file that carried a `%YAML 1.1` directive (e.g. a cloned netlab-examples topology) set `_yaml.version` as a side effect, and every later `dump()` — for *any* unrelated topology — kept stamping `%YAML 1.1` onto files that never had it. Fixed by resetting `_yaml.version = None` right after every `.load()` in `from_yaml()`. If new round-trip `YAML()` singletons get added, make them per-call (like `_helpers.py`/`images.py` already do) or reset state after load.
+- **Editing a canvas while the lab is deployed can look like edits "revert" after ~2-3s** if the background clab-projection cache warmer is allowed to use `netlab inspect` (the running instance) instead of the just-edited model. `app/contract/snapshot.py::_schedule_transform` now checks for `netlab.lock` and skips the `netlab create`/`inspect` transform entirely while locked, keeping the model-derived (edit-accurate) projection cached instead. Don't let that background warmer silently prefer "deployed" state over "just edited but not yet redeployed" state again.
 
 ## Key rules
 

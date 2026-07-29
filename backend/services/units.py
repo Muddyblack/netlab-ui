@@ -3,16 +3,17 @@
 A *unit* is a reusable topology fragment ("a workstation", "a room of 4
 workstations") stored as a real netlab YAML file in ``<workspace>/units/`` so
 it can be opened and edited on the canvas exactly like a lab. What has no
-place in netlab YAML lives in the unit's own ``*.netlab-ui.json`` sidecar:
+place in netlab YAML lives in the unit's own annotation files (see
+``services.annotations.store``):
 
-  - node positions use the sidecar's normal ``positions`` key (the canvas
-    already reads/writes it, so a unit opened as a lab keeps its layout);
-  - canvas view-state (group membership + group box styling, icon overrides)
-    uses the sidecar's normal ``nodeAnnotations``/``groupStyleAnnotations``/
-    ``icons`` keys, so a unit opened as a lab shows its colored groups, and
-    instantiate can stamp them onto every placed copy;
+  - node positions and icon overrides live inside clab-ui's own
+    ``nodeAnnotations`` entries (``{id, groupId, position, icon}``) — the canvas
+    already reads/writes it, so a unit opened as a lab keeps its layout;
+  - group box styling uses clab-ui's own ``groupStyleAnnotations`` key,
+    so a unit opened as a lab shows its colored groups, and instantiate can
+    stamp them onto every placed copy;
   - composition (``includes``), shared ``module`` list, and links to nodes
-    *outside* the unit sit under a ``unit`` key.
+    *outside* the unit sit under a netlab-gui-only ``unit`` key.
 
 Units being per-workspace (not per-lab) is the point: define a workstation
 once, drop it into any lab in the workspace.
@@ -127,7 +128,8 @@ def list_units(units_dir: Path) -> list[dict[str, Any]]:
 def _load_unit(path: Path) -> dict[str, Any]:
     topo = serialize.from_yaml(path.read_text())
     ann = ann_store.load(path)
-    positions = ann.get("positions") or {}
+    node_anns = ann.get("nodeAnnotations") or []
+    icons_map = {n["id"]: n["icon"] for n in node_anns if isinstance(n, dict) and n.get("icon")}
     meta = ann.get("unit") or {}
 
     nodes = []
@@ -137,7 +139,8 @@ def _load_unit(path: Path) -> dict[str, Any]:
         # flow back into an instantiated netlab topology.
         attrs = {key: value for key, value in n.attrs.items() if key not in _VIEW_STATE_ATTRS}
         entry: dict[str, Any] = {"name": n.name, "device": n.device, "attrs": attrs}
-        pos = positions.get(n.name)
+        pos = ann_store.get_node_annotation(ann, n.name)
+        pos = pos.get("position") if pos else None
         if pos:
             entry["x"] = pos.get("x", 0)
             entry["y"] = pos.get("y", 0)
@@ -157,9 +160,9 @@ def _load_unit(path: Path) -> dict[str, Any]:
         "module": list(meta.get("module") or []),
         "ports": [str(p) for p in (meta.get("ports") or []) if str(p)],
         # Canvas view-state carried with the unit (standard sidecar keys).
-        "nodeAnnotations": [dict(n) for n in (ann.get("nodeAnnotations") or [])],
+        "nodeAnnotations": [dict(n) for n in node_anns],
         "groupStyleAnnotations": [dict(s) for s in (ann.get("groupStyleAnnotations") or [])],
-        "icons": dict(ann.get("icons") or {}),
+        "icons": icons_map,
     }
 
 
@@ -232,11 +235,11 @@ def save_unit(units_dir: Path, body: dict[str, Any], source_topology: str | Path
     path.write_text(serialize.to_yaml(topo))
 
     ann = ann_store.load(path)
-    for n in node_bodies:
-        if "x" in n and "y" in n:
-            ann["positions"][n["name"]] = {"x": n["x"], "y": n["y"]}
     if source_topology is not None and node_bodies:
         _capture_view_state(ann, source_topology, [n["name"] for n in node_bodies])
+    for n in node_bodies:
+        if "x" in n and "y" in n:
+            ann_store.ensure_node_annotation(ann, n["name"])["position"] = {"x": n["x"], "y": n["y"]}
     existing_meta = ann.get("unit") or {}
     ann["unit"] = {
         "includes": includes,
@@ -368,18 +371,17 @@ def _capture_view_state(ann: dict[str, Any], source_topology: str | Path, node_n
     unit sidecar: group membership, the styling of those groups (color, border,
     box geometry), and icon overrides."""
     src = ann_store.load(source_topology)
-    group_of = {
-        n.get("id"): n.get("groupId")
-        for n in (src.get("nodeAnnotations") or [])
-        if isinstance(n, dict) and n.get("groupId")
-    }
+    src_by_id = {n.get("id"): n for n in (src.get("nodeAnnotations") or []) if isinstance(n, dict) and n.get("id")}
+    group_of = {nid: e["groupId"] for nid, e in src_by_id.items() if e.get("groupId")}
     ann["nodeAnnotations"] = [{"id": n, "groupId": group_of[n]} for n in node_names if n in group_of]
     used = {e["groupId"] for e in ann["nodeAnnotations"]}
     ann["groupStyleAnnotations"] = [
         dict(s) for s in (src.get("groupStyleAnnotations") or []) if isinstance(s, dict) and s.get("id") in used
     ]
-    icons = src.get("icons") or {}
-    ann["icons"] = {n: icons[n] for n in node_names if n in icons}
+    for n in node_names:
+        icon = src_by_id.get(n, {}).get("icon")
+        if icon:
+            ann_store.ensure_node_annotation(ann, n)["icon"] = icon
 
 
 _MAX_DOTTED_DEPTH = 10
@@ -443,6 +445,7 @@ def _validate_dotted_endpoints(
 def delete_unit(units_dir: Path, name: str) -> None:
     path = _unit_path(units_dir, name)
     path.unlink(missing_ok=True)
+    ann_store.clab_annotations_path(path).unlink(missing_ok=True)
     ann_store.sidecar_path(path).unlink(missing_ok=True)
 
 
@@ -506,7 +509,8 @@ def import_unit(units_dir: Path, bundle: dict[str, Any], *, overwrite: bool = Fa
     if unit.get("groupStyleAnnotations"):
         ann["groupStyleAnnotations"] = [dict(item) for item in unit["groupStyleAnnotations"]]
     if unit.get("icons"):
-        ann.setdefault("icons", {}).update(dict(unit["icons"]))
+        for node_name, icon in dict(unit["icons"]).items():
+            ann_store.ensure_node_annotation(ann, node_name)["icon"] = icon
     ann_store.save(path, ann)
     return name
 

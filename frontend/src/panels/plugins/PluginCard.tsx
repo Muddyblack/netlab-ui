@@ -86,59 +86,68 @@ export function PluginCard({
     >
       <AccordionSummary
         expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />}
-        sx={{ px: 0.5, minHeight: 48, "& .MuiAccordionSummary-content": { my: 0.5, alignItems: "center" } }}
+        sx={{
+          px: 1,
+          minHeight: 48,
+          "& .MuiAccordionSummary-content": {
+            my: 0.5,
+            alignItems: "center",
+            minWidth: 0,
+            mr: 1,
+            display: "flex",
+            justifyContent: "space-between",
+          },
+        }}
       >
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={isEnabled}
-              onClick={(event) => event.stopPropagation()}
-              onChange={(e) => onToggleEnabled(e.target.checked)}
-              size="small"
-            />
-          }
-          label={
-            <Box sx={{ minWidth: 0 }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.85rem" }}>
-                  {plugin.id}
-                </Typography>
-                {plugin.error && (
-                  <Tooltip title={plugin.error}>
-                    <ErrorOutlineIcon sx={{ fontSize: 15, color: "error.main" }} />
-                  </Tooltip>
-                )}
-                {originLabel && (
-                  <Tooltip title={plugin.source ?? ""}>
-                    <Chip
-                      label={originLabel}
-                      size="small"
-                      color="secondary"
-                      variant="outlined"
-                      sx={{ height: 17, fontSize: "0.63rem", "& .MuiChip-label": { px: 0.65 } }}
-                    />
-                  </Tooltip>
-                )}
-              </Box>
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary",
-                  display: "block",
-                  fontSize: "0.75rem",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {subtitle}
+        <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, flexGrow: 1, gap: 0.5, mr: 1 }}>
+          <Checkbox
+            checked={isEnabled}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(e) => onToggleEnabled(e.target.checked)}
+            size="small"
+            sx={{ p: 0.5, flexShrink: 0 }}
+          />
+          <Box
+            onClick={(event) => event.stopPropagation()}
+            sx={{ minWidth: 0, flexGrow: 1, cursor: "pointer" }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.85rem" }}>
+                {plugin.id}
               </Typography>
+              {plugin.error && (
+                <Tooltip title={plugin.error}>
+                  <ErrorOutlineIcon sx={{ fontSize: 15, color: "error.main" }} />
+                </Tooltip>
+              )}
+              {originLabel && (
+                <Tooltip title={plugin.source ?? ""}>
+                  <Chip
+                    label={originLabel}
+                    size="small"
+                    color="secondary"
+                    variant="outlined"
+                    sx={{ height: 17, fontSize: "0.63rem", "& .MuiChip-label": { px: 0.65 } }}
+                  />
+                </Tooltip>
+              )}
             </Box>
-          }
-          onClick={(event) => event.stopPropagation()}
-          sx={{ flexGrow: 1, mr: 0 }}
-        />
-        <Box onClick={(event) => event.stopPropagation()}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                fontSize: "0.75rem",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {subtitle}
+            </Typography>
+          </Box>
+        </Box>
+        <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0 }}>
           <DocumentationActionButtons
             docsUrl={plugin.docs_url}
             externalLabel={`Open ${plugin.id} netlab docs`}

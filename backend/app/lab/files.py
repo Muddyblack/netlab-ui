@@ -91,7 +91,7 @@ def _scan_workspace(workspace_path: Path, running_status: dict) -> list[dict]:
                 "endpointId": "local",
                 "filename": path.name,
                 "path": abs_path,
-                "hasAnnotations": ann_store.sidecar_path(abs_path).exists(),
+                "hasAnnotations": ann_store.has_annotations(abs_path),
                 "labName": lab_name,
                 "deploymentState": "deployed" if is_running else "undeployed",
                 "workspace": str(workspace_path.resolve()),
