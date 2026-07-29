@@ -24,10 +24,11 @@ def workspace() -> Path:
 def resolve_workspace_path(path: str) -> Path:
     """Resolve ``path`` and require it to live inside a configured workspace."""
     target = Path(path).expanduser().resolve()
-    allowed = [Path(ws).expanduser().resolve() for ws in ws_store.load()]
-    if not any(target == ws or target.is_relative_to(ws) for ws in allowed):
-        raise HTTPException(403, "path is outside the configured workspaces")
-    return target
+    for ws in ws_store.load():
+        base = Path(ws).expanduser().resolve()
+        if target == base or target.is_relative_to(base):
+            return target
+    raise HTTPException(403, "path is outside the configured workspaces")
 
 
 def session_path(session_id: str) -> str:

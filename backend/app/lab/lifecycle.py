@@ -108,8 +108,9 @@ async def lab_instance_force_cleanup_stream(instance_id: str):
                 else:
                     for out_stream, out_line in fmt.feed(stream, line):
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
-        except runner.NetlabNotInstalled as exc:
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        except runner.NetlabNotInstalled:
+            logger.exception("Forced cleanup failed: netlab not installed")
+            yield f"data: {json.dumps({'error': 'netlab CLI not found; check the backend host.'})}\n\n"
         except (OSError, UnicodeError, ValueError):
             logger.exception("Forced cleanup failed")
             yield f"data: {json.dumps({'error': 'Forced cleanup failed.'})}\n\n"
@@ -323,10 +324,11 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
             if tracker:
                 tracker.finish(130)
             raise
-        except runner.NetlabNotInstalled as exc:
+        except runner.NetlabNotInstalled:
             if tracker:
                 tracker.finish(1)
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            logger.exception("Lab deployment stream failed: netlab not installed")
+            yield f"data: {json.dumps({'error': 'netlab CLI not found; check the backend host.'})}\n\n"
         except (OSError, UnicodeError, ValueError):
             if tracker:
                 tracker.finish(1)
