@@ -60,6 +60,28 @@ does not fork or reimplement anything from clab-ui.
   the `patch-package` devDependency, and the `postinstall` script.
 - Track/link the upstream fix here once filed: (no issue filed yet).
 
+## @redocly/openapi-core minimatch patch (permanent, not temporary)
+
+`openapi-typescript@7.13.0` (used by `npm run gen:api`) depends on
+`@redocly/openapi-core@^1.34.6`, which is pinned to old `minimatch` (whose
+`brace-expansion` dependency has a known DoS vulnerability). The `overrides`
+block in `package.json` forces `minimatch@10.2.6` (patched `brace-expansion`),
+but v10 changed its export shape from a default export to a named export,
+which breaks Redocly's `require("minimatch")` call in `lib/utils.js`.
+
+`frontend/patches/@redocly+openapi-core+1.34.17.patch` (applied via
+`postinstall` → `patch-package`) fixes just that one import line
+(`const minimatch = require(...)` → `const { minimatch } = require(...)`).
+
+This is **not** expected to resolve upstream the way the clab-ui patch above
+will: `@redocly/openapi-core`'s `1.x` line is archived (npm dist-tag
+`v1-archive: 1.34.17`) — no further 1.x releases are coming. Redocly's `2.x`
+line dropped `minimatch` entirely (now uses `picomatch`), but
+`openapi-typescript` has no release depending on Redocly 2.x yet. So this
+patch stays until `openapi-typescript` ships a major version that upgrades to
+Redocly 2.x — don't delete it as "stale," and don't be surprised if it outlives
+the clab-ui patch above.
+
 ## Rules
 - **Never deep-import from clab-ui** — only import from `@srl-labs/clab-ui` root or its declared sub-entries (e.g. `@srl-labs/clab-ui/host`).
 - Netlab customizations go in `src/` — clab-ui is a dependency, not something we edit.
