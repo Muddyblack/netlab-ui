@@ -1,0 +1,6 @@
+diff --git a/node_modules/@redocly/openapi-core/lib/utils.js b/node_modules/@redocly/openapi-core/lib/utils.js
+--- a/node_modules/@redocly/openapi-core/lib/utils.js
++++ b/node_modules/@redocly/openapi-core/lib/utils.js
+@@ -42 +42 @@
+-const minimatch = require("minimatch");
++const { minimatch } = require("minimatch");
