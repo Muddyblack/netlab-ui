@@ -346,8 +346,13 @@ async def new_lab(body: NewLabRequest):
     if not name:
         raise HTTPException(400, "name is required")
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in name)
-    workspace = common.workspace()
-    path = workspace / f"{safe}.yml"
+    workspace_root = common.workspace().resolve()
+    candidate = workspace_root / f"{safe}.yml"
+    path = candidate.resolve()
+    try:
+        path.relative_to(workspace_root)
+    except ValueError:
+        raise HTTPException(400, "invalid lab name") from None
     if path.exists():
         raise HTTPException(409, f"{safe}.yml already exists")
     # `defaults.device` is not optional in practice: canvas node drops may leave
