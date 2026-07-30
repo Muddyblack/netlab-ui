@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from services.model import serialize
 
 
 @pytest.fixture
@@ -96,3 +97,19 @@ def test_clone_rejects_parent_directory_destination(client, workspace, monkeypat
 
     assert res.status_code == 400
     assert workspace.is_dir()
+
+
+def test_new_lab_scaffold_is_transformable(client, workspace):
+    """A scaffolded lab must survive `netlab create` as soon as the first node is
+    dropped on the canvas. Canvas drops may leave `device` unset, and netlab
+    aborts the whole transform when no default device exists — which silently
+    downgrades the canvas to the model-derived projection."""
+    resp = client.post("/api/lab/new", json={"name": "scaffold-check"})
+    assert resp.status_code == 200
+
+    text = Path(resp.json()["path"]).read_text()
+    topo = serialize.from_yaml(text)
+    assert topo.defaults.get("device"), f"scaffold has no default device:\n{text}"
+
+    # A device-less node (what a canvas drop produces) must inherit the default.
+    assert "device:" not in text.split("nodes:")[1]

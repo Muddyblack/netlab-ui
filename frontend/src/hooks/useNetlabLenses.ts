@@ -28,6 +28,7 @@ export function useNetlabLenses(sessionId: string, refreshKey?: string) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [stale, setStale] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [teachingOpen, setTeachingOpen] = useState(false);
   const [teachingDoc, setTeachingDoc] = useState<TeachingDocument | null>(null);
@@ -102,6 +103,9 @@ export function useNetlabLenses(sessionId: string, refreshKey?: string) {
     }
   }, [sessionId]);
 
+  /** Mark every lens's data as out of date — the topology behind it changed. */
+  const invalidate = useCallback(() => setStale(true), []);
+
   const fetchDeployment = useCallback(async () => {
     if (!sessionId) {
       setDeployment(null);
@@ -135,6 +139,22 @@ export function useNetlabLenses(sessionId: string, refreshKey?: string) {
   useEffect(() => {
     void refresh();
   }, [refresh, refreshKey]);
+
+  // Every lens is derived from netlab's *transformed* topology, so an edit
+  // invalidates all of them — but nothing here watches the topology, and
+  // `refreshKey` only changes on a lab-tab switch. That is why a newly added
+  // link used to render with no addressing until the page was reloaded.
+  // `invalidate()` is called when a background `netlab create` completes.
+  //
+  // Deferred until the lens is actually on screen: the bundle endpoint runs
+  // netlab's full analysis, and re-running it for a panel nobody is looking at
+  // is pure cost. Flipping `overlayVisible` re-runs this, so opening the panel
+  // later still picks the fresh data up.
+  useEffect(() => {
+    if (!stale || !overlayVisible) return;
+    setStale(false);
+    void refresh();
+  }, [stale, overlayVisible, refresh]);
 
   useEffect(() => {
     if (lens === "deployment") void fetchDeployment();
@@ -434,6 +454,7 @@ export function useNetlabLenses(sessionId: string, refreshKey?: string) {
     toggleOverlayPinned,
     overlayVisible,
     refresh,
+    invalidate,
     selectRef,
     selectObjects,
     addressResults,

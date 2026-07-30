@@ -350,7 +350,14 @@ async def new_lab(body: NewLabRequest):
     path = workspace / f"{safe}.yml"
     if path.exists():
         raise HTTPException(409, f"{safe}.yml already exists")
-    path.write_text(f"name: {safe}\nnodes:\nlinks:\n")
+    # `defaults.device` is not optional in practice: canvas node drops may leave
+    # `device` unset (see contract/commands.py `_add_node`), and netlab aborts the
+    # whole transform with "No device type specified for node X and there is no
+    # default device type". Without it the first node added to a fresh lab breaks
+    # `netlab create`, and the canvas silently degrades to the model-derived
+    # projection instead of the clab one. Scaffold the default so a new lab is
+    # transformable from the very first drop; the user can change it in the YAML.
+    path.write_text(f"name: {safe}\nprovider: clab\ndefaults:\n  device: frr\nnodes:\nlinks:\n")
     events.hub.publish({"type": "files"})
     abs_path = str(path.resolve())
     return {

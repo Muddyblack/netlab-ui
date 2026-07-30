@@ -63,21 +63,26 @@ interface Options {
   callbacks: ExplorerActionCallbacks;
 }
 
+function toFileSignature(file: LabFileEntry) {
+  const topologyRef = file?.topologyRef ?? {};
+  return {
+    filename: file?.filename ?? "",
+    labName: file?.labName ?? "",
+    path: file?.path ?? "",
+    workspace: file?.workspace ?? "",
+    topologyId: topologyRef.topologyId ?? "",
+    yamlPath: topologyRef.yamlPath ?? "",
+    source: topologyRef.source ?? ""
+  };
+}
+
 function buildExplorerDataSignature(
   labFiles: LabFileEntry[],
   runningLabsStatus: RunningLabsStatus,
   workspaces: WorkspaceEntry[]
 ): string {
   const files = (labFiles ?? [])
-    .map((file) => ({
-      filename: file?.filename ?? "",
-      labName: file?.labName ?? "",
-      path: file?.path ?? "",
-      workspace: file?.workspace ?? "",
-      topologyId: file?.topologyRef?.topologyId ?? "",
-      yamlPath: file?.topologyRef?.yamlPath ?? "",
-      source: file?.topologyRef?.source ?? ""
-    }))
+    .map(toFileSignature)
     .sort((a, b) => a.path.localeCompare(b.path));
 
   const runningLabs = Object.entries(runningLabsStatus ?? {})
@@ -102,6 +107,321 @@ function buildExplorerDataSignature(
 
   return JSON.stringify({ files, runningLabs, workspaces: workspaceList });
 }
+
+type ActionItem = {
+  topologyRef?: TopologyRef;
+  path?: string;
+  resourcePath?: string;
+  endpointId?: string;
+  title?: string;
+  label?: string;
+  name?: string;
+  containerName?: unknown;
+  mgmtIp?: unknown;
+  kind?: unknown;
+  image?: unknown;
+};
+
+interface ActionCtx {
+  cb: ExplorerActionCallbacks;
+  item: ActionItem | undefined;
+  topoRef: TopologyRef | undefined;
+  args: unknown[];
+  runningLabsStatusRef: React.RefObject<RunningLabsStatus>;
+}
+
+async function resolveSession(cb: ExplorerActionCallbacks, ref: TopologyRef): Promise<string | null> {
+  let sid = cb.getSessionId();
+  if (!sid) sid = await cb.getOrCreateSession(ref);
+  return sid;
+}
+
+// Same directory-prefix match App.tsx's `activeLabRunning` uses: `netlab
+// status --all` instance summaries only carry `dir`, no lab name or
+// topology path, so that's the match that actually fires for netlab-managed
+// labs.
+function findRunningNodeNames(runningLabsStatusRef: React.RefObject<RunningLabsStatus>, ref: TopologyRef): string[] {
+  const labName = ref.labName;
+  const yamlPath = ref.yamlPath;
+  const info = Object.values(runningLabsStatusRef.current ?? {}).find((entry) =>
+    (!!labName && entry.name === labName) ||
+    (!!yamlPath && entry.path === yamlPath) ||
+    (!!yamlPath && !!entry.dir && yamlPath.startsWith(`${entry.dir}/`))
+  );
+  return Object.keys(info?.nodes ?? {});
+}
+
+async function handleOpenTopoViewer({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openLab(topoRef);
+}
+
+// clab-io-draw's assign-levels wizard needs a real TTY — opened as a
+// session-dock terminal tab (PTY/WebSocket bridge) instead of a plain
+// request/response export like horizontal/vertical below.
+async function handleDrawioInteractive({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  if (sid) cb.openDrawioWizard();
+}
+
+function makeDrawioExportHandler(layout: "horizontal" | "vertical") {
+  return async ({ cb, topoRef }: ActionCtx) => {
+    if (!topoRef) return;
+    const sid = await resolveSession(cb, topoRef);
+    if (sid) await cb.exportDrawio(sid, layout);
+  };
+}
+
+function makeNetlabSvgGraphHandler(layout: "interactive" | "horizontal" | "vertical") {
+  return async ({ cb, topoRef }: ActionCtx) => {
+    if (!topoRef) return;
+    const sid = await resolveSession(cb, topoRef);
+    if (sid) await cb.openLabGraph(sid, layout);
+  };
+}
+
+async function handleInspectOneLab({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  if (sid) await cb.inspectLab(sid);
+}
+
+const FCLI_COMMAND_BY_ID: Record<string, string> = {
+  "containerlab.lab.fcli.bgpPeers": "bgp-peers",
+  "containerlab.lab.fcli.bgpRib": "bgp-rib",
+  "containerlab.lab.fcli.ipv4Rib": "ipv4-rib",
+  "containerlab.lab.fcli.lldp": "lldp",
+  "containerlab.lab.fcli.mac": "mac",
+  "containerlab.lab.fcli.ni": "ni",
+  "containerlab.lab.fcli.subif": "subif",
+  "containerlab.lab.fcli.sysInfo": "sys-info"
+};
+
+function makeFcliHandler(command: string) {
+  return async ({ cb, topoRef }: ActionCtx) => {
+    if (!topoRef) return;
+    const sid = await resolveSession(cb, topoRef);
+    if (sid) await cb.runFcli(sid, command);
+  };
+}
+
+async function handleOpenFile({ cb, item }: ActionCtx) {
+  const path = item?.path || item?.resourcePath || item?.topologyRef?.yamlPath;
+  if (path) await cb.openFileTab({ endpointId: item?.endpointId || "local", path, title: item?.title || item?.label });
+}
+
+async function handleDeployLab({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  if (sid) await cb.deployLab(sid);
+}
+
+async function handleDestroyLab({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  if (sid) await cb.destroyLab(sid);
+}
+
+async function handleNetlabRestart({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  if (sid) await cb.netlabRestart(sid);
+}
+
+async function handleSshToAllNodes({ cb, topoRef, runningLabsStatusRef }: ActionCtx) {
+  if (!topoRef) return;
+  const sid = await resolveSession(cb, topoRef);
+  const nodeNames = findRunningNodeNames(runningLabsStatusRef, topoRef);
+  if (sid && nodeNames.length === 0) {
+    cb.addToast("No running nodes found for this lab", "warning");
+  } else if (sid) {
+    nodeNames.forEach((nodeName) => cb.openShell(nodeName));
+  }
+}
+
+async function handleCopyPath({ cb, item }: ActionCtx) {
+  const path = item?.topologyRef?.yamlPath || item?.path || item?.resourcePath;
+  if (path) {
+    void navigator.clipboard.writeText(path).then(
+      () => cb.addToast(`Copied: ${path}`, "success"),
+      () => cb.addToast("Clipboard write failed", "error")
+    );
+  } else {
+    cb.addToast("Nothing to copy for this lab", "warning");
+  }
+}
+
+function handleOpenNewLabDialog({ cb }: ActionCtx) {
+  cb.openNewLabDialog();
+}
+
+function handleOpenLink({ args }: ActionCtx) {
+  if (typeof args[0] === "string") window.open(args[0], "_blank");
+}
+
+function handleOpenCloneDialog({ cb }: ActionCtx) {
+  cb.openCloneDialog();
+}
+
+function handleCloneHere({ cb, item }: ActionCtx) {
+  cb.openCloneDialog(item?.resourcePath);
+}
+
+function handleAddToWorkspace({ cb }: ActionCtx) {
+  cb.openAddWorkspace();
+}
+
+function handleRemoveWorkspace({ cb, item }: ActionCtx) {
+  if (item?.resourcePath) cb.removeWorkspace(item.resourcePath);
+}
+
+function handleBrowseExamples({ cb }: ActionCtx) {
+  cb.openExampleLabs();
+}
+
+function handleNewFolder({ cb, item }: ActionCtx) {
+  if (item?.resourcePath) cb.newFolder(item.resourcePath);
+}
+
+function handleManageImages({ cb }: ActionCtx) {
+  cb.openImageManager();
+}
+
+function handleOpenRunningLabs({ cb }: ActionCtx) {
+  cb.openRunningLabs();
+}
+
+function handleNodeShell({ cb, item }: ActionCtx) {
+  const nodeName = item?.name || item?.label;
+  if (nodeName) cb.openShell(nodeName);
+}
+
+function handleNodeLogs({ cb, item }: ActionCtx) {
+  const nodeName = item?.name || item?.label;
+  if (nodeName) cb.showLogs(nodeName);
+}
+
+function makeNodeLifecycleHandler(action: "start" | "stop" | "restart" | "pause" | "unpause" | "save") {
+  return ({ cb, item }: ActionCtx) => {
+    const nodeName = item?.name || item?.label;
+    if (nodeName) cb.nodeLifecycle(nodeName, action);
+  };
+}
+
+function handleInstallEdgeshark({ cb }: ActionCtx) {
+  cb.installEdgeshark();
+}
+
+function handleUninstallEdgeshark({ cb }: ActionCtx) {
+  cb.uninstallEdgeshark();
+}
+
+function handleKillWiresharkVnc({ cb }: ActionCtx) {
+  cb.killAllWiresharkVNC();
+}
+
+function handleManageImpairments({ cb }: ActionCtx) {
+  cb.addToast(
+    "Select one of the node's links on the canvas and use the link editor's impairment fields (delay/jitter/loss/rate/corruption).",
+    "info"
+  );
+}
+
+function makeNodeCopyHandler(field: "name" | "containerName" | "mgmtIp" | "kind" | "image") {
+  return ({ cb, item }: ActionCtx) => {
+    const value = field === "name" ? item?.name || item?.label : item?.[field];
+    if (typeof value === "string" && value) {
+      void navigator.clipboard.writeText(value).then(
+        () => cb.addToast(`Copied: ${value}`, "success"),
+        () => cb.addToast("Clipboard write failed", "error")
+      );
+    } else {
+      cb.addToast("Nothing to copy for this node", "warning");
+    }
+  };
+}
+
+function makeNetlabLifecycleHandler(
+  action: "netlabInitial" | "netlabCreateConfigs" | "netlabRestart" | "netlabValidate" | "netlabCollect"
+) {
+  return async ({ cb, topoRef }: ActionCtx) => {
+    if (!topoRef) return;
+    const sid = await resolveSession(cb, topoRef);
+    if (sid) await cb[action](sid);
+  };
+}
+
+// Dispatch table keyed by exact commandId. Every id below is enumerated
+// (rather than matched via startsWith) so this stays a flat lookup — that's
+// what keeps executeAction itself down to a single branch instead of a long
+// if/else chain.
+const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> = {
+  "containerlab.lab.graph.topoViewer": handleOpenTopoViewer,
+  "containerlab.editor.topoViewerEditor.open": handleOpenTopoViewer,
+  "containerlab.lab.graph.drawio.interactive": handleDrawioInteractive,
+  "containerlab.lab.graph.drawio.horizontal": makeDrawioExportHandler("horizontal"),
+  "containerlab.lab.graph.drawio.vertical": makeDrawioExportHandler("vertical"),
+  "containerlab.lab.graph.netlabSvg.interactive": makeNetlabSvgGraphHandler("interactive"),
+  "containerlab.lab.graph.netlabSvg.vertical": makeNetlabSvgGraphHandler("vertical"),
+  "containerlab.lab.graph.netlabSvg.horizontal": makeNetlabSvgGraphHandler("horizontal"),
+  "containerlab.inspectOneLab": handleInspectOneLab,
+  ...Object.fromEntries(Object.entries(FCLI_COMMAND_BY_ID).map(([id, command]) => [id, makeFcliHandler(command)])),
+  "containerlab.lab.openFile": handleOpenFile,
+  "containerlab.file.open": handleOpenFile,
+  // "Redeploy"/"Start Nodes" and their cleanup variants all resolve to the
+  // same `netlab up` streamed run as canvas Deploy — mirrors how
+  // topoViewerHost.runLifecycle collapses these in createHost.ts.
+  "containerlab.lab.deploy": handleDeployLab,
+  "containerlab.lab.deploy.cleanup": handleDeployLab,
+  "containerlab.lab.redeploy": handleDeployLab,
+  "containerlab.lab.redeploy.cleanup": handleDeployLab,
+  "containerlab.lab.start": handleDeployLab,
+  // "Destroy (Cleanup)"/"Stop Nodes" all resolve to the same `netlab down`
+  // run as canvas Destroy.
+  "containerlab.lab.destroy": handleDestroyLab,
+  "containerlab.lab.destroy.cleanup": handleDestroyLab,
+  "containerlab.lab.stop": handleDestroyLab,
+  "containerlab.lab.restart": handleNetlabRestart,
+  "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
+  "containerlab.lab.copyPath": handleCopyPath,
+  "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
+  "containerlab.file.newFile": handleOpenNewLabDialog,
+  "containerlab.openLink": handleOpenLink,
+  "containerlab.lab.cloneRepo": handleOpenCloneDialog,
+  "netlab.lab.cloneRepo": handleOpenCloneDialog,
+  "netlab.workspace.cloneHere": handleCloneHere,
+  "netlab.workspace.addToWorkspace": handleAddToWorkspace,
+  "netlab.workspace.remove": handleRemoveWorkspace,
+  "netlab.examples.browse": handleBrowseExamples,
+  "containerlab.file.newFolder": handleNewFolder,
+  "containerlab.images.manage": handleManageImages,
+  "netlab.labs.running": handleOpenRunningLabs,
+  "containerlab.node.ssh": handleNodeShell,
+  "containerlab.node.attachShell": handleNodeShell,
+  "containerlab.node.telnet": handleNodeShell,
+  "containerlab.node.showLogs": handleNodeLogs,
+  "containerlab.node.showlogs": handleNodeLogs,
+  "containerlab.node.start": makeNodeLifecycleHandler("start"),
+  "containerlab.node.stop": makeNodeLifecycleHandler("stop"),
+  "containerlab.node.restart": makeNodeLifecycleHandler("restart"),
+  "containerlab.node.pause": makeNodeLifecycleHandler("pause"),
+  "containerlab.node.unpause": makeNodeLifecycleHandler("unpause"),
+  "containerlab.node.save": makeNodeLifecycleHandler("save"),
+  "containerlab.install.edgeshark": handleInstallEdgeshark,
+  "containerlab.uninstall.edgeshark": handleUninstallEdgeshark,
+  "containerlab.capture.killAllWiresharkVNC": handleKillWiresharkVnc,
+  "containerlab.node.manageImpairments": handleManageImpairments,
+  "containerlab.node.copyName": makeNodeCopyHandler("name"),
+  "containerlab.node.copyID": makeNodeCopyHandler("containerName"),
+  "containerlab.node.copyIPv4Address": makeNodeCopyHandler("mgmtIp"),
+  "containerlab.node.copyKind": makeNodeCopyHandler("kind"),
+  "containerlab.node.copyImage": makeNodeCopyHandler("image"),
+  "netlab.lab.initial": makeNetlabLifecycleHandler("netlabInitial"),
+  "netlab.lab.create-configs": makeNetlabLifecycleHandler("netlabCreateConfigs"),
+  "netlab.lab.restart": makeNetlabLifecycleHandler("netlabRestart"),
+  "netlab.lab.validate": makeNetlabLifecycleHandler("netlabValidate"),
+  "netlab.lab.collect": makeNetlabLifecycleHandler("netlabCollect")
+};
 
 export function useExplorerController({
   explorerSubscribers,
@@ -282,185 +602,10 @@ export function useExplorerController({
       executeAction: async (binding: ExplorerActionInvocation) => {
         const cb = callbacksRef.current;
         const { commandId, args } = binding;
-        const item = args[0] as { topologyRef?: TopologyRef; path?: string; resourcePath?: string; endpointId?: string; title?: string; label?: string; name?: string } | undefined;
-        const topoRef = item?.topologyRef;
-
-        const resolveSession = async (ref: TopologyRef) => {
-          let sid = cb.getSessionId();
-          if (!sid) sid = await cb.getOrCreateSession(ref);
-          return sid;
-        };
-
-        // Same directory-prefix match App.tsx's `activeLabRunning` uses:
-        // `netlab status --all` instance summaries only carry `dir`, no lab
-        // name or topology path, so that's the match that actually fires for
-        // netlab-managed labs.
-        const findRunningNodeNames = (ref: TopologyRef): string[] => {
-          const labName = ref.labName;
-          const yamlPath = ref.yamlPath;
-          const info = Object.values(runningLabsStatusRef.current ?? {}).find((entry) =>
-            (!!labName && entry.name === labName) ||
-            (!!yamlPath && entry.path === yamlPath) ||
-            (!!yamlPath && !!entry.dir && yamlPath.startsWith(`${entry.dir}/`))
-          );
-          return Object.keys(info?.nodes ?? {});
-        };
-
-        if (commandId === "containerlab.lab.graph.topoViewer" || commandId === "containerlab.editor.topoViewerEditor.open") {
-          if (topoRef) await cb.openLab(topoRef);
-        } else if (commandId === "containerlab.lab.graph.drawio.interactive") {
-          // clab-io-draw's assign-levels wizard needs a real TTY — opened as
-          // a session-dock terminal tab (PTY/WebSocket bridge) instead of a
-          // plain request/response export like horizontal/vertical below.
-          if (topoRef) {
-            const sid = await resolveSession(topoRef);
-            if (sid) cb.openDrawioWizard();
-          }
-        } else if (commandId.startsWith("containerlab.lab.graph.drawio.")) {
-          // Real draw.io export (horizontal/vertical — plain request/response).
-          if (topoRef) {
-            const sid = await resolveSession(topoRef);
-            const layout = commandId.endsWith(".horizontal") ? "horizontal" : "vertical";
-            if (sid) await cb.exportDrawio(sid, layout);
-          }
-        } else if (commandId.startsWith("containerlab.lab.graph.netlabSvg.")) {
-          // netlab's own SVG graph (graphviz/d2) — extra items alongside the
-          // real draw.io export above.
-          if (topoRef) {
-            const sid = await resolveSession(topoRef);
-            let layout: "vertical" | "horizontal" | "interactive" = "interactive";
-            if (commandId.endsWith(".vertical")) layout = "vertical";
-            if (commandId.endsWith(".horizontal")) layout = "horizontal";
-            if (sid) await cb.openLabGraph(sid, layout);
-          }
-        } else if (commandId === "containerlab.inspectOneLab") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.inspectLab(sid); }
-        } else if (commandId.startsWith("containerlab.lab.fcli.")) {
-          if (topoRef) {
-            const sid = await resolveSession(topoRef);
-            const commandById: Record<string, string> = {
-              "containerlab.lab.fcli.bgpPeers": "bgp-peers",
-              "containerlab.lab.fcli.bgpRib": "bgp-rib",
-              "containerlab.lab.fcli.ipv4Rib": "ipv4-rib",
-              "containerlab.lab.fcli.lldp": "lldp",
-              "containerlab.lab.fcli.mac": "mac",
-              "containerlab.lab.fcli.ni": "ni",
-              "containerlab.lab.fcli.subif": "subif",
-              "containerlab.lab.fcli.sysInfo": "sys-info"
-            };
-            const command = commandById[commandId];
-            if (sid && command) await cb.runFcli(sid, command);
-          }
-        } else if (commandId === "containerlab.lab.openFile" || commandId === "containerlab.file.open") {
-          const path = item?.path || item?.resourcePath || item?.topologyRef?.yamlPath;
-          if (path) await cb.openFileTab({ endpointId: item?.endpointId || "local", path, title: item?.title || item?.label });
-        } else if (
-          // "Redeploy"/"Start Nodes" and their cleanup variants all resolve to
-          // the same `netlab up` streamed run as canvas Deploy — mirrors how
-          // topoViewerHost.runLifecycle collapses these in createHost.ts.
-          commandId === "containerlab.lab.deploy" || commandId === "containerlab.lab.deploy.cleanup" ||
-          commandId === "containerlab.lab.redeploy" || commandId === "containerlab.lab.redeploy.cleanup" ||
-          commandId === "containerlab.lab.start"
-        ) {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.deployLab(sid); }
-        } else if (
-          // "Destroy (Cleanup)"/"Stop Nodes" all resolve to the same
-          // `netlab down` run as canvas Destroy.
-          commandId === "containerlab.lab.destroy" || commandId === "containerlab.lab.destroy.cleanup" ||
-          commandId === "containerlab.lab.stop"
-        ) {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.destroyLab(sid); }
-        } else if (commandId === "containerlab.lab.restart") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabRestart(sid); }
-        } else if (commandId === "containerlab.lab.sshToAllNodes") {
-          if (topoRef) {
-            const sid = await resolveSession(topoRef);
-            const nodeNames = findRunningNodeNames(topoRef);
-            if (sid && nodeNames.length === 0) {
-              cb.addToast("No running nodes found for this lab", "warning");
-            } else if (sid) {
-              nodeNames.forEach((nodeName) => cb.openShell(nodeName));
-            }
-          }
-        } else if (commandId === "containerlab.lab.copyPath") {
-          const path = item?.topologyRef?.yamlPath || item?.path || item?.resourcePath;
-          if (path) {
-            void navigator.clipboard.writeText(path).then(
-              () => cb.addToast(`Copied: ${path}`, "success"),
-              () => cb.addToast("Clipboard write failed", "error")
-            );
-          } else {
-            cb.addToast("Nothing to copy for this lab", "warning");
-          }
-        } else if (commandId === "containerlab.editor.topoViewerEditor" || commandId === "containerlab.file.newFile") {
-          cb.openNewLabDialog();
-        } else if (commandId === "containerlab.openLink") {
-          if (typeof args[0] === "string") window.open(args[0], "_blank");
-        } else if (commandId === "containerlab.lab.cloneRepo" || commandId === "netlab.lab.cloneRepo") {
-          cb.openCloneDialog();
-        } else if (commandId === "netlab.workspace.cloneHere") {
-          cb.openCloneDialog(item?.resourcePath);
-        } else if (commandId === "netlab.workspace.addToWorkspace") {
-          cb.openAddWorkspace();
-        } else if (commandId === "netlab.workspace.remove") {
-          if (item?.resourcePath) cb.removeWorkspace(item.resourcePath);
-        } else if (commandId === "netlab.examples.browse") {
-          cb.openExampleLabs();
-        } else if (commandId === "containerlab.file.newFolder") {
-          if (item?.resourcePath) cb.newFolder(item.resourcePath);
-        } else if (commandId === "containerlab.images.manage") {
-          cb.openImageManager();
-        } else if (commandId === "netlab.labs.running") {
-          cb.openRunningLabs();
-        } else if (commandId === "containerlab.node.ssh" || commandId === "containerlab.node.attachShell" ||
-                   commandId === "containerlab.node.telnet") {
-          const nodeName = item?.name || item?.label;
-          if (nodeName) cb.openShell(nodeName);
-        } else if (commandId === "containerlab.node.showLogs" || commandId === "containerlab.node.showlogs") {
-          const nodeName = item?.name || item?.label;
-          if (nodeName) cb.showLogs(nodeName);
-        } else if (commandId === "containerlab.node.start" || commandId === "containerlab.node.stop" ||
-                   commandId === "containerlab.node.restart" || commandId === "containerlab.node.pause" ||
-                   commandId === "containerlab.node.unpause" || commandId === "containerlab.node.save") {
-          const nodeName = item?.name || item?.label;
-          const nodeAction = commandId.slice("containerlab.node.".length) as "start" | "stop" | "restart" | "pause" | "unpause" | "save";
-          if (nodeName) cb.nodeLifecycle(nodeName, nodeAction);
-        } else if (commandId === "containerlab.install.edgeshark") {
-          cb.installEdgeshark();
-        } else if (commandId === "containerlab.uninstall.edgeshark") {
-          cb.uninstallEdgeshark();
-        } else if (commandId === "containerlab.capture.killAllWiresharkVNC") {
-          cb.killAllWiresharkVNC();
-        } else if (commandId === "containerlab.node.manageImpairments") {
-          cb.addToast("Select one of the node's links on the canvas and use the link editor's impairment fields (delay/jitter/loss/rate/corruption).", "info");
-        } else if (commandId.startsWith("containerlab.node.copy")) {
-          const node = item as Record<string, unknown> | undefined;
-          const valueByCommand: Record<string, unknown> = {
-            "containerlab.node.copyName": node?.name || node?.label,
-            "containerlab.node.copyID": node?.containerName,
-            "containerlab.node.copyIPv4Address": node?.mgmtIp,
-            "containerlab.node.copyKind": node?.kind,
-            "containerlab.node.copyImage": node?.image
-          };
-          const value = valueByCommand[commandId];
-          if (typeof value === "string" && value) {
-            void navigator.clipboard.writeText(value).then(
-              () => cb.addToast(`Copied: ${value}`, "success"),
-              () => cb.addToast("Clipboard write failed", "error")
-            );
-          } else {
-            cb.addToast("Nothing to copy for this node", "warning");
-          }
-        } else if (commandId === "netlab.lab.initial") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabInitial(sid); }
-        } else if (commandId === "netlab.lab.create-configs") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabCreateConfigs(sid); }
-        } else if (commandId === "netlab.lab.restart") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabRestart(sid); }
-        } else if (commandId === "netlab.lab.validate") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabValidate(sid); }
-        } else if (commandId === "netlab.lab.collect") {
-          if (topoRef) { const sid = await resolveSession(topoRef); if (sid) await cb.netlabCollect(sid); }
+        const item = args[0] as ActionItem | undefined;
+        const handler = ACTION_HANDLERS[commandId];
+        if (handler) {
+          await handler({ cb, item, topoRef: item?.topologyRef, args, runningLabsStatusRef });
         }
       }
     });

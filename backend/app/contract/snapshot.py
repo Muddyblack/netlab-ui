@@ -19,36 +19,112 @@ clab-ui integration can be developed end-to-end locally with zero setup.
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from services import annotations as ann_store
+from services import events
 from services.model import serialize
+from services.model.edge_ids import EdgeIdCounter, edge_id
 from services.model.topology import Topology
 from services.netlab import runner
 from services.netlab import validation as validation_store
+
+# Where a canvas projection came from — and, for the previews, why it is only an
+# approximation of the real ``netlab create`` transform. This reaches the UI in
+# the snapshot's ``projection.source``, so "why does the canvas look like that?"
+# is answerable instead of guesswork.
+ProjectionSource = Literal[
+    # The real `netlab create -o clab` transform.
+    "clab",
+    # Derived from the netlab model because the lab is deployed and
+    # `netlab create` refuses to run in a locked directory.
+    "locked-preview",
+    # Derived from the netlab model because `netlab create` failed.
+    "failed-preview",
+    # The live blend served while a transform runs: the model's element set over
+    # the previous real projection's bodies (see `_merge_projections`).
+    "blended",
+    # Straight off the netlab model, with no real projection to blend onto —
+    # a lab that has never been transformed, or netlab not installed at all.
+    "model",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class _CachedProjection:
+    """A canvas projection plus the provenance that decides when it goes stale."""
+
+    yaml_hash: str
+    nodes: list[dict]
+    edges: list[dict]
+    source: ProjectionSource
+
+    def is_fresh(self, yaml_hash: str, *, locked: bool) -> bool:
+        """Whether this entry can still be served as-is.
+
+        A ``locked-preview`` is only a stand-in for a transform that could not
+        run. Once the lock clears the real transform has to happen, so matching
+        the YAML hash is not enough to keep serving it — otherwise the canvas
+        stays on the preview forever after the lab is torn down.
+
+        A ``failed-preview`` *does* stay valid while the hash matches: the YAML
+        on disk is what broke `netlab create`, so re-running it on every
+        snapshot request would just be a retry storm.
+        """
+        if not yaml_hash or self.yaml_hash != yaml_hash:
+            return False
+        return self.source != "locked-preview" or locked
+
 
 # Cache clab projection results by (topology_path, yaml_md5) so we only call
 # `runner.create()` when the YAML actually changes.  Position moves and other
 # annotation-only commands never touch the YAML, so they get a free snapshot.
 # The cache is process-wide; the bounded dict prevents unbounded memory growth.
 _MAX_CACHE = 32
-_clab_cache: dict[str, tuple[str, list[dict], list[dict]]] = {}
+_clab_cache: dict[str, _CachedProjection] = {}
 
 # In-flight background `netlab create` transforms, keyed by topology path.
-# A cache miss serves the fast model-derived projection immediately (the UI
-# stays usable) and warms the cache here; the snapshot carries
-# ``transformPending: true`` so the frontend knows to re-request later.
+# A cache miss serves the fast blended projection immediately (the UI stays
+# usable) and warms the cache here; the snapshot carries ``projection.pending``
+# so the frontend knows to pick the result up.
 _transform_tasks: dict[str, asyncio.Task] = {}
 
+# Last `netlab create` failure per topology path, as ``(yaml_hash, message)``.
+# A failed transform still caches a usable projection (see `_schedule_transform`),
+# so without this the canvas just quietly swaps renderers and the user is left
+# guessing why the topology looks wrong. Keyed by hash so the error clears itself
+# as soon as the YAML that caused it is edited.
+_transform_errors: dict[str, tuple[str, str]] = {}
 
-def _store_cache(topology_path: str, yaml_hash: str, nodes: list[dict], edges: list[dict]) -> None:
+
+def _is_locked(topology_path: str) -> bool:
+    """True while netlab holds the lab directory, i.e. the lab is deployed.
+
+    ``netlab create`` refuses to run in a locked directory, so this gates both
+    the background transform and cache validity. Deliberately read fresh at each
+    call site rather than passed around: the lock can appear or clear between a
+    snapshot request and the background transform that request scheduled, and
+    each decision wants the state as it is at *its* moment.
+    """
+    return (Path(topology_path).parent / "netlab.lock").exists()
+
+
+def _store_cache(
+    topology_path: str,
+    yaml_hash: str,
+    nodes: list[dict],
+    edges: list[dict],
+    source: ProjectionSource,
+) -> None:
     if not yaml_hash:
         return
     if len(_clab_cache) >= _MAX_CACHE:
         _clab_cache.pop(next(iter(_clab_cache)))
-    _clab_cache[topology_path] = (yaml_hash, nodes, edges)
+    _clab_cache[topology_path] = _CachedProjection(yaml_hash, nodes, edges, source)
 
 
 def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list[dict], list[dict]]) -> None:
@@ -62,48 +138,78 @@ def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list
 
     async def _work() -> None:
         try:
-            locked = (Path(topology_path).parent / "netlab.lock").exists()
-            if locked:
-                # `netlab create` refuses to run while the lab is deployed, and
-                # `runner.create()` transparently substitutes `netlab inspect`
-                # (the *running* instance) instead of raising. That reflects
-                # containers as deployed, not the edit that was just made but
-                # not yet redeployed — caching it here would overwrite the
-                # correct, just-edited `fallback` a few seconds later and make
-                # in-progress edits appear to silently revert. Keep serving the
-                # model-derived fallback until the lab is redeployed (new
-                # netlab.lock state) or torn down.
-                nodes, edges = fallback
-            else:
-                try:
-                    result = await runner.create(topology_path)
-                    clab = result.get("clab")
+            try:
+                # ``isolated=True`` runs the transform from a scratch directory
+                # with an absolute topology path. netlab still resolves
+                # lab-relative plugins and templates (its ``topology:`` search
+                # path), so the transform is faithful, but nothing is written to
+                # the lab directory — and it works on a *deployed* lab, because
+                # netlab's locked-directory refusal is against the cwd. A
+                # deployed lab's pending edits therefore get a real clab
+                # projection instead of the model-derived preview this used to
+                # fall back to.
+                result = await runner.create(topology_path, isolated=True)
+                clab = result.get("clab")
+                nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
+                source: ProjectionSource = "clab" if clab else "failed-preview"
+                _transform_errors.pop(topology_path, None)
+            except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
+                # Record the failure before choosing a fallback projection.
+                # Every branch below still produces a renderable canvas, so this
+                # message is the only signal the user gets that what they are
+                # looking at is not the real transform.
+                _transform_errors[topology_path] = (
+                    yaml_hash,
+                    (exc.stderr or str(exc)) if isinstance(exc, runner.NetlabError) else str(exc),
+                )
+                if isinstance(exc, runner.NetlabError):
+                    validation_store.store_failure(topology_path, exc.stderr or str(exc))
+                if _is_locked(topology_path):
+                    # The isolated transform is expected to work while the lab is
+                    # deployed, but deployment state is still the most likely
+                    # reason for it not to. Classify it as a locked preview
+                    # rather than a YAML failure so it is retried as soon as the
+                    # lab is torn down, instead of waiting for an edit that may
+                    # never come.
+                    nodes, edges = fallback
+                    source = "locked-preview"
+                elif topology_path not in _clab_cache:
+                    # Never built successfully for this path yet (e.g. right
+                    # after a backend restart, before any snapshot request has
+                    # run `netlab create`). Use the clab.yml written at the last
+                    # deploy so the canvas isn't blank — vital for
+                    # plugin-generated topologies whose raw YAML has no nodes.
+                    clab = runner.read_existing_clab(topology_path)
                     nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
-                except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
-                    if topology_path not in _clab_cache:
-                        # Never built successfully for this path yet (e.g. right
-                        # after a backend restart, before any snapshot request
-                        # has run `netlab create`). Use the clab.yml written at
-                        # the last deploy so the canvas isn't blank — vital for
-                        # plugin-generated topologies whose raw YAML has no
-                        # nodes.
-                        clab = runner.read_existing_clab(topology_path)
-                        nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
-                    else:
-                        # We've built successfully before, so this failure means
-                        # the edit that was just made is what broke `netlab
-                        # create` (e.g. a bad interface assignment on a new
-                        # link). Silently substituting the old deployed
-                        # projection would drop that edit's node/link from the
-                        # canvas with no indication anything is wrong — keep
-                        # serving the live model-derived fallback instead (it at
-                        # least reflects the edit) and surface the real error.
-                        nodes, edges = fallback
-                        if isinstance(exc, runner.NetlabError):
-                            validation_store.store_failure(topology_path, exc.stderr or str(exc))
-            _store_cache(topology_path, yaml_hash, nodes, edges)
+                    source = "clab" if clab else "failed-preview"
+                else:
+                    # We've built successfully before, so this failure means the
+                    # edit that was just made is what broke `netlab create` (e.g.
+                    # a bad interface assignment on a new link). Silently
+                    # substituting the old deployed projection would drop that
+                    # edit's node/link from the canvas with no indication
+                    # anything is wrong — keep serving the live model-derived
+                    # fallback instead (it at least reflects the edit) and
+                    # surface the real error.
+                    nodes, edges = fallback
+                    source = "failed-preview"
+            _store_cache(topology_path, yaml_hash, nodes, edges, source)
+        except Exception as exc:  # noqa: BLE001
+            # A transform can fail in ways `runner.create` does not wrap — an
+            # unparseable JSON dump, an unreadable clab.yml, a disappearing lab
+            # directory. Left unhandled these vanish into the asyncio task and
+            # nothing is ever cached, so every snapshot re-runs the failing
+            # transform forever. Cache the fallback and report the error.
+            _transform_errors[topology_path] = (yaml_hash, str(exc))
+            _store_cache(topology_path, yaml_hash, *fallback, "failed-preview")
         finally:
             _transform_tasks.pop(topology_path, None)
+            # Tell the UI the projection is ready instead of making it poll for
+            # it. A blind poll pays its full interval even when the transform
+            # took 400 ms, which is the bulk of the lag between an edit and the
+            # canvas settling. The frontend keeps a slow timer as a backstop for
+            # a dropped SSE connection.
+            events.hub.publish({"type": "transform", "path": topology_path})
 
     _transform_tasks[topology_path] = asyncio.create_task(_work())
 
@@ -115,7 +221,8 @@ def _nodes_edges_from_clab(clab: dict[str, Any]) -> tuple[list[dict], list[dict]
         for name, body in (topo.get("nodes") or {}).items()
     ]
     edges = []
-    for i, link in enumerate(topo.get("links") or []):
+    seen: EdgeIdCounter = {}
+    for link in topo.get("links") or []:
         eps = link.get("endpoints") or []
         # Extract node names and interface names
         source_parts = eps[0].split(":") if len(eps) > 0 and isinstance(eps[0], str) else ["", ""]
@@ -137,7 +244,7 @@ def _nodes_edges_from_clab(clab: dict[str, Any]) -> tuple[list[dict], list[dict]
         if source_node and target_node:
             edges.append(
                 {
-                    "id": f"e{i}",
+                    "id": edge_id(source_node, target_node, seen),
                     "source": source_node,
                     "target": target_node,
                     "data": {"sourceEndpoint": source_iface or "", "targetEndpoint": target_iface or ""},
@@ -153,8 +260,9 @@ def _nodes_edges_from_model(topo: Topology) -> tuple[list[dict], list[dict]]:
     endpoint text until actual deployment."""
     nodes = [{"id": n.name, "kind": n.device, "data": dict(n.attrs)} for n in topo.nodes]
     edges = []
+    seen: EdgeIdCounter = {}
 
-    for i, link in enumerate(topo.links):
+    for link in topo.links:
         if len(link.endpoints) >= 2:
             source = link.endpoints[0]
             target = link.endpoints[1]
@@ -170,7 +278,7 @@ def _nodes_edges_from_model(topo: Topology) -> tuple[list[dict], list[dict]]:
 
             edges.append(
                 {
-                    "id": f"e{i}",
+                    "id": edge_id(source, target, seen),
                     "source": source,
                     "target": target,
                     "data": {
@@ -180,6 +288,61 @@ def _nodes_edges_from_model(topo: Topology) -> tuple[list[dict], list[dict]]:
                 }
             )
     return nodes, edges
+
+
+def _merge_projections(
+    model: tuple[list[dict], list[dict]], base: tuple[list[dict], list[dict]]
+) -> tuple[list[dict], list[dict]]:
+    """Element *set* from the live model, element *bodies* from a real clab
+    projection wherever the ids match.
+
+    This is what the canvas gets while a background ``netlab create`` is still
+    running. Serving the raw model projection there means every node and edge
+    is momentarily re-described by a different source — kinds, interface labels
+    and link styling all change and then change back a second later, which
+    reads as the canvas glitching. Serving the previous clab projection
+    unchanged is worse: an edit the user just made (a new link, a deleted node)
+    would vanish until the transform lands.
+
+    Taking the set from the model and the bodies from clab gives both: the edit
+    shows up immediately, and everything that already existed keeps the exact
+    description it is already being rendered with, so nothing flickers. Ids are
+    endpoint-derived (see ``services.model.edge_ids``), which is what lets the
+    two projections recognise each other's elements at all.
+
+    Elements the clab transform synthesizes and the model has no name for
+    (bridge nodes for multi-access links, say) are not carried over — the model
+    is authoritative about what exists, otherwise deletions would not stick.
+    Those reappear when the transform completes, exactly as they do today.
+    """
+    model_nodes, model_edges = model
+    base_nodes, base_edges = base
+    base_by_node = {n.get("id"): n for n in base_nodes}
+    base_by_edge = {e.get("id"): e for e in base_edges}
+    # Deep-copied: `build()` reconciles these dicts in place, and the base ones
+    # are still owned by `_clab_cache`.
+    nodes = [copy.deepcopy(base_by_node[n["id"]]) if n["id"] in base_by_node else n for n in model_nodes]
+    edges = [copy.deepcopy(base_by_edge[e["id"]]) if e["id"] in base_by_edge else e for e in model_edges]
+    return nodes, edges
+
+
+def _existing_clab_projection(topology_path: str) -> tuple[list[dict], list[dict]] | None:
+    """The clab projection written to disk by the last deploy, if any.
+
+    Used as the blend base the first time a lab is opened, when nothing is
+    cached yet. That is the moment the source swap is most visible — the canvas
+    paints, then repaints — and a previously deployed lab already has the real
+    transform sitting in its ``clab.yml``, so it can open in its final form and
+    skip the repaint entirely.
+    """
+    try:
+        clab = runner.read_existing_clab(topology_path)
+    except Exception:  # noqa: BLE001 — a missing/unreadable clab.yml just means no base
+        return None
+    if not clab:
+        return None
+    nodes, edges = _nodes_edges_from_clab(clab)
+    return (nodes, edges) if nodes else None
 
 
 def _apply_scope(
@@ -250,6 +413,10 @@ async def build(
     edges: list[dict]
     lab_registered = False
     transform_pending = False
+    transform_error: str | None = None
+    # Nothing installed / nothing cached yet means the canvas is coming straight
+    # off the netlab model; the branches below refine this.
+    projection_source: ProjectionSource = "model"
     if runner.is_installed():
         try:
             # Hash the YAML to avoid re-running `netlab create` on every snapshot
@@ -259,14 +426,33 @@ async def build(
             except OSError:
                 yaml_hash = ""
 
+            failure = _transform_errors.get(topology_path)
+            # Only report a failure that belongs to the YAML on disk right now —
+            # an edit that changes the hash is assumed to be the user's fix.
+            if failure and failure[0] == yaml_hash and yaml_hash:
+                transform_error = failure[1]
+
             cached = _clab_cache.get(topology_path)
-            if cached and cached[0] == yaml_hash and yaml_hash:
-                nodes, edges = cached[1], cached[2]
+            if cached and cached.is_fresh(yaml_hash, locked=_is_locked(topology_path)):
+                # Deep-copied because the reconciliation pass below mutates
+                # these dicts and they belong to the cache.
+                nodes, edges = copy.deepcopy(cached.nodes), copy.deepcopy(cached.edges)
+                projection_source = cached.source
             else:
                 # Serve the fast model-derived projection right away and run
                 # the (potentially slow) `netlab create` transform in the
                 # background — opening a lab must never block on netlab.
+                #
+                # Blend it over the most recent real clab projection so only
+                # what actually changed looks different (see
+                # `_merge_projections`); without a base to blend onto the whole
+                # canvas visibly re-renders from a different source and then
+                # re-renders back.
                 nodes, edges = _nodes_edges_from_model(topo)
+                base = (cached.nodes, cached.edges) if cached else _existing_clab_projection(topology_path)
+                if base:
+                    nodes, edges = _merge_projections((nodes, edges), base)
+                    projection_source = "blended"
                 if yaml_hash:
                     transform_pending = True
                     _schedule_transform(topology_path, yaml_hash, (nodes, edges))
@@ -316,8 +502,25 @@ async def build(
         source_node = topo.node(node_id)
         if source_node is not None:
             node["data"].update(source_node.attrs)
-            if source_node.device:
-                node["data"]["device"] = source_node.device
+            # ``kind`` from a clab projection is the containerlab kind (FRR,
+            # for example, projects to ``linux``). clab-ui sends this field
+            # back when duplicating a node, so expose the *resolved netlab*
+            # device here instead; otherwise Ctrl+D silently turns an FRR
+            # node into an explicit Linux node. Keep the projection's outer
+            # ``kind`` untouched for rendering.
+            netlab_device = source_node.device or topo.defaults.get("device")
+            if netlab_device:
+                node["data"]["device"] = netlab_device
+                node["data"]["kind"] = netlab_device
+            # Round-trip the *entire* declarative node (module config, mgmt,
+            # any custom attribute) through duplicate/copy-paste, not just
+            # device. clab-ui's own payload only forwards a fixed field
+            # whitelist, so stash a full copy here under extraData — it
+            # survives clab-ui's node.data spread untouched — and
+            # `_add_node` unpacks it back onto the clone. Generic by
+            # construction: nothing here names a specific attribute.
+            if source_node.attrs:
+                node["data"].setdefault("extraData", {})["netlabAttrs"] = copy.deepcopy(source_node.attrs)
         if "label" not in node["data"]:
             node["data"]["label"] = node_id
         if "role" not in node["data"]:
@@ -389,9 +592,21 @@ async def build(
         "deploymentState": is_deployed,
         "canUndo": can_undo,
         "canRedo": can_redo,
-        # True while a background `netlab create` is warming the projection
-        # cache; the frontend re-requests the snapshot until this clears.
-        "transformPending": transform_pending,
+        # Everything the UI needs to know about *what* the nodes/edges above
+        # actually are. One object rather than loose flags, because these three
+        # describe a single state and were previously easy to read in isolation
+        # and get wrong (a failed transform clears `pending` too, so `pending:
+        # false` alone never meant "this is the real transform").
+        #   source  — see ProjectionSource; "clab" is the real transform, the
+        #             *-preview values say why it is only an approximation.
+        #   pending — a background `netlab create` is running; the frontend picks
+        #             the result up from the `transform` push event.
+        #   error   — the last `netlab create` failure for this exact YAML.
+        "projection": {
+            "source": projection_source,
+            "pending": transform_pending,
+            "error": transform_error,
+        },
         "validationIssues": [issue.as_dict() for issue in validation_issues],
     }
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from services.lenses._helpers import EdgeIdCounter, natural_key
 from services.lenses._helpers import as_dict as _dict
 from services.lenses._helpers import as_list as _list
 from services.lenses._helpers import edge_ids as _edge_ids
@@ -32,11 +33,13 @@ def _link_vlans(interface: dict[str, Any]) -> tuple[list[str], list[str]]:
 def _vlan_edges(transformed: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     """Map each VLAN name to the physical edges that carry it, with mode."""
     edges: dict[str, list[dict[str, Any]]] = {}
-    for fallback_index, raw_link in enumerate(_list(transformed.get("links")), start=1):
+    # Shared across the whole link list so parallel links are numbered exactly
+    # as the canvas projection numbers them.
+    edge_id_counter: EdgeIdCounter = {}
+    for raw_link in _list(transformed.get("links")):
         link = _dict(raw_link)
         endpoints = [_dict(ep) for ep in _list(link.get("interfaces")) if _dict(ep).get("node")]
-        link_index = int(link.get("linkindex") or fallback_index)
-        edge_ids = _edge_ids(link_index, endpoints)
+        edge_ids = _edge_ids(endpoints, edge_id_counter)
         nodes = [str(ep.get("node")) for ep in endpoints]
         for ep in endpoints:
             access, trunk = _link_vlans(ep)
@@ -101,8 +104,8 @@ def build_service_explorer(transformed: dict[str, Any]) -> dict[str, Any]:
                 "prefix": str(_dict(vlan.get("prefix")).get("ipv4")) if _dict(vlan.get("prefix")).get("ipv4") else None,
                 "vrf": str(vlan.get("vrf")) if vlan.get("vrf") else None,
                 "evpn": evpn_info,
-                "nodeIds": sorted(member_nodes),
-                "sviNodeIds": sorted(svi_nodes),
+                "nodeIds": sorted(member_nodes, key=natural_key),
+                "sviNodeIds": sorted(svi_nodes, key=natural_key),
                 "physicalEdgeIds": edge_ids,
                 "edges": [{"edgeIds": e["edgeIds"], "mode": e["mode"], "nodes": e["nodes"]} for e in edges],
                 "colorKey": _color_key("vlan", str(name), vlan.get("id")),
@@ -117,7 +120,7 @@ def build_service_explorer(transformed: dict[str, Any]) -> dict[str, Any]:
         member_nodes = {
             str(node_name) for node_name, raw_node in nodes.items() if str(name) in _dict(_dict(raw_node).get("vrfs"))
         }
-        vrf_vlans = sorted(v["name"] for v in vlans if v["vrf"] == str(name))
+        vrf_vlans = sorted((v["name"] for v in vlans if v["vrf"] == str(name)), key=natural_key)
         evpn_transit = None
         for node_name in member_nodes:
             node_vrf = _dict(_dict(_dict(nodes.get(node_name)).get("vrfs")).get(str(name)))
@@ -134,7 +137,7 @@ def build_service_explorer(transformed: dict[str, Any]) -> dict[str, Any]:
                 "importTargets": [str(rt) for rt in _list(vrf.get("import"))],
                 "exportTargets": [str(rt) for rt in _list(vrf.get("export"))],
                 "evpnTransitVni": evpn_transit,
-                "nodeIds": sorted(member_nodes),
+                "nodeIds": sorted(member_nodes, key=natural_key),
                 "vlans": vrf_vlans,
                 "colorKey": _color_key("vrf", str(name), vrf.get("id")),
                 "objectRefs": object_refs,

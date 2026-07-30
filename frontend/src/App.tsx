@@ -1,7 +1,5 @@
-import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { App as ClabUiApp, useIsLocked, useNodes, useTopoViewerActions } from "@srl-labs/clab-ui";
-import { LabTabsBar } from "./components/LabTabsBar";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsLocked, useNodes, useTopoViewerActions } from "@srl-labs/clab-ui";
 import {
   createClabUiRuntime,
   type CustomPaletteTab,
@@ -10,7 +8,6 @@ import {
   type TopologyUiContext,
   type TopologyUiRequestOptions,
 } from "@srl-labs/clab-ui/host";
-import { ContainerlabImageManagerDialog } from "@srl-labs/clab-ui/image-manager";
 import {
   applyRuntimeEdgeStatsToGraph,
   executeTopologyCommand,
@@ -21,10 +18,7 @@ import {
 import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import { createApiClabUiHost, type AppClabUiHost } from "./host/createHost";
 import { createDemoClabUiHost } from "./host/createDemoHost";
-import { INITIAL_GRAPH_DATA } from "./icons";
-import { Box, IconButton, Tooltip } from "@mui/material";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { Box } from "@mui/material";
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
@@ -33,32 +27,23 @@ import "@srl-labs/clab-ui/styles/global.css";
 import "highlight.js/styles/github-dark.css";
 
 import { PluginsPanel } from "./panels/Plugins";
-import { AttractorEmptyState } from "./components/AttractorEmptyState";
 import { NetlabBasicTab } from "./components/node-editor/NetlabBasicTab";
 import { NetlabConfigTab } from "./components/node-editor/NetlabConfigTab";
 import { NetlabAdvancedTab } from "./components/node-editor/NetlabAdvancedTab";
 import { NetlabModulesTab } from "./components/node-editor/NetlabModulesTab";
-import { NodeEditorSessionProvider } from "./components/node-editor/NodeEditorSessionContext";
-import { UnitsDock } from "./panels/UnitsDock";
 import { UnitComposer } from "./panels/UnitComposer";
 import { useAutoOpenComposerTab } from "./hooks/useAutoOpenComposerTab";
 import { GroupsPanel } from "./panels/Groups";
-import { NetlabLinks } from "./panels/NetlabLinks";
 import { WorkersPanel } from "./panels/Workers";
 import { AssistantPanel } from "./panels/assistant/AssistantPanel";
 import {
   persistAssistantOpen,
   readAssistantOpen,
 } from "./panels/assistant/preferences";
-import { RuntimeSnackbarView } from "./components/RuntimeSnackbarView";
 import { StartupGate } from "./components/StartupGate";
-import { EnvWarningBanner } from "./components/EnvWarningBanner";
 import { NetlabDeployMenuItems } from "./components/NetlabDeployMenuItems";
-import { CanvasValidationSummary } from "./components/CanvasValidationSummary";
-import { DeployDiffDialog } from "./components/DeployDiffDialog";
-import { CanvasDeploymentProgress, type DeploymentProgress } from "./components/CanvasDeploymentProgress";
-import { QuickOpenDialog } from "./components/QuickOpenDialog";
-import { api, HttpError, type AssistantCapabilities, type DeployDiffResult } from "./api/client";
+import { type DeploymentProgress } from "./components/CanvasDeploymentProgress";
+import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type NetlabProjection } from "./api/client";
 
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "./lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "./lifecycle/persistence";
@@ -72,23 +57,16 @@ import type { ValidationIssue } from "./hooks/useLabLifecycle";
 import { useExplorerController, type ExplorerIncomingMessage } from "./hooks/useExplorerController";
 import { useSessionDock, type SessionTab } from "./hooks/useSessionDock";
 import { useBrowserNotifications } from "./hooks/useBrowserNotifications";
-import { NetlabLenses } from "./components/lenses/NetlabLenses";
 import { LensesPanel } from "./components/lenses/LensesPanel";
 import { useNetlabLenses } from "./hooks/useNetlabLenses";
 import { useRightPanelTabMemory } from "./hooks/useRightPanelTabMemory";
-import { WorkspaceDialogs } from "./components/WorkspaceDialogs";
 import { AppToolbarActions } from "./app/AppToolbarActions";
-import { RunningLabsDialog } from "./components/dialogs/RunningLabsDialog";
-import { CommandOutputDialog } from "./components/dialogs/CommandOutputDialog";
-import { SettingsDialog, type SettingsTab } from "./components/dialogs/SettingsDialog";
-
-// Monaco (file editor) and xterm (node shell) dominate the initial bundle but
-// are only needed once the user opens a file tab or a shell — load them lazily
-// so first paint doesn't pay for them.
-const FileEditorTabPanel = lazy(() =>
-  import("./components/FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
-);
-const SessionDock = lazy(() => import("./terminal/SessionDock").then((m) => ({ default: m.SessionDock })));
+import { type SettingsTab } from "./components/dialogs/SettingsDialog";
+import { AppCanvasArea } from "./components/app/AppCanvasArea";
+import { AppSidebarPortals } from "./components/app/AppSidebarPortals";
+import { AppCanvasOverlays } from "./components/app/AppCanvasOverlays";
+import { AppDialogs } from "./components/app/AppDialogs";
+import { AppSecondaryDialogs } from "./components/app/AppSecondaryDialogs";
 
 const netlabNodeEditorTabs = [
   { id: "basic", label: "Basic", component: NetlabBasicTab },
@@ -96,6 +74,106 @@ const netlabNodeEditorTabs = [
   { id: "config", label: "Configuration", component: NetlabConfigTab },
   { id: "advanced", label: "Advanced", component: NetlabAdvancedTab }
 ];
+
+// netlab reports transform failures as a block: a generic header, one line per
+// offending node/link, then a "Fatal error" trailer. A toast only has room for
+// one line, so skip the header/trailer noise and lead with the first line that
+// actually names a cause, counting the rest so nothing looks hidden.
+type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
+
+async function openLabGraphPopup(sid: string, layout: "interactive" | "horizontal" | "vertical", addToast: Toast) {
+  const popup = window.open("", "_blank");
+  try {
+    const result = await api.labGraph(sid, layout);
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || `netlab graph exited ${result.code}`);
+    const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "image/svg+xml" }));
+    if (popup) popup.location.href = blobUrl;
+    else window.open(blobUrl, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (err) {
+    popup?.close();
+    addToast(`Could not create graph: ${err instanceof Error ? err.message : String(err)}`, "error");
+  }
+}
+
+// Real draw.io/mxGraph XML (containerlab --drawio, via clab-io-draw) - unlike
+// the SVG graph above, browsers can't render this inline, so it downloads as
+// a .drawio file for opening in the draw.io app instead.
+async function exportDrawioDownload(sid: string, layout: "horizontal" | "vertical", addToast: Toast) {
+  try {
+    const result = await api.labGraphDrawio(sid, layout);
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || `containerlab graph --drawio exited ${result.code}`);
+    const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "application/xml" }));
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = "topology.drawio";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    addToast("Downloaded topology.drawio", "success");
+  } catch (err) {
+    addToast(`Could not export draw.io diagram: ${err instanceof Error ? err.message : String(err)}`, "error");
+  }
+}
+
+type InspectOutputState = { loading: boolean; output: string | null; error: string | null } | null;
+
+async function inspectLabAndSet(sid: string, setInspectOutput: (value: InspectOutputState) => void) {
+  setInspectOutput({ loading: true, output: null, error: null });
+  try {
+    const result = await api.labInspect(sid);
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || `netlab inspect exited ${result.code}`);
+    setInspectOutput({ loading: false, output: result.stdout, error: null });
+  } catch (err) {
+    setInspectOutput({ loading: false, output: null, error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function runFcliPopup(sid: string, command: string, addToast: Toast) {
+  const popup = window.open("", "_blank");
+  try {
+    const result = await api.labFcli(sid, command);
+    if (result.code !== 0) throw new Error(result.stderr || result.stdout || `fcli exited ${result.code}`);
+    const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "text/plain;charset=utf-8" }));
+    if (popup) popup.location.href = blobUrl;
+    else window.open(blobUrl, "_blank");
+    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  } catch (err) {
+    popup?.close();
+    addToast(`Could not run fcli ${command}: ${err instanceof Error ? err.message : String(err)}`, "error");
+  }
+}
+
+function installEdgesharkAction(addToast: Toast) {
+  addToast("Installing Edgeshark on the docker host — first install pulls images and can take a few minutes…", "info");
+  api.installEdgeshark().then(
+    () => addToast("Edgeshark is installed and running — packet capture is ready", "success"),
+    (err) => addToast(`Edgeshark install failed: ${err instanceof Error ? err.message : String(err)}`, "error")
+  );
+}
+
+function uninstallEdgesharkAction(addToast: Toast) {
+  api.uninstallEdgeshark().then(
+    () => addToast("Edgeshark removed", "success"),
+    (err) => addToast(`Edgeshark uninstall failed: ${err instanceof Error ? err.message : String(err)}`, "error")
+  );
+}
+
+function killAllWiresharkVncAction(addToast: Toast) {
+  api.killAllWiresharkVnc().then(
+    (result) => addToast(result.message, "success"),
+    (err) => addToast(`Could not remove Wireshark containers: ${err instanceof Error ? err.message : String(err)}`, "error")
+  );
+}
+
+function firstLine(error: string): string {
+  const lines = error
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^errors? encountered\b/i.test(line) && !/^fatal error in netlab\b/i.test(line));
+  if (lines.length === 0) return error.trim().split("\n")[0] ?? "";
+  return lines.length > 1 ? `${lines[0]} (+${lines.length - 1} more)` : lines[0];
+}
 
 export default function App() {
   const canvasNodes = useNodes();
@@ -167,6 +245,11 @@ export default function App() {
 
   // ── Hooks ────────────────────────────────────────────────────────────────────
   const handlePluginPanelChangedRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Assigned in the transform-tracking block below, which is declared after
+  // useAppData needs it.
+  const handleTransformDoneRef = useRef<() => void>(() => { });
+  // Assigned once the lenses hook exists, further down.
+  const invalidateLensesRef = useRef<() => void>(() => { });
 
   const {
     startup, checkStartup,
@@ -179,6 +262,9 @@ export default function App() {
     hostRef,
     onFilesChanged: useCallback(() => {
       void handlePluginPanelChangedRef.current();
+    }, []),
+    onTransformDone: useCallback(() => {
+      handleTransformDoneRef.current();
     }, []),
   });
 
@@ -249,115 +335,106 @@ export default function App() {
       },
       openImageManager: () => setImageManagerOpen(true),
       openRunningLabs: () => setRunningLabsOpen(true),
-      openLabGraph: async (sid, layout) => {
-        const popup = window.open("", "_blank");
-        try {
-          const result = await api.labGraph(sid, layout);
-          if (result.code !== 0) throw new Error(result.stderr || result.stdout || `netlab graph exited ${result.code}`);
-          const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "image/svg+xml" }));
-          if (popup) popup.location.href = blobUrl;
-          else window.open(blobUrl, "_blank");
-          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-        } catch (err) {
-          popup?.close();
-          addToast(`Could not create graph: ${err instanceof Error ? err.message : String(err)}`, "error");
-        }
-      },
-      // Real draw.io/mxGraph XML (containerlab --drawio, via clab-io-draw) -
-      // unlike the SVG graph above, browsers can't render this inline, so it
-      // downloads as a .drawio file for opening in the draw.io app instead.
-      exportDrawio: async (sid, layout) => {
-        try {
-          const result = await api.labGraphDrawio(sid, layout);
-          if (result.code !== 0) throw new Error(result.stderr || result.stdout || `containerlab graph --drawio exited ${result.code}`);
-          const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "application/xml" }));
-          const link = document.createElement("a");
-          link.href = blobUrl;
-          link.download = "topology.drawio";
-          link.click();
-          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-          addToast("Downloaded topology.drawio", "success");
-        } catch (err) {
-          addToast(`Could not export draw.io diagram: ${err instanceof Error ? err.message : String(err)}`, "error");
-        }
-      },
-      inspectLab: async (sid) => {
-        setInspectOutput({ loading: true, output: null, error: null });
-        try {
-          const result = await api.labInspect(sid);
-          if (result.code !== 0) throw new Error(result.stderr || result.stdout || `netlab inspect exited ${result.code}`);
-          setInspectOutput({ loading: false, output: result.stdout, error: null });
-        } catch (err) {
-          setInspectOutput({ loading: false, output: null, error: err instanceof Error ? err.message : String(err) });
-        }
-      },
-      runFcli: async (sid, command) => {
-        const popup = window.open("", "_blank");
-        try {
-          const result = await api.labFcli(sid, command);
-          if (result.code !== 0) throw new Error(result.stderr || result.stdout || `fcli exited ${result.code}`);
-          const blobUrl = URL.createObjectURL(new Blob([result.stdout], { type: "text/plain;charset=utf-8" }));
-          if (popup) popup.location.href = blobUrl;
-          else window.open(blobUrl, "_blank");
-          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-        } catch (err) {
-          popup?.close();
-          addToast(`Could not run fcli ${command}: ${err instanceof Error ? err.message : String(err)}`, "error");
-        }
-      },
+      openLabGraph: (sid, layout) => openLabGraphPopup(sid, layout, addToast),
+      exportDrawio: (sid, layout) => exportDrawioDownload(sid, layout, addToast),
+      inspectLab: (sid) => inspectLabAndSet(sid, setInspectOutput),
+      runFcli: (sid, command) => runFcliPopup(sid, command, addToast),
       openShell: (n) => openShellRef.current(n),
       showLogs: (n) => openLogsRef.current(n),
       openDrawioWizard: () => openDrawioWizardRef.current(),
       nodeLifecycle: (n, action) => handleNodeLifecycleRef.current(n, action),
-      installEdgeshark: () => {
-        addToast("Installing Edgeshark on the docker host — first install pulls images and can take a few minutes…", "info");
-        api.installEdgeshark().then(
-          () => addToast("Edgeshark is installed and running — packet capture is ready", "success"),
-          (err) => addToast(`Edgeshark install failed: ${err instanceof Error ? err.message : String(err)}`, "error")
-        );
-      },
-      uninstallEdgeshark: () => {
-        api.uninstallEdgeshark().then(
-          () => addToast("Edgeshark removed", "success"),
-          (err) => addToast(`Edgeshark uninstall failed: ${err instanceof Error ? err.message : String(err)}`, "error")
-        );
-      },
-      killAllWiresharkVNC: () => {
-        api.killAllWiresharkVnc().then(
-          (result) => addToast(result.message, "success"),
-          (err) => addToast(`Could not remove Wireshark containers: ${err instanceof Error ? err.message : String(err)}`, "error")
-        );
-      },
+      installEdgeshark: () => installEdgesharkAction(addToast),
+      uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),
+      killAllWiresharkVNC: () => killAllWiresharkVncAction(addToast),
       addToast,
       getSessionId: () => sessionIdRef.current
     }
   });
 
   // ── Background netlab transform tracking ────────────────────────────────────
-  // Snapshots arrive instantly from the YAML model while `netlab create` warms
-  // the projection cache in the background (`transformPending: true`). Poll the
-  // snapshot until the transform lands, with a toast at start and finish.
-  const transformPollRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; announced: boolean }>({ timer: null, announced: false });
+  // A snapshot arrives immediately while `netlab create` warms the projection
+  // cache in the background (`projection.pending`). The backend already blends
+  // that interim snapshot over the last real projection, so the canvas is
+  // correct the whole time — all that's left here is to pick the finished
+  // projection up. `onTransformDone` (a backend push event) is the primary
+  // signal; the timer below is only a backstop for a dropped SSE stream, so it
+  // backs off instead of hammering a fixed interval, and gives up rather than
+  // re-requesting forever if `projection.pending` never clears.
+  //
+  // Progress is shown as a quiet inline pill (see TransformIndicator), not as
+  // toasts — this state recurs on every edit, so a notification per transform
+  // was pure noise. Toasts are kept for failures only, which are the one
+  // outcome the user has to act on. `reportedError` dedupes those: the snapshot
+  // is re-requested on every canvas interaction and keeps reporting the same
+  // failure until the YAML is edited, which would otherwise bury the screen in
+  // identical toasts.
+  const TRANSFORM_POLL_CAP_MS = 5000;
+  const TRANSFORM_POLL_ATTEMPTS = 15;
+  const [transformRunning, setTransformRunning] = useState(false);
+  const transformPollRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; pending: boolean; attempts: number; reportedError: string | null }>({ timer: null, pending: false, attempts: 0, reportedError: null });
+
+  const clearTransformPoll = useCallback(() => {
+    const state = transformPollRef.current;
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+    state.pending = false;
+    state.attempts = 0;
+    setTransformRunning(false);
+  }, []);
+
   // netlab-specific field the backend adds to its snapshot response — not part
-  // of clab-ui's own TopologySnapshot type.
-  const handleTransformPendingRef = useRef<(snap: TopologySnapshot & { transformPending?: boolean }) => void>(() => { });
+  // of clab-ui's own TopologySnapshot type. `source` says what the nodes/edges
+  // actually are ("clab" is the real transform; the *-preview values say why
+  // they are only an approximation).
+  const handleTransformPendingRef = useRef<(snap: TopologySnapshot & { projection?: NetlabProjection }) => void>(() => { });
   handleTransformPendingRef.current = (snap) => {
     const state = transformPollRef.current;
-    if (snap?.transformPending) {
-      if (!state.announced) {
-        state.announced = true;
-        addToast("netlab is transforming the topology in the background — showing a quick preview", "info");
-      }
+    if (snap?.projection?.pending) {
+      state.pending = true;
+      setTransformRunning(true);
       if (!state.timer) {
+        if (state.attempts >= TRANSFORM_POLL_ATTEMPTS) {
+          clearTransformPoll();
+          addToast("netlab is taking unusually long to transform this topology — reload to retry.", "error");
+          return;
+        }
+        const delay = Math.min(750 * 2 ** state.attempts, TRANSFORM_POLL_CAP_MS);
+        state.attempts += 1;
         state.timer = setTimeout(() => {
           state.timer = null;
           refreshCanvasRef.current();
-        }, 3000);
+        }, delay);
       }
-    } else if (state.announced) {
-      state.announced = false;
-      addToast("Topology transform complete", "success");
+      return;
     }
+    clearTransformPoll();
+    // A failed transform also clears `pending`, so the error is what tells the
+    // user the canvas is showing an approximate preview rather than the real
+    // transform.
+    const error = snap?.projection?.error ?? null;
+    if (error) {
+      if (state.reportedError !== error) {
+        state.reportedError = error;
+        addToast(`netlab could not transform this topology — the canvas is showing an approximate preview. ${firstLine(error)}`, "error");
+      }
+      return;
+    }
+    state.reportedError = null;
+  };
+
+  // Backend push: a `netlab create` finished somewhere. Only refresh if this
+  // canvas is actually waiting on one — the event carries no session identity,
+  // and refreshing on an unrelated lab's transform would be wasted work.
+  handleTransformDoneRef.current = () => {
+    // Unconditional: a completed transform means the transformed topology the
+    // lenses analyse has changed, whether or not this canvas was waiting on it.
+    // The hook defers the actual refetch until a lens is on screen.
+    invalidateLensesRef.current();
+    const state = transformPollRef.current;
+    if (!state.pending) return;
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = null;
+    refreshCanvasRef.current();
   };
 
   // ── Host + runtime ───────────────────────────────────────────────────────────
@@ -440,6 +517,7 @@ export default function App() {
   // switching to another dock tab and back.
   const netlabLenses = useNetlabLenses(sessionId ?? "", activeTabId ?? undefined);
   const { applyDeploymentProgress } = netlabLenses;
+  invalidateLensesRef.current = netlabLenses.invalidate;
   useRightPanelTabMemory();
 
   // When the tab open on the canvas is a unit file (lives in a `units/` dir),
@@ -992,240 +1070,123 @@ export default function App() {
             } : {}),
           }}
         >
-          {runtime && (
-            <NodeEditorSessionProvider value={sessionId}>
-              <ClabUiApp
-                initialData={INITIAL_GRAPH_DATA}
-                runtime={appRuntime}
-              />
-            </NodeEditorSessionProvider>
-          )}
+          <AppCanvasArea
+            runtime={runtime}
+            appRuntime={appRuntime}
+            sessionId={sessionId}
+            transformRunning={transformRunning}
+            activeFileTab={activeFileTab}
+            portalContainer={portalContainer}
+            labFiles={labFiles}
+            handleOpenLab={handleOpenLab}
+            navbarPortalContainer={navbarPortalContainer}
+            toolbarActions={toolbarActions}
+          />
 
-          {!sessionId && !activeFileTab && portalContainer && createPortal(
-            <AttractorEmptyState
-              labs={labFiles}
-              onOpenLab={(topologyRef) => void handleOpenLab(topologyRef)}
-            />,
-            portalContainer
-          )}
+          <AppSidebarPortals
+            sessionId={sessionId}
+            netlabLinksPaletteContainer={netlabLinksPaletteContainer}
+            refreshCanvas={refreshCanvas}
+            addToast={addToast}
+            leftSidebarToggleContainer={leftSidebarToggleContainer}
+            isLeftSidebarOpen={isLeftSidebarOpen}
+            handleToggleLeftSidebar={handleToggleLeftSidebar}
+            tabBarContainer={tabBarContainer}
+            openTabs={openTabs}
+            activeTabId={activeTabId}
+            handleActivateLabTab={handleActivateLabTab}
+            handleCloseLab={handleCloseLab}
+          />
 
-          {navbarPortalContainer && createPortal(toolbarActions, navbarPortalContainer)}
-          <SettingsDialog
-            open={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            initialTab={settingsTab}
+          <AppCanvasOverlays
+            portalContainer={portalContainer}
+            activeFileTab={activeFileTab}
             themeMode={themeMode}
-            onToggleTheme={() => handleThemeChange(themeMode === "dark" ? "light" : "dark")}
+            handleFileTabChange={handleFileTabChange}
+            handleCloseLab={handleCloseLab}
+            handleFileTabSave={handleFileTabSave}
+            handleFileTabReload={handleFileTabReload}
+            sessionId={sessionId}
+            validationIssues={validationIssues}
+            setValidationIssues={setValidationIssues}
+            deploymentProgress={deploymentProgress}
+            activeTabId={activeTabId}
+            refreshCanvas={refreshCanvas}
+            addToast={addToast}
+            handleOpenLab={handleOpenLab}
+            netlabLenses={netlabLenses}
+            sessionDock={sessionDock}
+            openShell={openShell}
+            handleSessionPopOut={handleSessionPopOut}
+          />
+
+          <AppDialogs
+            settingsOpen={settingsOpen}
+            setSettingsOpen={setSettingsOpen}
+            settingsTab={settingsTab}
+            setSettingsTab={setSettingsTab}
+            themeMode={themeMode}
+            handleThemeChange={handleThemeChange}
             notificationsSupported={notificationsSupported}
             notificationsEnabled={notificationsEnabled}
             notificationPermission={notificationPermission}
-            onToggleNotifications={() => void toggleNotifications()}
+            toggleNotifications={toggleNotifications}
             workspaces={workspaces}
-            onAddWorkspace={async (path) => {
-              const r = await api.addWorkspace(path);
-              setWorkspaces(r.workspaces as WorkspaceEntry[]);
-              void fetchFiles();
-            }}
-            onRemoveWorkspace={async (path) => {
-              const r = await api.removeWorkspace(path);
-              setWorkspaces(r.workspaces as WorkspaceEntry[]);
-              void fetchFiles();
-            }}
-            onEnvironmentChanged={() => void checkStartup()}
-            assistantProviders={assistantCapabilities?.providers ?? []}
-            assistantInitialProviderId={assistantSettingsProviderId}
-            onAssistantChanged={refreshAssistantCapabilities}
-            health={startup.health}
-          />
-
-          {sessionId && netlabLinksPaletteContainer && createPortal(
-            <NetlabLinks sessionId={sessionId} onChanged={refreshCanvas} onToast={addToast} />,
-            netlabLinksPaletteContainer
-          )}
-
-          {leftSidebarToggleContainer && createPortal(
-            <Tooltip title={isLeftSidebarOpen ? "Hide left sidebar" : "Show left sidebar"} placement="right">
-              <IconButton
-                size="small"
-                onClick={handleToggleLeftSidebar}
-                data-testid="left-sidebar-toggle"
-                sx={{
-                  width: 20,
-                  height: 48,
-                  borderRadius: "0 4px 4px 0",
-                  border: 1,
-                  borderLeft: 0,
-                  borderColor: "divider",
-                  bgcolor: "background.paper",
-                  color: "text.secondary",
-                  p: 0,
-                  "&:hover": { bgcolor: "action.hover" }
-                }}
-              >
-                {isLeftSidebarOpen
-                  ? <ChevronLeftIcon sx={{ fontSize: 16 }} />
-                  : <ChevronRightIcon sx={{ fontSize: 16 }} />}
-              </IconButton>
-            </Tooltip>,
-            leftSidebarToggleContainer
-          )}
-
-          {tabBarContainer && openTabs.length > 0 && createPortal(
-            <LabTabsBar
-              activeTabId={activeTabId}
-              tabs={openTabs.map((t) => ({ id: t.id, title: t.title, subtitle: t.subtitle, path: t.kind === "topology" ? t.topologyRef?.yamlPath : t.path, dirty: t.kind === "file" ? t.content !== t.originalContent : false }))}
-              onActivate={(id) => void handleActivateLabTab(id)}
-              onClose={(id) => void handleCloseLab(id)}
-            />,
-            tabBarContainer
-          )}
-
-          {portalContainer && activeFileTab && createPortal(
-            <Suspense fallback={null}>
-              <FileEditorTabPanel tab={activeFileTab} themeMode={themeMode} onChange={handleFileTabChange} onClose={(id) => void handleCloseLab(id)} onSave={(id) => void handleFileTabSave(id)} onReload={handleFileTabReload} />
-            </Suspense>,
-            portalContainer
-          )}
-
-          {portalContainer && sessionId && !activeFileTab && !DEMO_MODE && createPortal(
-            <>
-              <CanvasValidationSummary issues={validationIssues} onClose={() => setValidationIssues([])} />
-              <CanvasDeploymentProgress progress={deploymentProgress} />
-              <UnitsDock
-                sessionId={sessionId}
-                refreshKey={activeTabId ?? undefined}
-                onRefresh={refreshCanvas}
-                onToast={addToast}
-                onOpenUnit={(unit) =>
-                  void handleOpenLab(
-                    {
-                      topologyId: `standalone:local::${unit.path}`,
-                      labName: unit.name,
-                      yamlPath: unit.path,
-                      source: "standalone"
-                    },
-                    // Unit layouts keep the coordinates of the lab they were
-                    // drawn in — fit the viewport or the canvas looks blank.
-                    { fitView: true }
-                  )
-                }
-              />
-              <NetlabLenses
-                sessionId={sessionId}
-                container={portalContainer as HTMLElement}
-                state={netlabLenses}
-                themeMode={themeMode}
-                onToast={addToast}
-              />
-            </>,
-            portalContainer
-          )}
-
-          <DeployDiffDialog
-            diff={deployDiff}
-            validationIssues={deployValidationIssues}
-            onCancel={() => {
-              setDeployDiff(null);
-              setDeployValidationIssues([]);
-              deployDecisionRef.current?.(false);
-              deployDecisionRef.current = null;
-            }}
-            onDeploy={() => {
-              setDeployDiff(null);
-              setDeployValidationIssues([]);
-              deployDecisionRef.current?.(true);
-              deployDecisionRef.current = null;
-            }}
-          />
-
-          <QuickOpenDialog
-            open={quickOpen}
-            onClose={() => setQuickOpen(false)}
-            sessionId={sessionId}
-            isLocked={isTopologyLocked}
-            labs={labFiles}
-            actions={quickActions}
-            onOpenLab={(topologyRef) => void handleOpenLab(topologyRef)}
-            onOpenUnit={(unit) => void handleOpenLab({ topologyId: `standalone:local::${unit.path}`, labName: unit.name, yamlPath: unit.path, source: "standalone" }, { fitView: true })}
-            onInstantiateUnit={(unit) => {
-              if (!sessionId) return;
-              if (isTopologyLocked) {
-                addToast("Unlock the lab before placing a unit.", "warning");
-                return;
-              }
-              void api.instantiateUnit(sessionId, unit.name)
-                .then(() => {
-                  refreshCanvas();
-                  host.emitTopoViewerEvent?.({ type: "fitViewport" });
-                  addToast(`Instantiated ${unit.name}`, "success");
-                })
-                .catch((err) => addToast(`Could not instantiate ${unit.name}: ${err instanceof Error ? err.message : String(err)}`, "error"));
-            }}
-          />
-
-          {/* Session dock lives in the canvas overlay container but renders for
-              file tabs too (VS Code-style panel over the editor) so shells and
-              log streams survive tab switches. */}
-          {portalContainer && sessionId && !DEMO_MODE && sessionDock.tabs.length > 0 && createPortal(
-            <Suspense fallback={null}>
-              <SessionDock
-                sessionId={sessionId}
-                tabs={sessionDock.tabs}
-                activeKey={sessionDock.activeKey}
-                open={sessionDock.open}
-                onSelect={sessionDock.selectTab}
-                onClose={sessionDock.closeTab}
-                onToggleOpen={() => sessionDock.setOpen((value) => !value)}
-                onOpenShell={openShell}
-                onPopOut={handleSessionPopOut}
-              />
-            </Suspense>,
-            portalContainer
-          )}
-
-          {runtime && <ContainerlabImageManagerDialog open={imageManagerOpen} runtime={runtime} onClose={() => setImageManagerOpen(false)} endpointOptions={[{ id: "local", label: "local" }]} />}
-
-          <CommandOutputDialog
-            open={inspectOutput !== null}
-            onClose={() => setInspectOutput(null)}
-            title="netlab inspect"
-            loading={inspectOutput?.loading ?? false}
-            output={inspectOutput?.output ?? null}
-            errorMessage={inspectOutput?.error ?? null}
-            themeMode={themeMode}
-            language="yaml"
-          />
-
-          <RunningLabsDialog
-            open={runningLabsOpen}
-            onClose={() => setRunningLabsOpen(false)}
-            onChanged={() => { void refreshStatus(); void fetchFiles(); }}
-            onToast={addToast}
-            getOrCreateSession={getOrCreateSession}
-            handleDestroyLab={handleDestroyLab}
-          />
-
-          <WorkspaceDialogs
             setWorkspaces={setWorkspaces}
             fetchFiles={fetchFiles}
+            checkStartup={checkStartup}
+            assistantCapabilities={assistantCapabilities}
+            assistantSettingsProviderId={assistantSettingsProviderId}
+            refreshAssistantCapabilities={refreshAssistantCapabilities}
+            startup={startup}
+            deployDiff={deployDiff}
+            deployValidationIssues={deployValidationIssues}
+            setDeployDiff={setDeployDiff}
+            setDeployValidationIssues={setDeployValidationIssues}
+            deployDecisionRef={deployDecisionRef}
+            quickOpen={quickOpen}
+            setQuickOpen={setQuickOpen}
+            sessionId={sessionId}
+            isTopologyLocked={isTopologyLocked}
+            labFiles={labFiles}
+            quickActions={quickActions}
+            handleOpenLab={handleOpenLab}
             addToast={addToast}
-            cloneOpen={cloneOpen}
-            cloneTarget={cloneTarget}
-            onCloneClose={() => { setCloneOpen(false); setCloneTarget(undefined); }}
-            folderBrowserOpen={folderBrowserOpen}
-            onFolderBrowserClose={() => setFolderBrowserOpen(false)}
-            exampleLabsOpen={exampleLabsOpen}
-            onExampleLabsClose={() => setExampleLabsOpen(false)}
-            newFolderParent={newFolderParent}
-            onNewFolderClose={() => setNewFolderParent(null)}
-            newLabDialogOpen={newLabDialogOpen}
-            onNewLabDialogClose={() => setNewLabDialogOpen(false)}
-            onCreateLab={handleCreateLab}
+            host={host}
+            refreshCanvas={refreshCanvas}
+            imageManagerOpen={imageManagerOpen}
+            setImageManagerOpen={setImageManagerOpen}
+            runtime={runtime}
+            inspectOutput={inspectOutput}
+            setInspectOutput={setInspectOutput}
           />
 
-          <EnvWarningBanner health={DEMO_MODE ? null : startup.health} />
-
-          <RuntimeSnackbarView snackbar={runtimeSnackbar} onClose={() => setRuntimeSnackbar(defaultRuntimeSnackbar)} />
+          <AppSecondaryDialogs
+            runningLabsOpen={runningLabsOpen}
+            setRunningLabsOpen={setRunningLabsOpen}
+            refreshStatus={refreshStatus}
+            fetchFiles={fetchFiles}
+            addToast={addToast}
+            getOrCreateSession={getOrCreateSession}
+            handleDestroyLab={handleDestroyLab}
+            setWorkspaces={setWorkspaces}
+            cloneOpen={cloneOpen}
+            cloneTarget={cloneTarget}
+            setCloneOpen={setCloneOpen}
+            setCloneTarget={setCloneTarget}
+            folderBrowserOpen={folderBrowserOpen}
+            setFolderBrowserOpen={setFolderBrowserOpen}
+            exampleLabsOpen={exampleLabsOpen}
+            setExampleLabsOpen={setExampleLabsOpen}
+            newFolderParent={newFolderParent}
+            setNewFolderParent={setNewFolderParent}
+            newLabDialogOpen={newLabDialogOpen}
+            setNewLabDialogOpen={setNewLabDialogOpen}
+            handleCreateLab={handleCreateLab}
+            startup={startup}
+            runtimeSnackbar={runtimeSnackbar}
+            setRuntimeSnackbar={setRuntimeSnackbar}
+          />
         </Box>
       )}
     </MuiThemeProvider>

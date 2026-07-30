@@ -220,6 +220,66 @@ def test_structural_add_node_bumps_revision_and_writes_yaml(client, topo_path):
     assert "r9" in text and "frr" in text
 
 
+def test_duplicated_node_matching_lab_default_stays_inherited(client, topo_path):
+    """Duplicating a node that has no explicit `device` (it inherits `defaults.device`)
+    must not pin the resolved default onto the clone. clab-ui always round-trips its
+    rendering `kind` through `extraData.kind` (see commands.py's `_add_node`), even for
+    nodes that never had an explicit device — the clone should still inherit."""
+    Path(topo_path).write_text("name: sample\ndefaults:\n  device: frr\nnodes:\n  r1:\n")
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {"type": "addNode", "id": "r1_copy", "extraData": {"kind": "frr"}},
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r1_copy" in text
+    assert "device" not in text.split("r1_copy", 1)[1].split("\n\n")[0]
+
+
+def test_duplicated_node_with_explicit_device_keeps_it(client, topo_path):
+    """A clone whose device genuinely differs from the lab default (an explicit
+    per-node override, not just the rendered default) must still keep it."""
+    Path(topo_path).write_text("name: sample\ndefaults:\n  device: frr\nnodes:\n  r4:\n    device: linux\n")
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {"type": "addNode", "id": "r4_copy", "extraData": {"kind": "linux"}},
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r4_copy" in text and "linux" in text
+
+
+def test_duplicated_node_carries_full_attrs(client, topo_path):
+    """Ctrl+D/copy-paste must clone everything the source node had — not just
+    device — since clab-ui only round-trips a fixed field whitelist on its own.
+    See snapshot.py's `extraData.netlabAttrs` and commands.py's `_add_node`."""
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {
+                "type": "addNode",
+                "id": "r9_copy",
+                "extraData": {
+                    "kind": "frr",
+                    "netlabAttrs": {"config": ["custom.j2"], "mgmt": {"ipv4": "10.0.0.9"}},
+                },
+            },
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r9_copy" in text
+    assert "custom.j2" in text
+    assert "10.0.0.9" in text
+
+
 def test_undo_redo_round_trip(client, topo_path):
     sid = _new_session(client, topo_path)
     client.post(

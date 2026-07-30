@@ -91,10 +91,15 @@ export function FileEditorTabPanel({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const dirty = tab.content !== tab.originalContent;
   const themeModeRef = useRef(themeMode);
+  const contentRef = useRef(tab.content);
 
   useEffect(() => {
     themeModeRef.current = themeMode;
   }, [themeMode]);
+
+  useEffect(() => {
+    contentRef.current = tab.content;
+  }, [tab.content]);
 
   const handleSave = useCallback(() => {
     onSave(tab.id);
@@ -106,9 +111,9 @@ export function FileEditorTabPanel({
     }
 
     const theme = applyMonacoTheme(themeModeRef.current);
-    const language = languageForDocument(tab.path, tab.content);
+    const language = languageForDocument(tab.path, contentRef.current);
     const editor = monaco.editor.create(containerRef.current, {
-      value: tab.content,
+      value: contentRef.current,
       language,
       theme,
       automaticLayout: true,

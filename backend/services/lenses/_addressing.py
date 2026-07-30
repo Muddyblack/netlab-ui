@@ -10,11 +10,13 @@ from typing import Any
 from services.lenses._helpers import (
     FAMILIES,
     IP_NETWORK,
+    EdgeIdCounter,
     as_dict,
     as_interface,
     as_list,
     as_network,
     edge_ids,
+    natural_key,
     source_has_manual_address,
     source_link,
     stable_id,
@@ -106,13 +108,15 @@ def build_addressing(
     warnings: list[dict[str, Any]] = []
     segment_networks: list[tuple[str, str, IP_NETWORK, str | None, str | None]] = []
     pair_edge_ids: dict[frozenset[str], list[str]] = defaultdict(list)
+    # Shared across the whole link list so parallel links are numbered exactly
+    # as the canvas projection numbers them.
+    edge_id_counter: EdgeIdCounter = {}
 
-    for fallback_index, raw_link in enumerate(as_list(transformed.get("links")), start=1):
+    for raw_link in as_list(transformed.get("links")):
         link = as_dict(raw_link)
         endpoints = [as_dict(endpoint) for endpoint in as_list(link.get("interfaces")) if as_dict(endpoint).get("node")]
         if not endpoints:
             continue
-        link_index = int(link.get("linkindex") or fallback_index)
         endpoint_key = ",".join(
             sorted(f"{endpoint.get('node')}@{endpoint.get('ifname', '')}" for endpoint in endpoints)
         )
@@ -142,7 +146,7 @@ def build_addressing(
             for value in (endpoint.get("ipv4"), endpoint.get("ipv6"))
         ):
             origin = "unnumbered"
-        segment_edge_ids = edge_ids(link_index, endpoints)
+        segment_edge_ids = edge_ids(endpoints, edge_id_counter)
         endpoint_rows: list[dict[str, Any]] = []
         for endpoint in endpoints:
             node = str(endpoint.get("node"))
@@ -269,7 +273,7 @@ def build_addressing(
             "id": stable_id("warning", "duplicate", family, address),
             "severity": "error",
             "kind": "duplicate-address",
-            "message": f"{address} is assigned to {', '.join(sorted(nodes))}",
+            "message": f"{address} is assigned to {', '.join(sorted(nodes, key=natural_key))}",
             "objectRefs": refs,
         }
         warnings.append(warning)

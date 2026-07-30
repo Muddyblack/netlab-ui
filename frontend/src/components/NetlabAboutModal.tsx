@@ -88,16 +88,76 @@ function VersionRow({
     );
 }
 
-export function RuntimeInfo({ health }: { health: HealthStatus | null }) {
+const CATEGORY_LABELS: Record<NetlabComponent["category"], string> = {
+    required: "Required packages",
+    optional: "Optional packages",
+    ansible: "Ansible components",
+};
+
+function ComponentsCategoryGroup({ category, components }: { category: NetlabComponent["category"]; components: NetlabComponent[] }) {
+    const items = components.filter((item) => item.category === category);
+    if (items.length === 0) return null;
+    return (
+        <Box sx={{ mb: 1 }}>
+            <Typography variant="caption" color={TEXT_SECONDARY} fontWeight={600}>{CATEGORY_LABELS[category]}</Typography>
+            <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                {items.map((item) => (
+                    <Chip
+                        key={`${category}:${item.name}`}
+                        size="small"
+                        variant="outlined"
+                        color={componentChipColor(item)}
+                        label={`${item.name}: ${item.version ?? "not installed"}`}
+                    />
+                ))}
+            </Stack>
+        </Box>
+    );
+}
+
+function ComponentsAccordion({
+    components,
+    hasProblem,
+    missingAnsible,
+}: {
+    components: NetlabComponent[];
+    hasProblem: boolean;
+    missingAnsible: NetlabComponent[];
+}) {
+    if (components.length === 0) return null;
+    return (
+        <>
+            <Divider />
+            <Accordion disableGutters elevation={0} sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 34, "& .MuiAccordionSummary-content": { my: 0.5 } }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+                        {hasProblem ? <ErrorOutlineIcon color="error" fontSize="small" /> : <CheckCircleIcon color="success" fontSize="small" />}
+                        <Typography variant="body2" fontWeight={600}>
+                            {hasProblem ? "Environment needs attention" : "Core dependencies healthy"}
+                        </Typography>
+                        {missingAnsible.length > 0 && <Chip size="small" color="warning" variant="outlined" label="Ansible missing" />}
+                    </Stack>
+                </AccordionSummary>
+                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0 }}>
+                    {(["required", "optional", "ansible"] as const).map((category) => (
+                        <ComponentsCategoryGroup key={category} category={category} components={components} />
+                    ))}
+                </AccordionDetails>
+            </Accordion>
+        </>
+    );
+}
+
+function healthFlags(health: HealthStatus | null) {
     const components = health?.netlabComponents ?? [];
     const missingRequired = components.filter((item) => item.category === "required" && !item.installed);
     const missingAnsible = components.filter((item) => item.category === "ansible" && !item.installed);
     const hasProblem = health?.netlab === false || health?.netlabVersionSupported === false || missingRequired.length > 0;
-    const categoryLabels: Record<NetlabComponent["category"], string> = {
-        required: "Required packages",
-        optional: "Optional packages",
-        ansible: "Ansible components",
-    };
+    return { components, missingAnsible, hasProblem };
+}
+
+export function RuntimeInfo({ health }: { health: HealthStatus | null }) {
+    const { components, missingAnsible, hasProblem } = healthFlags(health);
     return (
         <Stack spacing={1}>
             <Typography variant="subtitle2">Environment</Typography>
@@ -112,44 +172,7 @@ export function RuntimeInfo({ health }: { health: HealthStatus | null }) {
                             netlab {health.minNetlabVersion}+ is recommended for this UI.
                         </Typography>
                     )}
-                    {components.length > 0 && (
-                        <>
-                            <Divider />
-                            <Accordion disableGutters elevation={0} sx={{ bgcolor: "transparent", "&::before": { display: "none" } }}>
-                                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0, minHeight: 34, "& .MuiAccordionSummary-content": { my: 0.5 } }}>
-                                    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
-                                        {hasProblem ? <ErrorOutlineIcon color="error" fontSize="small" /> : <CheckCircleIcon color="success" fontSize="small" />}
-                                        <Typography variant="body2" fontWeight={600}>
-                                            {hasProblem ? "Environment needs attention" : "Core dependencies healthy"}
-                                        </Typography>
-                                        {missingAnsible.length > 0 && <Chip size="small" color="warning" variant="outlined" label="Ansible missing" />}
-                                    </Stack>
-                                </AccordionSummary>
-                                <AccordionDetails sx={{ px: 0, pt: 0.5, pb: 0 }}>
-                                    {(["required", "optional", "ansible"] as const).map((category) => {
-                                        const items = components.filter((item) => item.category === category);
-                                        if (items.length === 0) return null;
-                                        return (
-                                            <Box key={category} sx={{ mb: 1 }}>
-                                                <Typography variant="caption" color={TEXT_SECONDARY} fontWeight={600}>{categoryLabels[category]}</Typography>
-                                                <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-                                                    {items.map((item) => (
-                                                        <Chip
-                                                            key={`${category}:${item.name}`}
-                                                            size="small"
-                                                            variant="outlined"
-                                                            color={componentChipColor(item)}
-                                                            label={`${item.name}: ${item.version ?? "not installed"}`}
-                                                        />
-                                                    ))}
-                                                </Stack>
-                                            </Box>
-                                        );
-                                    })}
-                                </AccordionDetails>
-                            </Accordion>
-                        </>
-                    )}
+                    <ComponentsAccordion components={components} hasProblem={hasProblem} missingAnsible={missingAnsible} />
                 </Stack>
             </Card>
         </Stack>

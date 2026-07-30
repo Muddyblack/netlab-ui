@@ -1,5 +1,5 @@
 diff --git a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
-index ec79e53..9955805 100644
+index ec79e53..625a5f3 100644
 --- a/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
 +++ b/node_modules/@srl-labs/clab-ui/dist/chunks/chunk-XB5UYPDR.js
 @@ -14870,27 +14870,43 @@ var PaletteSection = ({
@@ -55,7 +55,45 @@ index ec79e53..9955805 100644
    const activeTab = userTab;
    useEffect19(() => {
      let idleCallbackId = null;
-@@ -22525,5 +22541,6 @@ var App = ({ initialData, runtime, chrome }) => {
+@@ -14937,7 +14953,8 @@ var PaletteSection = ({
+   const [yamlDraft, setYamlDraft] = useState12(yamlContent);
+   const [annotationsDraft, setAnnotationsDraft] = useState12(annotationsContent);
+   const [yamlDirty, setYamlDirty] = useState12(false);
+   const [annotationsDirty, setAnnotationsDirty] = useState12(false);
++  const yamlHasChanges = yamlDraft !== yamlContent;
+   const isSourceReadOnly = isLocked;
+   useEffect19(() => {
+     if (!yamlDirty) {
+@@ -15051,7 +15068,7 @@ var PaletteSection = ({
+               onClick: () => {
+                 handleSaveYaml().catch(() => void 0);
+               },
+-              disabled: !yamlDirty,
++              disabled: !yamlHasChanges,
+               title: "Save",
+               children: /* @__PURE__ */ jsx22(SaveIcon, { fontSize: "small" })
+             }
+@@ -22163,8 +22179,18 @@ var AppContent = ({
+     if (!hasActiveTopology) {
+       return;
+     }
++    // If the context panel (Drawer, 250ms transition) is still closed, opening
++    // it and switching to the "yaml" tab in the same tick makes Monaco's
++    // automaticLayout measure the panel mid-transition, causing a visible
++    // jump/flicker as its container width animates open. Deferring the tab
++    // switch until after the transition finishes avoids that; when the panel
++    // is already open there's no transition, so the switch is immediate.
+     panelVisibility.handleOpenContextPanel("manual");
+-    setPaletteTabRequest({ tabId: "yaml" });
++    if (panelVisibility.isContextPanelOpen) {
++      setPaletteTabRequest({ tabId: "yaml" });
++    } else {
++      window.setTimeout(() => setPaletteTabRequest({ tabId: "yaml" }), 260);
++    }
+   }, [hasActiveTopology, panelVisibility]);
+   const isBulkLinkModalOpen = shouldShowBulkLinkModal(
+     hasActiveTopology,
+@@ -22525,5 +22551,6 @@ var App = ({ initialData, runtime, chrome }) => {
  
  export {
    subscribeToWebviewMessages,

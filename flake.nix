@@ -13,6 +13,41 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
+        # Single source of truth for backend Python deps: parse
+        # backend/pyproject.toml at eval time instead of hand-copying
+        # dependency names into this file, where they can (and did) drift.
+        backendPyproject = builtins.fromTOML (builtins.readFile ./backend/pyproject.toml);
+
+        # Strip PEP 508 extras/markers/version specifiers down to the bare
+        # distribution name, e.g. "uvicorn[standard]>=0.29" -> "uvicorn".
+        pep508Name = spec: builtins.head (builtins.split "[][<>=!~; ]" spec);
+
+        # PyPI distribution names that nixpkgs exposes under a different
+        # python3Packages attribute. Extend this table, not the dependency
+        # lists in backend/pyproject.toml, when a new dependency needs
+        # remapping.
+        pypiToNixpkgs = {
+          "ruamel.yaml" = "ruamel-yaml";
+        };
+
+        resolvePythonDeps =
+          specs:
+          map (
+            spec:
+            let
+              name = pep508Name spec;
+              attr = pypiToNixpkgs.${name} or name;
+            in
+            pkgs.python312Packages.${attr}
+          ) specs;
+
+        # `netlab` (the networklab/ansible optional-dependency group) is
+        # resolved separately below via a custom nixpkgs derivation and the
+        # system/nixpkgs `ansible*` packages, so it's excluded here.
+        backendRuntimeDeps = resolvePythonDeps backendPyproject.project.dependencies;
+        backendAssistantDeps = resolvePythonDeps backendPyproject.project.optional-dependencies.assistant;
+        backendDevDeps = resolvePythonDeps backendPyproject.project.optional-dependencies.dev;
+
         netlab = pkgs.python312Packages.buildPythonPackage rec {
           pname = "networklab";
           version = "26.5";
@@ -37,26 +72,27 @@
           doCheck = false;
         };
 
-        # Python 3.12 with the backend's runtime + dev dependencies baked in,
-        # mirroring backend/pyproject.toml.
+        # Python 3.12 with the backend's runtime + optional-extra dependencies
+        # baked in. The dependency lists themselves come from
+        # backend/pyproject.toml (see backendRuntimeDeps/backendAssistantDeps/
+        # backendDevDeps above); this is just plumbing plus the handful of
+        # things pyproject.toml can't express for Nix.
         python = pkgs.python312.withPackages (
-          ps: with ps; [
-            fastapi
-            uvicorn
+          ps:
+          backendRuntimeDeps
+          ++ [
             # uvicorn's fast event loop + HTTP parser (uvicorn[standard] on
             # pip); uvicorn auto-detects them when importable.
-            uvloop
-            httptools
-            ruamel-yaml
-            ptyprocess
-            watchfiles
-            # dev
-            pytest
-            httpx
+            ps.uvloop
+            ps.httptools
+          ]
+          ++ backendAssistantDeps
+          ++ backendDevDeps
+          ++ [
             # Optional netlab integrations shown by `netlab version`.
-            # ansible
-            # ansible-core
-            # ansible-pylibssh
+            # ps.ansible
+            # ps.ansible-core
+            # ps.ansible-pylibssh
             # Expose the PyPI `networklab` package's `netlab` CLI in the shell.
             netlab
           ]

@@ -46,6 +46,28 @@ export interface NetlabEnvironment {
   containerlab: boolean;
   libvirt: boolean;
 }
+/**
+ * What the canvas nodes/edges in a snapshot actually are.
+ *
+ * Hand-written rather than generated: the snapshot is typed as a bare dict on
+ * the backend (see SnapshotResponse), so it never reaches the OpenAPI schema.
+ * Mirrors `ProjectionSource` in backend/app/contract/snapshot.py.
+ */
+export interface NetlabProjection {
+  /**
+   * "clab" is the real `netlab create` transform. "blended" is the live
+   * interim view served while a transform runs — the model's element set over
+   * the last real projection's bodies. "model" is the raw netlab model with no
+   * projection to blend onto. The *-preview values are approximations, and say
+   * why the real transform could not run.
+   */
+  source: "clab" | "blended" | "model" | "locked-preview" | "failed-preview";
+  /** A background `netlab create` is running; its result arrives via SSE. */
+  pending: boolean;
+  /** The last `netlab create` failure for the YAML currently on disk. */
+  error?: string | null;
+}
+
 export type MultiserverResult = Schemas["MultiserverResult"];
 export type WorkerInfo = Schemas["WorkerInfo"];
 export type MultiserverVxlan = Schemas["MultiserverVxlan"];
