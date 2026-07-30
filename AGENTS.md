@@ -154,5 +154,5 @@ hooks and panels. Where things live now:
   `buildProviders` / `executeAction` / snapshot options.
 - **`lifecycle/`** — shared types (`StartupState`, `WorkspaceEntry`) and
   persistence helpers.
-- **Dialogs** — `components/dialogs/` (`WorkspacesDialog`, `NewLabDialog`,
+- **Dialogs** — `components/dialogs/` (`NewLabDialog`,
   `CloneRepoDialog`, …).
