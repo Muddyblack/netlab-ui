@@ -55,6 +55,99 @@ function AttributeRow({ index, entryKey, value }: { index: number; entryKey: str
   );
 }
 
+function MembersSection({ nodeMembers, nestedMembers }: { nodeMembers: string[]; nestedMembers: string[] }) {
+  return (
+    <Stack spacing={0.85}>
+      {nodeMembers.length > 0 && (
+        <Box>
+          {nestedMembers.length > 0 && (
+            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.4, fontWeight: 600 }}>
+              Nodes
+            </Typography>
+          )}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+            <NodeSetChips names={nodeMembers} variant="filled" sx={{ bgcolor: "action.hover" }} />
+          </Box>
+        </Box>
+      )}
+      {nestedMembers.length > 0 && (
+        <Box>
+          {nodeMembers.length > 0 && (
+            <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.4, fontWeight: 600 }}>
+              Nested groups
+            </Typography>
+          )}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+            {nestedMembers.map((member) => (
+              <Chip
+                key={member}
+                size="small"
+                variant="outlined"
+                color="primary"
+                icon={<AccountTreeIcon sx={{ fontSize: "14px !important" }} />}
+                label={member}
+                sx={{ height: 22, fontSize: "0.72rem" }}
+              />
+            ))}
+          </Box>
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
+function ModulesSection({ modules }: { modules: string[] }) {
+  return (
+    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+      {modules.map((module) => (
+        <Chip
+          key={module}
+          size="small"
+          color="primary"
+          variant="outlined"
+          label={module}
+          sx={{ height: 22, fontSize: "0.72rem", fontWeight: 600 }}
+        />
+      ))}
+    </Box>
+  );
+}
+
+function AttributesSection({ attrs }: { attrs: Record<string, unknown> }) {
+  return (
+    <Stack spacing={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, overflow: "visible" }}>
+      {Object.entries(attrs).map(([key, value], index) => (
+        <AttributeRow key={key} index={index} entryKey={key} value={value} />
+      ))}
+    </Stack>
+  );
+}
+
+function GroupCardDetails({ group, nodeMembers, nestedMembers, attrCount }: {
+  group: GroupInfo;
+  nodeMembers: string[];
+  nestedMembers: string[];
+  attrCount: number;
+}) {
+  return (
+    <Stack spacing={1.5}>
+      <DetailSection icon={<DevicesIcon />} title="Members" count={group.members.length} emptyHint="No members yet">
+        <MembersSection nodeMembers={nodeMembers} nestedMembers={nestedMembers} />
+      </DetailSection>
+
+      <DetailSection icon={<ExtensionOutlinedIcon />} title="Modules" count={group.module.length} emptyHint="No modules enabled">
+        <ModulesSection modules={group.module} />
+      </DetailSection>
+
+      {attrCount > 0 && (
+        <DetailSection icon={<TuneOutlinedIcon />} title="Advanced settings" count={attrCount} emptyHint="">
+          <AttributesSection attrs={group.attrs} />
+        </DetailSection>
+      )}
+    </Stack>
+  );
+}
+
 export function GroupCard({
   group,
   groupNames,
@@ -197,94 +290,7 @@ export function GroupCard({
             Empty group — edit to add members or modules.
           </Typography>
         ) : (
-          <Stack spacing={1.5}>
-            <DetailSection
-              icon={<DevicesIcon />}
-              title="Members"
-              count={group.members.length}
-              emptyHint="No members yet"
-            >
-              <Stack spacing={0.85}>
-                {nodeMembers.length > 0 && (
-                  <Box>
-                    {nestedMembers.length > 0 && (
-                      <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.4, fontWeight: 600 }}>
-                        Nodes
-                      </Typography>
-                    )}
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      <NodeSetChips names={nodeMembers} variant="filled" sx={{ bgcolor: "action.hover" }} />
-                    </Box>
-                  </Box>
-                )}
-                {nestedMembers.length > 0 && (
-                  <Box>
-                    {nodeMembers.length > 0 && (
-                      <Typography variant="caption" color="text.disabled" sx={{ display: "block", mb: 0.4, fontWeight: 600 }}>
-                        Nested groups
-                      </Typography>
-                    )}
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {nestedMembers.map((member) => (
-                        <Chip
-                          key={member}
-                          size="small"
-                          variant="outlined"
-                          color="primary"
-                          icon={<AccountTreeIcon sx={{ fontSize: "14px !important" }} />}
-                          label={member}
-                          sx={{ height: 22, fontSize: "0.72rem" }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                )}
-              </Stack>
-            </DetailSection>
-
-            <DetailSection
-              icon={<ExtensionOutlinedIcon />}
-              title="Modules"
-              count={group.module.length}
-              emptyHint="No modules enabled"
-            >
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                {group.module.map((module) => (
-                  <Chip
-                    key={module}
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    label={module}
-                    sx={{ height: 22, fontSize: "0.72rem", fontWeight: 600 }}
-                  />
-                ))}
-              </Box>
-            </DetailSection>
-
-            {attrCount > 0 && (
-              <DetailSection
-                icon={<TuneOutlinedIcon />}
-                title="Advanced settings"
-                count={attrCount}
-                emptyHint=""
-              >
-                <Stack
-                  spacing={0}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                    overflow: "visible"
-                  }}
-                >
-                  {Object.entries(group.attrs).map(([key, value], index) => (
-                    <AttributeRow key={key} index={index} entryKey={key} value={value} />
-                  ))}
-                </Stack>
-              </DetailSection>
-            )}
-          </Stack>
+          <GroupCardDetails group={group} nodeMembers={nodeMembers} nestedMembers={nestedMembers} attrCount={attrCount} />
         )}
       </AccordionDetails>
     </Accordion>

@@ -42,6 +42,97 @@ export interface ProviderModelPickerProps {
   onCapabilitiesChanged?: () => void;
 }
 
+function ProviderMenu({ anchorEl, onClose, providers, providerId, onSelect }: {
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  providers: AssistantProvider[];
+  providerId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={onClose} slotProps={{ paper: { sx: { minWidth: 230, maxWidth: 320 } } }}>
+      <Typography variant="overline" color="text.secondary" sx={{ px: 1.5 }}>
+        Provider
+      </Typography>
+      {providers.map((candidate) => (
+        <MenuItem key={candidate.id} selected={candidate.id === providerId} onClick={() => onSelect(candidate.id)}>
+          <ListItemIcon sx={{ minWidth: 30 }}>
+            {candidate.id === providerId ? <CheckIcon sx={{ fontSize: 17 }} /> : null}
+          </ListItemIcon>
+          <ListItemText
+            primary={candidate.name}
+            secondary={candidate.version || undefined}
+            slotProps={{ primary: { variant: "body2" }, secondary: { variant: "caption", noWrap: true } }}
+          />
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
+function ModelMenu({ anchorEl, onClose, modelDraft, setModelDraft, saveError, saving, models, model, onSubmit, onSelect }: {
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  modelDraft: string;
+  setModelDraft: (value: string) => void;
+  saveError: string | null;
+  saving: boolean;
+  models: string[];
+  model: string;
+  onSubmit: () => void;
+  onSelect: (option: string) => void;
+}) {
+  return (
+    <Menu
+      anchorEl={anchorEl}
+      open={Boolean(anchorEl)}
+      onClose={onClose}
+      slotProps={{ paper: { sx: { width: 310, maxWidth: "calc(100vw - 24px)", maxHeight: 420 } } }}
+    >
+      <Box
+        component="form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+        sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.75 }}
+      >
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          placeholder="Type a model ID"
+          value={modelDraft}
+          onChange={(event) => setModelDraft(event.target.value)}
+          error={Boolean(saveError)}
+          slotProps={{ htmlInput: { "aria-label": "Model ID" } }}
+        />
+        <Tooltip title="Use model">
+          <span>
+            <IconButton type="submit" size="small" color="primary" disabled={!modelDraft.trim() || saving} aria-label="Use model">
+              <ArrowForwardIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+      {saveError && (
+        <Typography color="error" variant="caption" sx={{ display: "block", px: 1.5, pb: 0.75 }}>
+          {saveError}
+        </Typography>
+      )}
+      {models.length > 0 && <Divider />}
+      {models.map((option) => (
+        <MenuItem key={option} selected={option === model} onClick={() => onSelect(option)} sx={{ minHeight: 36 }}>
+          <ListItemIcon sx={{ minWidth: 30 }}>
+            {option === model ? <CheckIcon sx={{ fontSize: 17 }} /> : null}
+          </ListItemIcon>
+          <ListItemText primary={option} slotProps={{ primary: { variant: "body2", noWrap: true, title: option } }} />
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
 export interface ProviderModelPickerHandle {
   openProvider: () => void;
   openModel: () => void;
@@ -189,103 +280,32 @@ export const ProviderModelPicker = forwardRef<
         )}
       </Stack>
 
-      <Menu
+      <ProviderMenu
         anchorEl={providerAnchor}
-        open={Boolean(providerAnchor)}
         onClose={() => setProviderAnchor(null)}
-        slotProps={{ paper: { sx: { minWidth: 230, maxWidth: 320 } } }}
-      >
-        <Typography variant="overline" color="text.secondary" sx={{ px: 1.5 }}>
-          Provider
-        </Typography>
-        {providers.map((candidate) => (
-          <MenuItem
-            key={candidate.id}
-            selected={candidate.id === providerId}
-            onClick={() => {
-              onProviderChange(candidate.id);
-              setProviderAnchor(null);
-            }}
-          >
-            <ListItemIcon sx={{ minWidth: 30 }}>
-              {candidate.id === providerId ? <CheckIcon sx={{ fontSize: 17 }} /> : null}
-            </ListItemIcon>
-            <ListItemText
-              primary={candidate.name}
-              secondary={candidate.version || undefined}
-              slotProps={{
-                primary: { variant: "body2" },
-                secondary: { variant: "caption", noWrap: true },
-              }}
-            />
-          </MenuItem>
-        ))}
-      </Menu>
+        providers={providers}
+        providerId={providerId}
+        onSelect={(id) => {
+          onProviderChange(id);
+          setProviderAnchor(null);
+        }}
+      />
 
-      <Menu
+      <ModelMenu
         anchorEl={modelAnchor}
-        open={Boolean(modelAnchor)}
         onClose={() => {
           setModelDraft(model);
           setModelAnchor(null);
         }}
-        slotProps={{ paper: { sx: { width: 310, maxWidth: "calc(100vw - 24px)", maxHeight: 420 } } }}
-      >
-        <Box
-          component="form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void saveModel(modelDraft);
-          }}
-          sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.75 }}
-        >
-          <TextField
-            autoFocus
-            fullWidth
-            size="small"
-            placeholder="Type a model ID"
-            value={modelDraft}
-            onChange={(event) => setModelDraft(event.target.value)}
-            error={Boolean(saveError)}
-            slotProps={{ htmlInput: { "aria-label": "Model ID" } }}
-          />
-          <Tooltip title="Use model">
-            <span>
-              <IconButton
-                type="submit"
-                size="small"
-                color="primary"
-                disabled={!modelDraft.trim() || saving}
-                aria-label="Use model"
-              >
-                <ArrowForwardIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
-        {saveError && (
-          <Typography color="error" variant="caption" sx={{ display: "block", px: 1.5, pb: 0.75 }}>
-            {saveError}
-          </Typography>
-        )}
-        {models.length > 0 && <Divider />}
-        {models.map((option) => (
-          <MenuItem
-            key={option}
-            selected={option === model}
-            onClick={() => void saveModel(option)}
-            sx={{ minHeight: 36 }}
-          >
-            <ListItemIcon sx={{ minWidth: 30 }}>
-              {option === model ? <CheckIcon sx={{ fontSize: 17 }} /> : null}
-            </ListItemIcon>
-            <ListItemText
-              primary={option}
-              slotProps={{ primary: { variant: "body2", noWrap: true, title: option } }}
-            />
-          </MenuItem>
-        ))}
-      </Menu>
+        modelDraft={modelDraft}
+        setModelDraft={setModelDraft}
+        saveError={saveError}
+        saving={saving}
+        models={models}
+        model={model}
+        onSubmit={() => void saveModel(modelDraft)}
+        onSelect={(option) => void saveModel(option)}
+      />
     </>
   );
 });

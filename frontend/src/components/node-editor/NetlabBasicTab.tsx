@@ -87,6 +87,165 @@ function getIconSrc(icon: string, color: string): string {
 // Shared with the device cache: fetched once, reused by every editor instance.
 let _platformDocsCache: DocsDocument | null = null;
 
+function IdentitySection({ data, onChange }: { data: NetlabNodeEditorData; onChange: NetlabOnChange }) {
+  return (
+    <PanelSection title="Identity" withTopDivider={false}>
+      {data.isCustomTemplate ? (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <InputField
+            id="node-template-name"
+            label="Template Name"
+            value={data.customName || ""}
+            onChange={(value) => onChange({ customName: value })}
+            placeholder="e.g. room_station"
+          />
+          <InputField
+            id="node-base-name"
+            label="Canvas Base Name"
+            value={data.baseName || ""}
+            onChange={(value) => onChange({ baseName: value })}
+            placeholder="e.g. room-station"
+          />
+          <InputField
+            id="node-interface-pattern"
+            label="Interface Pattern"
+            value={data.interfacePattern || ""}
+            onChange={(value) => onChange({ interfacePattern: value })}
+            placeholder="e.g. eth{1}"
+          />
+        </Box>
+      ) : (
+        <InputField
+          id="node-name"
+          label="Node Name"
+          value={data.name || ""}
+          onChange={(value) => onChange({ name: value })}
+        />
+      )}
+    </PanelSection>
+  );
+}
+
+function NetlabPropertiesSection({ data, onChange, deviceOptions, setPlatformSiteOpen, handleOpenPlatformDocs }: {
+  data: NetlabNodeEditorData;
+  onChange: NetlabOnChange;
+  deviceOptions: Array<{ value: string; label: string }>;
+  setPlatformSiteOpen: (open: boolean) => void;
+  handleOpenPlatformDocs: () => void;
+}) {
+  return (
+    <PanelSection title="Netlab Properties">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
+          <Box sx={{ flexGrow: 1 }}>
+            <FilterableDropdown
+              id="node-device"
+              label="Device Type"
+              options={deviceOptions}
+              value={data.device || data.kind || ""}
+              onChange={(value) => onChange({ device: value, kind: value })}
+              placeholder="Select or type device..."
+              allowFreeText={true}
+            />
+          </Box>
+          <DocumentationActionButtons
+            docsUrl={NETLAB_PLATFORMS_DOCS_URL}
+            externalLabel="Open supported platforms docs"
+            manualLabel="Open supported platforms reference"
+            onOpenExternal={() => setPlatformSiteOpen(true)}
+            onOpenManual={handleOpenPlatformDocs}
+          />
+        </Box>
+        <SelectField
+          id="node-role"
+          label="Role"
+          value={data.role || ""}
+          onChange={(value) => onChange({ role: value })}
+          options={ROLE_OPTIONS}
+        />
+        <SelectField
+          id="node-provider"
+          label="Provider"
+          value={data.provider || ""}
+          onChange={(value) => onChange({ provider: value })}
+          options={PROVIDER_OPTIONS}
+        />
+        <InputField
+          id="node-box"
+          label="Box Image"
+          value={data.box || ""}
+          onChange={(value) => onChange({ box: value })}
+          placeholder="e.g. generic/ubuntu2004 or arista/veos"
+        />
+      </Box>
+    </PanelSection>
+  );
+}
+
+function VisualCanvasSettingsSection({ data, onChange, iconName, iconColor, iconCornerRadius, setIsIconModalOpen, handleLabelBackgroundColorChange }: {
+  data: NetlabNodeEditorData;
+  onChange: NetlabOnChange;
+  iconName: string;
+  iconColor: string;
+  iconCornerRadius: number;
+  setIsIconModalOpen: (open: boolean) => void;
+  handleLabelBackgroundColorChange: (color: string) => void;
+}) {
+  return (
+    <PanelSection title="Visual Canvas Settings">
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ flexShrink: 0 }}>
+            <IconPreview
+              src={getIconSrc(iconName, iconColor)}
+              alt={iconName}
+              size={48}
+              cornerRadius={iconCornerRadius}
+            />
+          </Box>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>
+              Icon: {iconName}
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={(event) => {
+                blurTrigger(event.currentTarget);
+                setIsIconModalOpen(true);
+              }}
+            >
+              Change Icon
+            </Button>
+          </Box>
+        </Box>
+
+        <SelectField
+          id="node-label-position"
+          label="Label Position"
+          value={data.labelPosition || "bottom"}
+          onChange={(value) => onChange({ labelPosition: value })}
+          options={NODE_LABEL_POSITION_OPTIONS}
+        />
+
+        <SelectField
+          id="node-direction"
+          label="Label Direction"
+          value={data.direction || "right"}
+          onChange={(value) => onChange({ direction: value })}
+          options={NODE_DIRECTION_OPTIONS}
+        />
+
+        <ColorField
+          label="Label Background Color"
+          value={data.labelBackgroundColor || "rgba(0,0,0,0.7)"}
+          onChange={handleLabelBackgroundColorChange}
+        />
+      </Box>
+    </PanelSection>
+  );
+}
+
 export const NetlabBasicTab: React.FC<NodeEditorTabProps> = ({ data: rawData, onChange: rawOnChange }) => {
   const data = rawData as NetlabNodeEditorData;
   const onChange = rawOnChange as NetlabOnChange;
@@ -172,143 +331,25 @@ export const NetlabBasicTab: React.FC<NodeEditorTabProps> = ({ data: rawData, on
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      {/* Node / Template Name Section */}
-      <PanelSection title="Identity" withTopDivider={false}>
-        {data.isCustomTemplate ? (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <InputField
-              id="node-template-name"
-              label="Template Name"
-              value={data.customName || ""}
-              onChange={(value) => onChange({ customName: value })}
-              placeholder="e.g. room_station"
-            />
-            <InputField
-              id="node-base-name"
-              label="Canvas Base Name"
-              value={data.baseName || ""}
-              onChange={(value) => onChange({ baseName: value })}
-              placeholder="e.g. room-station"
-            />
-            <InputField
-              id="node-interface-pattern"
-              label="Interface Pattern"
-              value={data.interfacePattern || ""}
-              onChange={(value) => onChange({ interfacePattern: value })}
-              placeholder="e.g. eth{1}"
-            />
-          </Box>
-        ) : (
-          <InputField
-            id="node-name"
-            label="Node Name"
-            value={data.name || ""}
-            onChange={(value) => onChange({ name: value })}
-          />
-        )}
-      </PanelSection>
+      <IdentitySection data={data} onChange={onChange} />
 
-      {/* Netlab-specific Properties Section */}
-      <PanelSection title="Netlab Properties">
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-end", gap: 0.5 }}>
-            <Box sx={{ flexGrow: 1 }}>
-              <FilterableDropdown
-                id="node-device"
-                label="Device Type"
-                options={deviceOptions}
-                value={data.device || data.kind || ""}
-                onChange={(value) => onChange({ device: value, kind: value })}
-                placeholder="Select or type device..."
-                allowFreeText={true}
-              />
-            </Box>
-            <DocumentationActionButtons
-              docsUrl={NETLAB_PLATFORMS_DOCS_URL}
-              externalLabel="Open supported platforms docs"
-              manualLabel="Open supported platforms reference"
-              onOpenExternal={() => setPlatformSiteOpen(true)}
-              onOpenManual={handleOpenPlatformDocs}
-            />
-          </Box>
-          <SelectField
-            id="node-role"
-            label="Role"
-            value={data.role || ""}
-            onChange={(value) => onChange({ role: value })}
-            options={ROLE_OPTIONS}
-          />
-          <SelectField
-            id="node-provider"
-            label="Provider"
-            value={data.provider || ""}
-            onChange={(value) => onChange({ provider: value })}
-            options={PROVIDER_OPTIONS}
-          />
-          <InputField
-            id="node-box"
-            label="Box Image"
-            value={data.box || ""}
-            onChange={(value) => onChange({ box: value })}
-            placeholder="e.g. generic/ubuntu2004 or arista/veos"
-          />
-        </Box>
-      </PanelSection>
+      <NetlabPropertiesSection
+        data={data}
+        onChange={onChange}
+        deviceOptions={deviceOptions}
+        setPlatformSiteOpen={setPlatformSiteOpen}
+        handleOpenPlatformDocs={handleOpenPlatformDocs}
+      />
 
-      {/* Visual Canvas Options Section */}
-      <PanelSection title="Visual Canvas Settings">
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {/* Icon Selector Button and Preview */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Box sx={{ flexShrink: 0 }}>
-              <IconPreview
-                src={getIconSrc(iconName, iconColor)}
-                alt={iconName}
-                size={48}
-                cornerRadius={iconCornerRadius}
-              />
-            </Box>
-            <Box sx={{ flexGrow: 1 }}>
-              <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500 }}>
-                Icon: {iconName}
-              </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={(event) => {
-                  blurTrigger(event.currentTarget);
-                  setIsIconModalOpen(true);
-                }}
-              >
-                Change Icon
-              </Button>
-            </Box>
-          </Box>
-
-          {/* Label settings */}
-          <SelectField
-            id="node-label-position"
-            label="Label Position"
-            value={data.labelPosition || "bottom"}
-            onChange={(value) => onChange({ labelPosition: value })}
-            options={NODE_LABEL_POSITION_OPTIONS}
-          />
-
-          <SelectField
-            id="node-direction"
-            label="Label Direction"
-            value={data.direction || "right"}
-            onChange={(value) => onChange({ direction: value })}
-            options={NODE_DIRECTION_OPTIONS}
-          />
-
-          <ColorField
-            label="Label Background Color"
-            value={data.labelBackgroundColor || "rgba(0,0,0,0.7)"}
-            onChange={handleLabelBackgroundColorChange}
-          />
-        </Box>
-      </PanelSection>
+      <VisualCanvasSettingsSection
+        data={data}
+        onChange={onChange}
+        iconName={iconName}
+        iconColor={iconColor}
+        iconCornerRadius={iconCornerRadius}
+        setIsIconModalOpen={setIsIconModalOpen}
+        handleLabelBackgroundColorChange={handleLabelBackgroundColorChange}
+      />
 
       <MarkdownDocumentDialog
         open={platformDocsOpen}

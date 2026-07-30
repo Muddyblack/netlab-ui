@@ -214,25 +214,33 @@ export function labelWidth(value: string): number {
   return Math.ceil(measureText(value) + LABEL_TEXT_X + LABEL_PADDING_RIGHT);
 }
 
+function addressingObjectIds(bundle: LensBundleResult, ref: string): { nodeIds: string[]; edgeIds: string[] } {
+  const segment = bundle.addressing.segments.find((item) => item.id === ref);
+  const adjacency = bundle.controlPlane.adjacencies.find((item) => item.id === ref);
+  const source = segment ?? adjacency;
+  return { nodeIds: source?.nodeIds ?? [], edgeIds: source?.physicalEdgeIds ?? [] };
+}
+
+// Service refs (vlan:<name> / vrf:<name>) isolate every member node+edge.
+function serviceObjectIds(bundle: LensBundleResult, ref: string): { nodeIds: string[]; edgeIds: string[] } {
+  const name = ref.slice(ref.indexOf(":") + 1);
+  if (ref.startsWith("vlan:")) {
+    const vlan = bundle.serviceExplorer.vlans.find((item) => item.name === name);
+    return { nodeIds: vlan?.nodeIds ?? [], edgeIds: vlan?.physicalEdgeIds ?? [] };
+  }
+  const vrf = bundle.serviceExplorer.vrfs.find((item) => item.name === name);
+  return { nodeIds: vrf?.nodeIds ?? [], edgeIds: [] };
+}
+
 export function resolvePresentationObjects(bundle: LensBundleResult, refs: string[]) {
   const nodes = new Set<string>();
   const edges = new Set<string>();
   refs.forEach((ref) => {
     if (ref.startsWith("node:")) nodes.add(ref.slice(5));
-    const segment = bundle.addressing.segments.find((item) => item.id === ref);
-    const adjacency = bundle.controlPlane.adjacencies.find((item) => item.id === ref);
-    for (const node of segment?.nodeIds ?? adjacency?.nodeIds ?? []) nodes.add(node);
-    for (const edge of segment?.physicalEdgeIds ?? adjacency?.physicalEdgeIds ?? []) edges.add(edge);
-    // Service refs (vlan:<name> / vrf:<name>) isolate every member node+edge.
-    if (ref.startsWith("vlan:") || ref.startsWith("vrf:")) {
-      const name = ref.slice(ref.indexOf(":") + 1);
-      const service = ref.startsWith("vlan:")
-        ? bundle.serviceExplorer.vlans.find((item) => item.name === name)
-        : bundle.serviceExplorer.vrfs.find((item) => item.name === name);
-      for (const node of service?.nodeIds ?? []) nodes.add(node);
-      const vlan = ref.startsWith("vlan:") ? bundle.serviceExplorer.vlans.find((item) => item.name === name) : undefined;
-      for (const edge of vlan?.physicalEdgeIds ?? []) edges.add(edge);
-    }
+    const isService = ref.startsWith("vlan:") || ref.startsWith("vrf:");
+    const { nodeIds, edgeIds } = isService ? serviceObjectIds(bundle, ref) : addressingObjectIds(bundle, ref);
+    nodeIds.forEach((node) => nodes.add(node));
+    edgeIds.forEach((edge) => edges.add(edge));
   });
   return { nodes, edges };
 }

@@ -35,6 +35,117 @@ function toStringList(value: unknown): string[] {
   return [];
 }
 
+function ConfigPreviewFileSwitcher({ preview, selectedPreview, setActiveFile }: {
+  preview: ConfigPreviewResult;
+  selectedPreview: ConfigPreviewResult["files"][number] | undefined;
+  setActiveFile: (path: string) => void;
+}) {
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <FormControl size="small" sx={{ minWidth: 0, flex: 1 }}>
+        <InputLabel id="config-preview-file-label">Generated file</InputLabel>
+        <Select
+          labelId="config-preview-file-label"
+          label="Generated file"
+          value={selectedPreview?.path ?? ""}
+          onChange={(event) => setActiveFile(event.target.value)}
+        >
+          {preview.files.map((file) => <MenuItem key={file.path} value={file.path}>{file.path}</MenuItem>)}
+        </Select>
+      </FormControl>
+      <Tooltip title="Copy generated configuration">
+        <span>
+          <IconButton
+            size="small"
+            disabled={!selectedPreview}
+            onClick={() => selectedPreview && void navigator.clipboard.writeText(selectedPreview.content)}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Stack>
+  );
+}
+
+function ConfigPreviewHeaderRow({ nodeName, sessionId, previewLoading, hasPreview, loadPreview }: {
+  nodeName: string;
+  sessionId: string | null;
+  previewLoading: boolean;
+  hasPreview: boolean;
+  loadPreview: () => void;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+      <Typography variant="caption" color="text.secondary">
+        Exact files produced by netlab create for {nodeName || "this node"}.
+      </Typography>
+      <Button
+        size="small"
+        startIcon={previewLoading ? <CircularProgress size={14} /> : <RefreshIcon />}
+        disabled={!sessionId || !nodeName || previewLoading}
+        onClick={loadPreview}
+      >
+        {hasPreview ? "Regenerate" : "Generate"}
+      </Button>
+    </Stack>
+  );
+}
+
+function ConfigPreviewMessages({ previewError, preview }: { previewError: string | null; preview: ConfigPreviewResult | null }) {
+  return (
+    <>
+      {previewError && <Alert severity="error">{previewError}</Alert>}
+      {preview?.message && preview.files.length === 0 && <Alert severity="info">{preview.message}</Alert>}
+    </>
+  );
+}
+
+function ConfigPreviewViewer({ preview, activeFile, setActiveFile }: {
+  preview: ConfigPreviewResult;
+  activeFile: string;
+  setActiveFile: (path: string) => void;
+}) {
+  const selectedPreview = preview.files.find((file) => file.path === activeFile) ?? preview.files[0];
+  return (
+    <>
+      <ConfigPreviewFileSwitcher preview={preview} selectedPreview={selectedPreview} setActiveFile={setActiveFile} />
+      <Box sx={{ height: 320, overflow: "hidden", border: 1, borderColor: "divider", borderRadius: 1 }}>
+        <Suspense fallback={<Box sx={{ height: "100%", display: "grid", placeItems: "center" }}><CircularProgress size={20} /></Box>}>
+          <GeneratedConfigViewer
+            content={selectedPreview?.content ?? ""}
+            path={selectedPreview?.path ?? ""}
+            theme={resolveThemeMode()}
+          />
+        </Suspense>
+      </Box>
+    </>
+  );
+}
+
+function GeneratedConfigPreviewSection({ nodeName, sessionId, preview, previewLoading, previewError, activeFile, setActiveFile, loadPreview }: {
+  nodeName: string;
+  sessionId: string | null;
+  preview: ConfigPreviewResult | null;
+  previewLoading: boolean;
+  previewError: string | null;
+  activeFile: string;
+  setActiveFile: (path: string) => void;
+  loadPreview: () => void;
+}) {
+  return (
+    <PanelSection title="Generated configuration preview" withTopDivider={false} bodySx={{ p: 1.5 }}>
+      <Stack spacing={1.25}>
+        <ConfigPreviewHeaderRow nodeName={nodeName} sessionId={sessionId} previewLoading={previewLoading} hasPreview={Boolean(preview)} loadPreview={loadPreview} />
+        <ConfigPreviewMessages previewError={previewError} preview={preview} />
+        {preview && preview.files.length > 0 && (
+          <ConfigPreviewViewer preview={preview} activeFile={activeFile} setActiveFile={setActiveFile} />
+        )}
+      </Stack>
+    </PanelSection>
+  );
+}
+
 export const NetlabConfigTab: React.FC<NodeEditorTabProps> = ({ data: rawData, onChange: rawOnChange }) => {
   const data = rawData as NetlabNodeEditorData;
   const onChange = rawOnChange as NetlabOnChange;
@@ -95,69 +206,19 @@ export const NetlabConfigTab: React.FC<NodeEditorTabProps> = ({ data: rawData, o
     void loadPreview();
   }, [loadPreview]);
 
-  const selectedPreview = preview?.files.find((file) => file.path === activeFile) ?? preview?.files[0];
-
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {!data.isCustomTemplate && (
-        <PanelSection title="Generated configuration preview" withTopDivider={false} bodySx={{ p: 1.5 }}>
-          <Stack spacing={1.25}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-              <Typography variant="caption" color="text.secondary">
-                Exact files produced by netlab create for {nodeName || "this node"}.
-              </Typography>
-              <Button
-                size="small"
-                startIcon={previewLoading ? <CircularProgress size={14} /> : <RefreshIcon />}
-                disabled={!sessionId || !nodeName || previewLoading}
-                onClick={() => void loadPreview()}
-              >
-                {preview ? "Regenerate" : "Generate"}
-              </Button>
-            </Stack>
-
-            {previewError && <Alert severity="error">{previewError}</Alert>}
-            {preview?.message && preview.files.length === 0 && <Alert severity="info">{preview.message}</Alert>}
-
-            {preview && preview.files.length > 0 && (
-              <>
-                <Stack direction="row" spacing={0.75} alignItems="center">
-                  <FormControl size="small" sx={{ minWidth: 0, flex: 1 }}>
-                    <InputLabel id="config-preview-file-label">Generated file</InputLabel>
-                    <Select
-                      labelId="config-preview-file-label"
-                      label="Generated file"
-                      value={selectedPreview?.path ?? ""}
-                      onChange={(event) => setActiveFile(event.target.value)}
-                    >
-                      {preview.files.map((file) => <MenuItem key={file.path} value={file.path}>{file.path}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                  <Tooltip title="Copy generated configuration">
-                    <span>
-                      <IconButton
-                        size="small"
-                        disabled={!selectedPreview}
-                        onClick={() => selectedPreview && void navigator.clipboard.writeText(selectedPreview.content)}
-                      >
-                        <ContentCopyIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </Stack>
-                <Box sx={{ height: 320, overflow: "hidden", border: 1, borderColor: "divider", borderRadius: 1 }}>
-                  <Suspense fallback={<Box sx={{ height: "100%", display: "grid", placeItems: "center" }}><CircularProgress size={20} /></Box>}>
-                    <GeneratedConfigViewer
-                      content={selectedPreview?.content ?? ""}
-                      path={selectedPreview?.path ?? ""}
-                      theme={resolveThemeMode()}
-                    />
-                  </Suspense>
-                </Box>
-              </>
-            )}
-          </Stack>
-        </PanelSection>
+        <GeneratedConfigPreviewSection
+          nodeName={nodeName}
+          sessionId={sessionId}
+          preview={preview}
+          previewLoading={previewLoading}
+          previewError={previewError}
+          activeFile={activeFile}
+          setActiveFile={setActiveFile}
+          loadPreview={() => void loadPreview()}
+        />
       )}
 
       {/* Configuration Templates Section */}

@@ -24,6 +24,105 @@ export interface AppClabUiHost extends ClabUiHost {
 
 type OfficialHostOptions = NonNullable<Parameters<typeof officialCreateApiClabUiHost>[0]>;
 
+function buildPacketflixUri(configuredHost: string, configuredPortRaw: string | undefined, containerName: string, interfaceName: string): string {
+  const authorityHost = configuredHost.includes(":") && !configuredHost.startsWith("[")
+    ? `[${configuredHost}]`
+    : configuredHost;
+  const configuredPort = Number(configuredPortRaw);
+  const port = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
+    ? configuredPort
+    : 5001;
+  return `packetflix://${authorityHost}:${port}/interfaces?container=${encodeURIComponent(containerName)}&iface=${encodeURIComponent(interfaceName)}`;
+}
+
+async function startVncCapture({
+  safeFetch,
+  BASE,
+  containerName,
+  interfaceName,
+  view,
+  onError,
+}: {
+  safeFetch: typeof fetch;
+  BASE: string;
+  containerName: string;
+  interfaceName: string;
+  view: Window | null;
+  onError?: (message: string) => void;
+}): Promise<void> {
+  try {
+    const res = await safeFetch(`${BASE}/api/lab/capture/vnc`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        container: containerName,
+        interface: interfaceName,
+        darkMode: window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
+      }),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => null) as { detail?: unknown } | null)?.detail;
+      throw new Error(typeof detail === "string" ? detail : `Capture failed (${res.status})`);
+    }
+    const session = await res.json() as { port: number };
+    // The VNC container publishes its web UI on the backend's docker
+    // host, so reach it via the same hostname the API is served from.
+    const apiHost = BASE ? new URL(BASE, window.location.origin).hostname : window.location.hostname;
+    const url = `http://${apiHost.includes(":") && !apiHost.startsWith("[") ? `[${apiHost}]` : apiHost}:${session.port}/`;
+    if (view && !view.closed) view.location.replace(url);
+    else window.open(url, "_blank");
+  } catch (err) {
+    view?.close();
+    onError?.(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** The keys of runner.LIFECYCLE_ACTIONS on the Python side. */
+type BackendLifecycleAction = "up" | "down" | "initial" | "restart";
+
+// The "*Cleanup" variants are containerlab's --cleanup flavours of
+// deploy/redeploy/destroy (wipe stale artifacts first), not a separate
+// teardown phase. clab-ui's Deploy button actually emits `deployLabCleanup`,
+// so failing to map it here meant `netlab up` never ran — the lab's
+// containers were never created, and every later `initial` failed with
+// "No such container". netlab regenerates node_files on `up`, so mapping
+// the cleanup variants onto the same base action is the correct intent.
+function mapLifecycleAction(action: TopoViewerLifecycleAction): BackendLifecycleAction | null {
+  if (action === "deployLab" || action === "deployLabCleanup" || action === "redeployLab" || action === "redeployLabCleanup" || action === "startLab") {
+    return "up";
+  }
+  if (action === "applyLab") {
+    // clab-ui uses "apply" for pushing the generated configuration to an
+    // already-running lab. The equivalent netlab lifecycle command is
+    // `netlab initial`; treating this as an unknown action used to emit an
+    // immediate false success without ever contacting the backend.
+    return "initial";
+  }
+  if (action === "destroyLab" || action === "destroyLabCleanup" || action === "stopLab") return "down";
+  if (action === "restartLab") return "restart";
+  return null;
+}
+
+/** Reads an SSE body of `data: <json>\n\n` frames, calling onFrame for each complete one. */
+async function consumeSseStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onFrame: (raw: string) => void,
+): Promise<void> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) !== -1) {
+      onFrame(buffer.slice(0, sep));
+      buffer = buffer.slice(sep + 2);
+    }
+  }
+  if (buffer.trim()) onFrame(buffer);
+}
+
 export function createApiClabUiHost(options?: {
   explorer?: OfficialHostOptions["explorer"];
   meta?: OfficialHostOptions["meta"];
@@ -98,15 +197,7 @@ export function createApiClabUiHost(options?: {
     // link handled by a locally installed Wireshark + cshargextcap plugin.
     const configuredHost = import.meta.env.VITE_PACKETFLIX_HOST?.trim();
     if (configuredHost) {
-      const authorityHost = configuredHost.includes(":") && !configuredHost.startsWith("[")
-        ? `[${configuredHost}]`
-        : configuredHost;
-      const configuredPort = Number(import.meta.env.VITE_PACKETFLIX_PORT);
-      const port = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535
-        ? configuredPort
-        : 5001;
-      const uri = `packetflix://${authorityHost}:${port}/interfaces?container=${encodeURIComponent(container.name)}&iface=${encodeURIComponent(interfaceName)}`;
-      window.location.assign(uri);
+      window.location.assign(buildPacketflixUri(configuredHost, import.meta.env.VITE_PACKETFLIX_PORT, container.name, interfaceName));
       return;
     }
 
@@ -119,33 +210,7 @@ export function createApiClabUiHost(options?: {
       view.document.title = "Wireshark";
       view.document.body.textContent = `Starting Wireshark capture on ${nodeName}:${interfaceName}…`;
     }
-    void (async () => {
-      try {
-        const res = await safeFetch(`${BASE}/api/lab/capture/vnc`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            container: container.name,
-            interface: interfaceName,
-            darkMode: window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false,
-          }),
-        });
-        if (!res.ok) {
-          const detail = (await res.json().catch(() => null) as { detail?: unknown } | null)?.detail;
-          throw new Error(typeof detail === "string" ? detail : `Capture failed (${res.status})`);
-        }
-        const session = await res.json() as { port: number };
-        // The VNC container publishes its web UI on the backend's docker
-        // host, so reach it via the same hostname the API is served from.
-        const apiHost = BASE ? new URL(BASE, window.location.origin).hostname : window.location.hostname;
-        const url = `http://${apiHost.includes(":") && !apiHost.startsWith("[") ? `[${apiHost}]` : apiHost}:${session.port}/`;
-        if (view && !view.closed) view.location.replace(url);
-        else window.open(url, "_blank");
-      } catch (err) {
-        view?.close();
-        options?.onError?.(err instanceof Error ? err.message : String(err));
-      }
-    })();
+    void startVncCapture({ safeFetch, BASE, containerName: container.name, interfaceName, view, onError: options?.onError });
   };
 
   const emitIconList = (icons: CustomIconListItem[]) => {
@@ -192,33 +257,8 @@ export function createApiClabUiHost(options?: {
     runLifecycle(action: TopoViewerLifecycleAction) {
       if (!currentSessionId) return;
 
-      // Map the clab-ui lifecycle action to a backend lifecycle action string
-      // (the keys of runner.LIFECYCLE_ACTIONS on the Python side).
-      let backendAction: "up" | "down" | "initial" | "restart";
-      // The "*Cleanup" variants are containerlab's --cleanup flavours of
-      // deploy/redeploy/destroy (wipe stale artifacts first), not a separate
-      // teardown phase. clab-ui's Deploy button actually emits `deployLabCleanup`,
-      // so failing to map it here meant `netlab up` never ran — the lab's
-      // containers were never created, and every later `initial` failed with
-      // "No such container". netlab regenerates node_files on `up`, so mapping
-      // the cleanup variants onto the same base action is the correct intent.
-      if (
-        action === "deployLab" || action === "deployLabCleanup" ||
-        action === "redeployLab" || action === "redeployLabCleanup" ||
-        action === "startLab"
-      ) {
-        backendAction = "up";
-      } else if (action === "applyLab") {
-        // clab-ui uses "apply" for pushing the generated configuration to an
-        // already-running lab.  The equivalent netlab lifecycle command is
-        // `netlab initial`; treating this as an unknown action used to emit an
-        // immediate false success without ever contacting the backend.
-        backendAction = "initial";
-      } else if (action === "destroyLab" || action === "destroyLabCleanup" || action === "stopLab") {
-        backendAction = "down";
-      } else if (action === "restartLab") {
-        backendAction = "restart";
-      } else {
+      const backendAction = mapLifecycleAction(action);
+      if (!backendAction) {
         subscribers.forEach((s) => s({
           type: "lifecycleStatus",
           status: "error",
@@ -288,8 +328,6 @@ export function createApiClabUiHost(options?: {
           }
 
           const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
 
           const handleFrame = (raw: string) => {
             const trimmed = raw.trim();
@@ -330,17 +368,7 @@ export function createApiClabUiHost(options?: {
             }
           };
 
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            let sep: number;
-            while ((sep = buffer.indexOf("\n\n")) !== -1) {
-              handleFrame(buffer.slice(0, sep));
-              buffer = buffer.slice(sep + 2);
-            }
-          }
-          if (buffer.trim()) handleFrame(buffer);
+          await consumeSseStream(reader, handleFrame);
 
           // Stream ended without an explicit done/error frame.
           if (!settled) {

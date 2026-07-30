@@ -34,6 +34,141 @@ function ChipRow({
   );
 }
 
+function borderColorFor(isExpanded: boolean, error: string | null | undefined): string {
+  if (error) return "error.main";
+  if (isExpanded) return "primary.main";
+  return "divider";
+}
+
+function PluginSummaryHeader({ plugin, isEnabled, onToggleEnabled, originLabel, subtitle }: {
+  plugin: PluginInfo;
+  isEnabled: boolean;
+  onToggleEnabled: (enabled: boolean) => void;
+  originLabel: string | null;
+  subtitle: string;
+}) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, flexGrow: 1, gap: 0.5, mr: 1 }}>
+      <Checkbox
+        checked={isEnabled}
+        onClick={(event) => event.stopPropagation()}
+        onChange={(e) => onToggleEnabled(e.target.checked)}
+        size="small"
+        sx={{ p: 0.5, flexShrink: 0 }}
+      />
+      <Box onClick={(event) => event.stopPropagation()} sx={{ minWidth: 0, flexGrow: 1, cursor: "pointer" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.85rem" }}>
+            {plugin.id}
+          </Typography>
+          {plugin.error && (
+            <Tooltip title={plugin.error}>
+              <ErrorOutlineIcon sx={{ fontSize: 15, color: "error.main" }} />
+            </Tooltip>
+          )}
+          {originLabel && (
+            <Tooltip title={plugin.source ?? ""}>
+              <Chip
+                label={originLabel}
+                size="small"
+                color="secondary"
+                variant="outlined"
+                sx={{ height: 17, fontSize: "0.63rem", "& .MuiChip-label": { px: 0.65 } }}
+              />
+            </Tooltip>
+          )}
+        </Box>
+        <Typography
+          variant="caption"
+          sx={{ color: "text.secondary", display: "block", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {subtitle}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function PluginRelationsSummary({ hooks, requires, executeAfter }: { hooks: string[]; requires: string[]; executeAfter: string[] }) {
+  if (hooks.length === 0 && requires.length === 0 && executeAfter.length === 0) return null;
+  return (
+    <Box sx={{ display: "grid", gap: 0.5, mb: 1 }}>
+      {hooks.length > 0 && <ChipRow label="Runs at" values={hooks} />}
+      {requires.length > 0 && <ChipRow label="Requires" values={requires} color="warning" />}
+      {executeAfter.length > 0 && <ChipRow label="After" values={executeAfter} />}
+    </Box>
+  );
+}
+
+function PluginArgumentsList({ isLoadingReference, argumentsList, isCustom, pluginId }: {
+  isLoadingReference: boolean;
+  argumentsList: string[];
+  isCustom: boolean;
+  pluginId: string;
+}) {
+  if (isLoadingReference) {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <CircularProgress size={16} />
+        <Typography variant="caption" color="text.secondary">Loading plugin reference…</Typography>
+      </Box>
+    );
+  }
+  if (argumentsList.length > 0) {
+    return (
+      <Box component="ul" sx={{ m: 0, pl: 2.25, display: "grid", gap: 0.5 }}>
+        {argumentsList.map((argument, index) => (
+          <Typography component="li" key={`${pluginId}-${index}`} variant="caption" sx={{ color: "text.secondary", lineHeight: 1.45 }}>
+            {argument}
+          </Typography>
+        ))}
+      </Box>
+    );
+  }
+  return (
+    <Typography variant="caption" color="text.secondary">
+      {isCustom
+        ? "This plugin documents no arguments. Add a README.md next to it to document one here."
+        : "This plugin does not document structured arguments or defaults. Open its manual for the complete reference."}
+    </Typography>
+  );
+}
+
+function PluginCardDetails({ plugin, hooks, requires, executeAfter, shadows, isLoadingReference, argumentsList, isCustom }: {
+  plugin: PluginInfo;
+  hooks: string[];
+  requires: string[];
+  executeAfter: string[];
+  shadows: string[];
+  isLoadingReference: boolean;
+  argumentsList: string[];
+  isCustom: boolean;
+}) {
+  return (
+    <>
+      {plugin.error && (
+        <Typography variant="caption" sx={{ display: "block", color: "error.main", mb: 1 }}>
+          netlab will fail to load this plugin: {plugin.error}
+        </Typography>
+      )}
+
+      <PluginRelationsSummary hooks={hooks} requires={requires} executeAfter={executeAfter} />
+
+      {shadows.length > 0 && (
+        <Typography variant="caption" sx={{ display: "block", color: "warning.main", mb: 1 }}>
+          netlab loads {plugin.source} and ignores {shadows.length} other cop
+          {shadows.length === 1 ? "y" : "ies"}: {shadows.join(", ")}
+        </Typography>
+      )}
+
+      <Typography variant="caption" sx={{ display: "block", fontWeight: 700, color: "text.secondary", mb: 0.75 }}>
+        Arguments, values & defaults
+      </Typography>
+      <PluginArgumentsList isLoadingReference={isLoadingReference} argumentsList={argumentsList} isCustom={isCustom} pluginId={plugin.id} />
+    </>
+  );
+}
+
 interface PluginCardProps {
   plugin: PluginInfo;
   isEnabled: boolean;
@@ -65,9 +200,7 @@ export function PluginCard({
   // A custom plugin has no upstream manual, so the docstring is all the
   // summary there is.
   const subtitle = plugin.description || plugin.title;
-  let borderColor = "divider";
-  if (isExpanded) borderColor = "primary.main";
-  if (plugin.error) borderColor = "error.main";
+  const borderColor = borderColorFor(isExpanded, plugin.error);
 
   return (
     <Accordion
@@ -99,54 +232,7 @@ export function PluginCard({
           },
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, flexGrow: 1, gap: 0.5, mr: 1 }}>
-          <Checkbox
-            checked={isEnabled}
-            onClick={(event) => event.stopPropagation()}
-            onChange={(e) => onToggleEnabled(e.target.checked)}
-            size="small"
-            sx={{ p: 0.5, flexShrink: 0 }}
-          />
-          <Box
-            onClick={(event) => event.stopPropagation()}
-            sx={{ minWidth: 0, flexGrow: 1, cursor: "pointer" }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500, fontSize: "0.85rem" }}>
-                {plugin.id}
-              </Typography>
-              {plugin.error && (
-                <Tooltip title={plugin.error}>
-                  <ErrorOutlineIcon sx={{ fontSize: 15, color: "error.main" }} />
-                </Tooltip>
-              )}
-              {originLabel && (
-                <Tooltip title={plugin.source ?? ""}>
-                  <Chip
-                    label={originLabel}
-                    size="small"
-                    color="secondary"
-                    variant="outlined"
-                    sx={{ height: 17, fontSize: "0.63rem", "& .MuiChip-label": { px: 0.65 } }}
-                  />
-                </Tooltip>
-              )}
-            </Box>
-            <Typography
-              variant="caption"
-              sx={{
-                color: "text.secondary",
-                display: "block",
-                fontSize: "0.75rem",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {subtitle}
-            </Typography>
-          </Box>
-        </Box>
+        <PluginSummaryHeader plugin={plugin} isEnabled={isEnabled} onToggleEnabled={onToggleEnabled} originLabel={originLabel} subtitle={subtitle} />
         <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0 }}>
           <DocumentationActionButtons
             docsUrl={plugin.docs_url}
@@ -158,60 +244,16 @@ export function PluginCard({
         </Box>
       </AccordionSummary>
       <AccordionDetails sx={{ pt: 0, pb: 1.25, px: 1.5 }}>
-        {plugin.error && (
-          <Typography variant="caption" sx={{ display: "block", color: "error.main", mb: 1 }}>
-            netlab will fail to load this plugin: {plugin.error}
-          </Typography>
-        )}
-
-        {/* Where and when this plugin runs. netlab reorders `plugin:` by these
-            dependencies, so the list order in the file is not the run order. */}
-        {(hooks.length > 0 || requires.length > 0 || executeAfter.length > 0) && (
-          <Box sx={{ display: "grid", gap: 0.5, mb: 1 }}>
-            {hooks.length > 0 && (
-              <ChipRow label="Runs at" values={hooks} />
-            )}
-            {requires.length > 0 && (
-              <ChipRow label="Requires" values={requires} color="warning" />
-            )}
-            {executeAfter.length > 0 && (
-              <ChipRow label="After" values={executeAfter} />
-            )}
-          </Box>
-        )}
-
-        {shadows.length > 0 && (
-          <Typography variant="caption" sx={{ display: "block", color: "warning.main", mb: 1 }}>
-            netlab loads {plugin.source} and ignores {shadows.length} other cop
-            {shadows.length === 1 ? "y" : "ies"}: {shadows.join(", ")}
-          </Typography>
-        )}
-
-        <Typography variant="caption" sx={{ display: "block", fontWeight: 700, color: "text.secondary", mb: 0.75 }}>
-          Arguments, values & defaults
-        </Typography>
-        {isLoadingReference && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <CircularProgress size={16} />
-            <Typography variant="caption" color="text.secondary">Loading plugin reference…</Typography>
-          </Box>
-        )}
-        {!isLoadingReference && argumentsList.length > 0 && (
-          <Box component="ul" sx={{ m: 0, pl: 2.25, display: "grid", gap: 0.5 }}>
-            {argumentsList.map((argument, index) => (
-              <Typography component="li" key={`${plugin.id}-${index}`} variant="caption" sx={{ color: "text.secondary", lineHeight: 1.45 }}>
-                {argument}
-              </Typography>
-            ))}
-          </Box>
-        )}
-        {!isLoadingReference && argumentsList.length === 0 && (
-          <Typography variant="caption" color="text.secondary">
-            {isCustom
-              ? "This plugin documents no arguments. Add a README.md next to it to document one here."
-              : "This plugin does not document structured arguments or defaults. Open its manual for the complete reference."}
-          </Typography>
-        )}
+        <PluginCardDetails
+          plugin={plugin}
+          hooks={hooks}
+          requires={requires}
+          executeAfter={executeAfter}
+          shadows={shadows}
+          isLoadingReference={isLoadingReference}
+          argumentsList={argumentsList}
+          isCustom={isCustom}
+        />
       </AccordionDetails>
     </Accordion>
   );
