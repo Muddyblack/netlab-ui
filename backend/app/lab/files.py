@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,9 @@ from services.netlab import runner
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# A new lab's filename stem, after the punctuation squash in `new_lab`.
+_LAB_NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 
 
 def _count_labs(workspace_path: Path) -> int:
@@ -346,13 +350,11 @@ async def new_lab(body: NewLabRequest):
     if not name:
         raise HTTPException(400, "name is required")
     safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in name)
-    workspace_root = common.workspace().resolve()
-    candidate = workspace_root / f"{safe}.yml"
-    path = candidate.resolve()
-    try:
-        path.relative_to(workspace_root)
-    except ValueError:
-        raise HTTPException(400, "invalid lab name") from None
+    # Reject rather than repair: the substitution above should already leave only
+    # `[A-Za-z0-9_-]`, so anything failing here means the input was crafted.
+    if not _LAB_NAME_RE.fullmatch(safe):
+        raise HTTPException(400, "invalid lab name")
+    path = common.resolve_within(common.workspace(), f"{safe}.yml")
     if path.exists():
         raise HTTPException(409, f"{safe}.yml already exists")
     # `defaults.device` is not optional in practice: canvas node drops may leave

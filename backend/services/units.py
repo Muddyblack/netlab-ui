@@ -21,6 +21,7 @@ once, drop it into any lab in the workspace.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -104,11 +105,13 @@ def units_dir_for(topology_path: str | Path) -> Path:
 def _unit_path(units_dir: Path, name: str) -> Path:
     if not _UNIT_NAME_RE.fullmatch(name) or name in {".", ".."}:
         raise ValueError(f"invalid unit name: {name!r}")
-    root = units_dir.resolve()
-    path = (root / f"{name}.yml").resolve(strict=False)
-    if not path.is_relative_to(root) or path.parent != root:
+    # Compare fully-normalized strings (not `is_relative_to`) so a traversal
+    # that only appears after symlink resolution can't escape `units_dir`.
+    root = os.path.normpath(os.path.realpath(units_dir))
+    path = os.path.normpath(os.path.realpath(os.path.join(root, f"{name}.yml")))
+    if os.path.dirname(path) != root:
         raise ValueError(f"invalid unit path: {name!r}")
-    return path
+    return Path(path)
 
 
 def list_units(units_dir: Path) -> list[dict[str, Any]]:

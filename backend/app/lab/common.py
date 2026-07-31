@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -21,14 +22,40 @@ def workspace() -> Path:
     return path
 
 
+def _normalize(path: str | Path) -> str:
+    """Fully resolve ``path`` (user dir, symlinks, ``..``) to an absolute string.
+
+    Containment checks below compare normalized strings rather than
+    :meth:`Path.is_relative_to`, so a traversal that only becomes visible after
+    symlink resolution (``ws/link -> /etc``) can't slip through.
+    """
+    return os.path.normpath(os.path.realpath(os.path.expanduser(str(path))))
+
+
+def _contains(base: str, target: str) -> bool:
+    return target == base or target.startswith(base + os.sep)
+
+
 def resolve_workspace_path(path: str) -> Path:
     """Resolve ``path`` and require it to live inside a configured workspace."""
-    target = Path(path).expanduser().resolve()
+    target = _normalize(path)
     for ws in ws_store.load():
-        base = Path(ws).expanduser().resolve()
-        if target == base or target.is_relative_to(base):
-            return target
+        if _contains(_normalize(ws), target):
+            return Path(target)
     raise HTTPException(403, "path is outside the configured workspaces")
+
+
+def resolve_within(root: Path, name: str) -> Path:
+    """Resolve ``name`` beneath ``root``, rejecting anything that escapes it.
+
+    For endpoints that build a path from a user-supplied *name* (rather than a
+    full path): the name may not traverse out of ``root`` or into a subdirectory
+    of it."""
+    base = _normalize(root)
+    target = _normalize(os.path.join(base, name))
+    if not _contains(base, target) or os.path.dirname(target) != base:
+        raise HTTPException(400, "invalid path")
+    return Path(target)
 
 
 def session_path(session_id: str) -> str:

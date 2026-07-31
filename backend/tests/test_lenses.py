@@ -331,6 +331,8 @@ def test_isolated_and_in_place_creates_do_not_share_a_cache_entry(tmp_path: Path
 def test_lens_endpoint_resolves_the_live_session(tmp_path: Path, monkeypatch):
     topology = tmp_path / "lab.yml"
     topology.write_text("name: lab\nnodes: {r1: {}}\n")
+    monkeypatch.setenv("NETLAB_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("NETLAB_WORKSPACE_CONFIG", str(tmp_path / "ws.json"))
 
     async def fake_bundle(path, revision):
         assert path == str(topology)

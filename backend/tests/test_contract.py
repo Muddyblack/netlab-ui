@@ -44,7 +44,11 @@ def client():
 
 
 @pytest.fixture
-def topo_path(tmp_path) -> str:
+def topo_path(tmp_path, monkeypatch) -> str:
+    # Session creation requires the topology to sit inside a configured
+    # workspace, so make the temp dir one.
+    monkeypatch.setenv("NETLAB_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("NETLAB_WORKSPACE_CONFIG", str(tmp_path / "ws.json"))
     return str(tmp_path / "lab.yml")
 
 
