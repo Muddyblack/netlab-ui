@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -21,14 +22,46 @@ def workspace() -> Path:
     return path
 
 
+# Both functions below deliberately inline their normalize-then-`startswith`
+# check instead of sharing a helper. The containment test is what makes a
+# client-supplied path safe, and static analysis (CodeQL's `py/path-injection`)
+# only recognizes that guard when the normalization and the `startswith` apply
+# to the same local variable inside one function — hidden behind a helper
+# returning `bool`, the check is invisible and every downstream write is
+# reported as path injection. Keep the pattern literal here.
+
+
 def resolve_workspace_path(path: str) -> Path:
-    """Resolve ``path`` and require it to live inside a configured workspace."""
-    target = Path(path).expanduser().resolve()
+    """Resolve ``path`` and require it to live inside a configured workspace.
+
+    Normalizing through ``realpath`` first means a traversal that only becomes
+    visible after symlink resolution (``ws/link -> /etc``) can't slip through.
+    """
+    target = os.path.normpath(os.path.realpath(os.path.expanduser(path)))
     for ws in ws_store.load():
-        base = Path(ws).expanduser().resolve()
-        if target == base or target.is_relative_to(base):
-            return target
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(ws)))
+        if target == base:
+            # The workspace root itself. Return the *configured* string, not the
+            # request's — identical value, but it carries no user input with it.
+            return Path(base)
+        if target.startswith(base + os.sep):
+            return Path(target)
     raise HTTPException(403, "path is outside the configured workspaces")
+
+
+def resolve_within(root: Path, name: str) -> Path:
+    """Resolve ``name`` beneath ``root``, rejecting anything that escapes it.
+
+    For endpoints that build a path from a user-supplied *name* rather than a
+    full path: the name may not traverse out of ``root``, nor into a
+    subdirectory of it."""
+    base = os.path.normpath(os.path.realpath(str(root)))
+    target = os.path.normpath(os.path.realpath(os.path.join(base, name)))
+    if not target.startswith(base + os.sep):
+        raise HTTPException(400, "invalid path")
+    if os.path.dirname(target) != base:
+        raise HTTPException(400, "invalid path")
+    return Path(target)
 
 
 def session_path(session_id: str) -> str:
@@ -62,7 +95,7 @@ GENERATED_DIRS = {
     "monitoring",
     "grafana",
 }
-GENERATED_SUFFIXES = (".clab.yml", ".netlab-ui.json", ".log")
+GENERATED_SUFFIXES = (".clab.yml", ".netlab-ui.json", ".annotations.json", ".log")
 
 
 def is_generated(entry: Path, is_dir: bool) -> bool:

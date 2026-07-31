@@ -19,6 +19,25 @@ interface AppToolbarActionsProps {
   onSetupAssistant: () => void;
 }
 
+function notificationTooltipFor(notificationsEnabled: boolean, notificationPermission: NotificationPermission | "unavailable"): string {
+  if (notificationPermission === "denied") return "Notifications blocked — allow them in this site's browser settings";
+  if (notificationsEnabled) return "System notifications on — click to turn off";
+  return "Enable system notifications for netlab jobs";
+}
+
+function assistantStatusFor(assistantAvailable: boolean, assistantHasProvider: boolean, assistantOpen: boolean): {
+  label: string;
+  state: "offline" | "idle" | "sleeping";
+} {
+  if (assistantAvailable && assistantHasProvider) {
+    return { label: assistantOpen ? "Close assistant" : "Open assistant", state: assistantOpen ? "idle" : "sleeping" };
+  }
+  if (assistantAvailable) {
+    return { label: "Set up an AI provider", state: "sleeping" };
+  }
+  return { label: "Assistant unavailable", state: "offline" };
+}
+
 export function AppToolbarActions({
   notificationsSupported,
   notificationsEnabled,
@@ -31,18 +50,8 @@ export function AppToolbarActions({
   onToggleAssistant,
   onSetupAssistant
 }: AppToolbarActionsProps) {
-  let notificationTooltip = "Enable system notifications for netlab jobs";
-  if (notificationPermission === "denied") notificationTooltip = "Notifications blocked — allow them in this site's browser settings";
-  else if (notificationsEnabled) notificationTooltip = "System notifications on — click to turn off";
-  let assistantLabel = "Assistant unavailable";
-  let assistantState: "offline" | "idle" | "sleeping" = "offline";
-  if (assistantAvailable && assistantHasProvider) {
-    assistantLabel = assistantOpen ? "Close assistant" : "Open assistant";
-    assistantState = assistantOpen ? "idle" : "sleeping";
-  } else if (assistantAvailable) {
-    assistantLabel = "Set up an AI provider";
-    assistantState = "sleeping";
-  }
+  const notificationTooltip = notificationTooltipFor(notificationsEnabled, notificationPermission);
+  const { label: assistantLabel, state: assistantState } = assistantStatusFor(assistantAvailable, assistantHasProvider, assistantOpen);
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">

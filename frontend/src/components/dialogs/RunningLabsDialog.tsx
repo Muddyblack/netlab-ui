@@ -3,26 +3,23 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
-import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { api, type LabInstance } from "../../api/client";
 import type { TopologyRef } from "../../hooks/useTabManager";
 import { ForceCleanupProgressDialog } from "./ForceCleanupProgressDialog";
+import { RunningLabInstanceCard } from "./RunningLabInstanceCard";
+import { ConfirmInstanceActionDialog } from "./ConfirmInstanceActionDialog";
 
 type InstanceAction = "cleanup" | "force-cleanup" | "forget";
 
@@ -37,24 +34,6 @@ interface RunningLabsDialogProps {
   getOrCreateSession: (topoRef: TopologyRef) => Promise<string | null>;
   handleDestroyLab: (sessionId: string) => Promise<void>;
 }
-
-const ACTION_COPY: Record<InstanceAction, { title: string; detail: string; confirm: string }> = {
-  cleanup: {
-    title: "Shut down this lab?",
-    detail: "Opens the lab and runs netlab down, showing live output. This stops provider resources and removes the tracking entry when successful.",
-    confirm: "Shut down",
-  },
-  "force-cleanup": {
-    title: "Force provider cleanup?",
-    detail: "Runs netlab down --cleanup --force when the directory exists. For an orphaned containerlab lab, it removes the named clab resources and exact netlab tool-container prefix, then forgets the tracking record. Persistent data volumes are retained.",
-    confirm: "Force cleanup",
-  },
-  forget: {
-    title: "Forget this tracking record?",
-    detail: "This only removes the selected entry from netlab's status file. It does not stop or delete containers, VMs, networks, or tools. Use it only when those resources are already gone or were cleaned manually.",
-    confirm: "Forget record",
-  },
-};
 
 export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCreateSession, handleDestroyLab }: RunningLabsDialogProps) {
   const [instances, setInstances] = useState<LabInstance[]>([]);
@@ -135,20 +114,6 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
     }
   }, [onChanged, onToast, pending, refresh, shutDown]);
 
-  let pendingSeverity: "error" | "warning" | "info" = "info";
-  let pendingColor: "error" | "warning" | "primary" = "primary";
-  if (pending?.action === "force-cleanup") {
-    pendingSeverity = "warning";
-    pendingColor = "warning";
-  }
-  if (pending?.action === "forget") {
-    pendingSeverity = "error";
-    pendingColor = "error";
-  }
-  let confirmContent = <span>Confirm</span>;
-  if (pending) confirmContent = <span>{ACTION_COPY[pending.action].confirm}</span>;
-  if (running) confirmContent = <CircularProgress size={18} color="inherit" />;
-
   return (
     <>
       <Dialog open={open} onClose={running ? undefined : onClose} fullWidth maxWidth="md">
@@ -168,70 +133,12 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
             {loading && instances.length === 0 && <Box sx={{ display: "grid", placeItems: "center", py: 5 }}><CircularProgress size={28} /></Box>}
             {!loading && instances.length === 0 && <Alert severity="success">No netlab-managed lab instances are currently tracked.</Alert>}
             {instances.map((instance) => (
-              <Box key={instance.id} sx={{ border: 1, borderColor: "divider", borderRadius: 1.5, p: 2 }}>
-                <Stack direction="row" spacing={1} alignItems="flex-start">
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                      <Typography variant="subtitle1" fontWeight={700}>{instance.name}</Typography>
-                      <Chip size="small" label={`id: ${instance.id}`} variant="outlined" />
-                      {instance.providers.map((provider) => <Chip key={provider} size="small" label={provider} />)}
-                    </Stack>
-                    <Typography variant="body2" sx={{ mt: 0.75 }}>{instance.status}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, overflowWrap: "anywhere" }}>
-                      {instance.directory || "No directory recorded"}
-                    </Typography>
-                  </Box>
-                </Stack>
-                {!instance.directoryExists && (
-                  <Alert
-                    severity="warning"
-                    variant="outlined"
-                    sx={{
-                      mt: 1.5,
-                      bgcolor: "var(--vscode-inputValidation-warningBackground)",
-                      color: "text.primary",
-                      "& .MuiAlert-icon": { color: "warning.main" },
-                    }}
-                  >
-                    The recorded directory no longer exists. Normal shutdown is unavailable. Force cleanup can recover a containerlab-only instance from its recorded name; otherwise clean resources manually and then forget the stale record.
-                  </Alert>
-                )}
-                <Divider sx={{ my: 1.5 }} />
-                <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<PowerSettingsNewIcon />}
-                    disabled={!instance.directoryExists || running}
-                    onClick={() => setPending({ instance, action: "cleanup" })}
-                    sx={{ textTransform: "none" }}
-                  >
-                    Shut down
-                  </Button>
-                  <Button
-                    size="small"
-                    color="warning"
-                    variant="outlined"
-                    startIcon={<WarningAmberIcon />}
-                    disabled={running || (!instance.directoryExists && !(instance.providers.length === 1 && instance.providers[0] === "clab"))}
-                    onClick={() => setPending({ instance, action: "force-cleanup" })}
-                    sx={{ textTransform: "none" }}
-                  >
-                    Force cleanup
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    variant="outlined"
-                    startIcon={<DeleteForeverIcon />}
-                    disabled={running}
-                    onClick={() => setPending({ instance, action: "forget" })}
-                    sx={{ textTransform: "none" }}
-                  >
-                    Forget record
-                  </Button>
-                </Stack>
-              </Box>
+              <RunningLabInstanceCard
+                key={instance.id}
+                instance={instance}
+                running={running}
+                onAction={(inst, action) => setPending({ instance: inst, action })}
+              />
             ))}
             <Alert
               severity="info"
@@ -249,30 +156,12 @@ export function RunningLabsDialog({ open, onClose, onChanged, onToast, getOrCrea
         <DialogActions><Button variant="text" onClick={onClose} disabled={running} sx={{ textTransform: "none" }}>Close</Button></DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(pending)} onClose={running ? undefined : () => setPending(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>{pending ? ACTION_COPY[pending.action].title : "Confirm action"}</DialogTitle>
-        <DialogContent>
-          <Alert
-            severity={pendingSeverity}
-            variant="outlined"
-            sx={{ color: "text.primary" }}
-          >
-            {pending ? ACTION_COPY[pending.action].detail : ""}
-          </Alert>
-          {pending && <Typography variant="body2" sx={{ mt: 2 }}>Instance <strong>{pending.instance.id}</strong> · {pending.instance.name}</Typography>}
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={() => setPending(null)} disabled={running} sx={{ textTransform: "none" }}>Cancel</Button>
-          <Button
-            variant="contained"
-            color={pendingColor}
-            onClick={() => void runAction()}
-            disabled={running}
-          >
-            {confirmContent}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmInstanceActionDialog
+        pending={pending}
+        running={running}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void runAction()}
+      />
 
       <ForceCleanupProgressDialog
         open={Boolean(forceCleanupTarget)}

@@ -10,6 +10,121 @@ import { UnitPreview } from "../../components/UnitPreview";
 import { UNIT_DRAG_MIME } from "./useCanvasDropTarget";
 import type { UnitInfo } from "./types";
 
+function VersionBadges({ version, outdatedCount }: { version: number | undefined; outdatedCount: number }) {
+  if (!outdatedCount && !((version ?? 1) > 1)) return null;
+  return (
+    <Stack direction="row" spacing={0.5} justifyContent="center" sx={{ mt: -0.25 }}>
+      {(version ?? 1) > 1 && (
+        <Chip size="small" variant="outlined" label={`v${version}`} sx={{ height: 16, "& .MuiChip-label": { px: 0.6, fontSize: "0.62rem" } }} />
+      )}
+      {outdatedCount ? (
+        <Tooltip title={`${outdatedCount} placed instance(s) are on an older version — re-place to update`} arrow>
+          <Chip size="small" color="warning" label={`${outdatedCount} outdated`} sx={{ height: 16, "& .MuiChip-label": { px: 0.6, fontSize: "0.62rem" } }} />
+        </Tooltip>
+      ) : null}
+    </Stack>
+  );
+}
+
+function UnitCardActions({ unit, isLocked, pinned, onOpen, onTogglePin, onPlace, onExport, onDelete }: {
+  unit: UnitInfo;
+  isLocked: boolean;
+  pinned: boolean;
+  onOpen: (unit: UnitInfo) => void;
+  onTogglePin: (unit: UnitInfo) => void;
+  onPlace: (name: string) => void;
+  onExport: (name: string) => void;
+  onDelete: (name: string) => void;
+}) {
+  return (
+    <Box
+      className="unit-card-actions"
+      sx={{
+        position: "absolute",
+        top: 4,
+        right: 4,
+        display: "flex",
+        gap: 0,
+        opacity: pinned ? 1 : 0,
+        transition: "opacity 120ms",
+        bgcolor: "background.paper",
+        borderRadius: 1,
+        boxShadow: 1
+      }}
+    >
+      <Tooltip title="Open unit on the canvas to edit it" arrow>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(unit);
+          }}
+          aria-label={`Edit ${unit.name}`}
+          sx={{ p: 0.4 }}
+        >
+          <EditIcon sx={{ fontSize: 15 }} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title={pinned ? "Unpin unit" : "Pin unit"} arrow>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin(unit);
+          }}
+          aria-label={`${pinned ? "Unpin" : "Pin"} ${unit.name}`}
+          sx={{ p: 0.4 }}
+        >
+          {pinned ? <PushPinIcon sx={{ fontSize: 15 }} /> : <PushPinOutlinedIcon sx={{ fontSize: 15 }} />}
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Place with options (count, device, image)" arrow>
+        <span>
+          <IconButton
+            size="small"
+            disabled={isLocked}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlace(unit.name);
+            }}
+            aria-label={`Place ${unit.name} with options`}
+            sx={{ p: 0.4 }}
+          >
+            <TuneIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Export unit" arrow>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onExport(unit.name);
+          }}
+          aria-label={`Export ${unit.name}`}
+          sx={{ p: 0.4 }}
+        >
+          <FileDownloadOutlinedIcon sx={{ fontSize: 15 }} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Delete unit" arrow>
+        <IconButton
+          size="small"
+          color="error"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(unit.name);
+          }}
+          aria-label={`Delete ${unit.name}`}
+          sx={{ p: 0.4 }}
+        >
+          <DeleteIcon sx={{ fontSize: 15 }} />
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+}
+
 interface UnitCardProps {
   unit: UnitInfo;
   unitsByName: Record<string, UnitInfo>;
@@ -75,104 +190,18 @@ export function UnitCard({
         <Typography variant="body2" noWrap sx={{ fontWeight: 600, fontSize: "0.8rem", textAlign: "center" }}>
           {unit.name}
         </Typography>
-        {(outdatedCount || (unit.version ?? 1) > 1) && (
-          <Stack direction="row" spacing={0.5} justifyContent="center" sx={{ mt: -0.25 }}>
-            {(unit.version ?? 1) > 1 && (
-              <Chip size="small" variant="outlined" label={`v${unit.version}`} sx={{ height: 16, "& .MuiChip-label": { px: 0.6, fontSize: "0.62rem" } }} />
-            )}
-            {outdatedCount ? (
-              <Tooltip title={`${outdatedCount} placed instance(s) are on an older version — re-place to update`} arrow>
-                <Chip size="small" color="warning" label={`${outdatedCount} outdated`} sx={{ height: 16, "& .MuiChip-label": { px: 0.6, fontSize: "0.62rem" } }} />
-              </Tooltip>
-            ) : null}
-          </Stack>
-        )}
+        <VersionBadges version={unit.version} outdatedCount={outdatedCount} />
 
-        <Box
-          className="unit-card-actions"
-          sx={{
-            position: "absolute",
-            top: 4,
-            right: 4,
-            display: "flex",
-            gap: 0,
-            opacity: pinned ? 1 : 0,
-            transition: "opacity 120ms",
-            bgcolor: "background.paper",
-            borderRadius: 1,
-            boxShadow: 1
-          }}
-        >
-          <Tooltip title="Open unit on the canvas to edit it" arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpen(unit);
-              }}
-              aria-label={`Edit ${unit.name}`}
-              sx={{ p: 0.4 }}
-            >
-              <EditIcon sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={pinned ? "Unpin unit" : "Pin unit"} arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTogglePin(unit);
-              }}
-              aria-label={`${pinned ? "Unpin" : "Pin"} ${unit.name}`}
-              sx={{ p: 0.4 }}
-            >
-              {pinned ? <PushPinIcon sx={{ fontSize: 15 }} /> : <PushPinOutlinedIcon sx={{ fontSize: 15 }} />}
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Place with options (count, device, image)" arrow>
-            <span>
-              <IconButton
-                size="small"
-                disabled={isLocked}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPlace(unit.name);
-                }}
-                aria-label={`Place ${unit.name} with options`}
-                sx={{ p: 0.4 }}
-              >
-                <TuneIcon sx={{ fontSize: 15 }} />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Export unit" arrow>
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onExport(unit.name);
-              }}
-              aria-label={`Export ${unit.name}`}
-              sx={{ p: 0.4 }}
-            >
-              <FileDownloadOutlinedIcon sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete unit" arrow>
-            <IconButton
-              size="small"
-              color="error"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(unit.name);
-              }}
-              aria-label={`Delete ${unit.name}`}
-              sx={{ p: 0.4 }}
-            >
-              <DeleteIcon sx={{ fontSize: 15 }} />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <UnitCardActions
+          unit={unit}
+          isLocked={isLocked}
+          pinned={pinned}
+          onOpen={onOpen}
+          onTogglePin={onTogglePin}
+          onPlace={onPlace}
+          onExport={onExport}
+          onDelete={onDelete}
+        />
       </Paper>
     </Tooltip>
   );

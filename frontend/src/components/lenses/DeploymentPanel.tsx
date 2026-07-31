@@ -142,6 +142,122 @@ function NodeInspector({ detail }: { detail: DeploymentNodeDetail }) {
   );
 }
 
+function statusColorFor(deployment: DeploymentOverview): string {
+  if (deployment.summary.failed > 0) return STATE_META.failed.color;
+  if (deployment.done) return STATE_META.ready.color;
+  return STAGE_META[deployment.stage].color;
+}
+
+function statusIconFor(deployment: DeploymentOverview) {
+  if (deployment.summary.failed > 0) return ErrorIcon;
+  if (deployment.done) return CheckCircleIcon;
+  if (deployment.running) return SyncIcon;
+  return HourglassEmptyIcon;
+}
+
+function statusLabelFor(deployment: DeploymentOverview): string {
+  if (deployment.running) return "Running";
+  if (deployment.exitCode === 0) return "Completed successfully";
+  return `Finished with exit code ${deployment.exitCode ?? "unknown"}`;
+}
+
+function NoDeploymentAlert({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <Alert
+      severity="info"
+      action={(
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<RefreshIcon />}
+          onClick={onRefresh}
+          sx={{
+            color: "info.light",
+            borderColor: "rgba(41, 182, 246, 0.65)",
+            bgcolor: "transparent",
+            "&:hover": {
+              borderColor: "info.light",
+              bgcolor: "rgba(41, 182, 246, 0.12)",
+            },
+          }}
+        >
+          Refresh
+        </Button>
+      )}
+    >
+      No deployment run recorded yet. Start Deploy, Initial, Restart, or Create to populate this lens.
+    </Alert>
+  );
+}
+
+function DeploymentStatusHeader({ deployment, loading, onRefresh, onRerun, onShowLog }: {
+  deployment: DeploymentOverview;
+  loading: boolean;
+  onRefresh: () => void;
+  onRerun: () => void;
+  onShowLog: (stage?: string) => void;
+}) {
+  const statusColor = statusColorFor(deployment);
+  const StatusIcon = statusIconFor(deployment);
+  const statusLabel = statusLabelFor(deployment);
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(statusColor, 0.45), bgcolor: alpha(statusColor, 0.07) }}>
+      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+        <StatusIcon sx={{ color: statusColor, fontSize: 21 }} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{deployment.action ? `netlab ${deployment.action}` : "Deployment"}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {statusLabel}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={0.75} sx={{ ml: { xs: 3.5, sm: 0 } }}>
+          <Button size="small" variant="outlined" startIcon={<ArticleOutlinedIcon />} onClick={() => onShowLog()} sx={{ textTransform: "none", fontWeight: 650, borderColor: "divider", color: "text.primary" }}>Logs</Button>
+          <Tooltip title="Reload deployment status">
+            <span><Button size="small" variant="outlined" startIcon={loading ? <CircularProgress size={13} /> : <RefreshIcon />} disabled={loading} onClick={onRefresh} sx={{ minWidth: 0, px: 1.1, textTransform: "none", borderColor: "divider", color: "text.secondary" }}>Refresh</Button></span>
+          </Tooltip>
+          <Button size="small" variant="contained" startIcon={<ReplayIcon />} disabled={deployment.running} onClick={onRerun} sx={{ textTransform: "none", fontWeight: 700, boxShadow: "none", "&:hover": { boxShadow: "none" } }}>Run again</Button>
+        </Stack>
+      </Stack>
+      <StageTimeline deployment={deployment} onShowLog={onShowLog} />
+    </Paper>
+  );
+}
+
+function DeploymentSummaryChips({ summaryEntries }: { summaryEntries: [string, number][] }) {
+  return (
+    <Stack direction="row" gap={0.5} flexWrap="wrap">
+      {summaryEntries.map(([state, count]) => {
+        const meta = STATE_META[state];
+        return <Chip key={state} size="small" label={`${meta?.label ?? state} ${count}`} sx={{ color: meta?.color, borderColor: alpha(meta?.color ?? "#64748b", 0.55), bgcolor: alpha(meta?.color ?? "#64748b", 0.08) }} variant="outlined" />;
+      })}
+    </Stack>
+  );
+}
+
+function FailedNodesCard({ failedNodes, onSelectNode }: { failedNodes: string[]; onSelectNode: (node: string) => void }) {
+  const shownFailedNodes = failedNodes.slice(0, 200);
+  return (
+    <Paper variant="outlined" sx={{ p: 1.1, borderRadius: 2 }}>
+      <Typography variant="overline" sx={{ color: STATE_META.failed.color }}>Failed nodes · {failedNodes.length}</Typography>
+      <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+        <NodeSetChips names={shownFailedNodes} onSelect={onSelectNode} sx={{ color: STATE_META.failed.color, borderColor: alpha(STATE_META.failed.color, 0.5) }} />
+        {failedNodes.length > shownFailedNodes.length && <Chip size="small" label={`+${failedNodes.length - shownFailedNodes.length} more`} />}
+      </Stack>
+    </Paper>
+  );
+}
+
+function SelectedNodeSection({ selectedNode, selectedDetail }: { selectedNode: string | null; selectedDetail: DeploymentNodeDetail | null }) {
+  if (!selectedNode) {
+    return <Typography variant="body2" color="text.secondary">Select a canvas node to inspect its Ansible recap and recent tasks.</Typography>;
+  }
+  if (selectedDetail?.node !== selectedNode) {
+    return <Box sx={{ display: "grid", placeItems: "center", py: 2 }}><CircularProgress size={20} /></Box>;
+  }
+  if (selectedDetail.available) return <NodeInspector detail={selectedDetail} />;
+  return <Alert severity="info">No deployment data is available for {selectedNode}.</Alert>;
+}
+
 interface DeploymentPanelProps {
   sessionId: string;
   deployment: DeploymentOverview | null;
@@ -161,70 +277,14 @@ export function DeploymentPanel({ sessionId, deployment, selectedNode, selectedD
     setLogOpen(true);
   };
   if (loading && !deployment) return <Box sx={{ display: "grid", placeItems: "center", py: 4 }}><CircularProgress size={24} /></Box>;
-  if (!deployment?.available) {
-    return (
-      <Alert
-        severity="info"
-        action={(
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={onRefresh}
-            sx={{
-              color: "info.light",
-              borderColor: "rgba(41, 182, 246, 0.65)",
-              bgcolor: "transparent",
-              "&:hover": {
-                borderColor: "info.light",
-                bgcolor: "rgba(41, 182, 246, 0.12)",
-              },
-            }}
-          >
-            Refresh
-          </Button>
-        )}
-      >
-        No deployment run recorded yet. Start Deploy, Initial, Restart, or Create to populate this lens.
-      </Alert>
-    );
-  }
+  if (!deployment?.available) return <NoDeploymentAlert onRefresh={onRefresh} />;
 
   const failedNodes = Object.entries(deployment.nodes).filter(([, state]) => state === "failed").map(([node]) => node);
-  const shownFailedNodes = failedNodes.slice(0, 200);
-  let statusColor = STAGE_META[deployment.stage].color;
-  if (deployment.done) statusColor = STATE_META.ready.color;
-  if (deployment.summary.failed > 0) statusColor = STATE_META.failed.color;
-  let StatusIcon = HourglassEmptyIcon;
-  if (deployment.running) StatusIcon = SyncIcon;
-  if (deployment.done) StatusIcon = CheckCircleIcon;
-  if (deployment.summary.failed > 0) StatusIcon = ErrorIcon;
-  let statusLabel = `Finished with exit code ${deployment.exitCode ?? "unknown"}`;
-  if (deployment.exitCode === 0) statusLabel = "Completed successfully";
-  if (deployment.running) statusLabel = "Running";
   const summaryEntries = Object.entries(deployment.summary).filter(([name, count]) => name !== "total" && count > 0);
 
   return (
     <Stack spacing={1.25}>
-      <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(statusColor, 0.45), bgcolor: alpha(statusColor, 0.07) }}>
-        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-          <StatusIcon sx={{ color: statusColor, fontSize: 21 }} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{deployment.action ? `netlab ${deployment.action}` : "Deployment"}</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {statusLabel}
-            </Typography>
-          </Box>
-          <Stack direction="row" spacing={0.75} sx={{ ml: { xs: 3.5, sm: 0 } }}>
-            <Button size="small" variant="outlined" startIcon={<ArticleOutlinedIcon />} onClick={() => showLog()} sx={{ textTransform: "none", fontWeight: 650, borderColor: "divider", color: "text.primary" }}>Logs</Button>
-            <Tooltip title="Reload deployment status">
-              <span><Button size="small" variant="outlined" startIcon={loading ? <CircularProgress size={13} /> : <RefreshIcon />} disabled={loading} onClick={onRefresh} sx={{ minWidth: 0, px: 1.1, textTransform: "none", borderColor: "divider", color: "text.secondary" }}>Refresh</Button></span>
-            </Tooltip>
-            <Button size="small" variant="contained" startIcon={<ReplayIcon />} disabled={deployment.running} onClick={onRerun} sx={{ textTransform: "none", fontWeight: 700, boxShadow: "none", "&:hover": { boxShadow: "none" } }}>Run again</Button>
-          </Stack>
-        </Stack>
-        <StageTimeline deployment={deployment} onShowLog={showLog} />
-      </Paper>
+      <DeploymentStatusHeader deployment={deployment} loading={loading} onRefresh={onRefresh} onRerun={onRerun} onShowLog={showLog} />
 
       {deployment.currentTask && (
         <Paper variant="outlined" sx={{ px: 1.1, py: 0.85, borderRadius: 2 }}>
@@ -233,29 +293,13 @@ export function DeploymentPanel({ sessionId, deployment, selectedNode, selectedD
         </Paper>
       )}
 
-      <Stack direction="row" gap={0.5} flexWrap="wrap">
-        {summaryEntries.map(([state, count]) => {
-          const meta = STATE_META[state];
-          return <Chip key={state} size="small" label={`${meta?.label ?? state} ${count}`} sx={{ color: meta?.color, borderColor: alpha(meta?.color ?? "#64748b", 0.55), bgcolor: alpha(meta?.color ?? "#64748b", 0.08) }} variant="outlined" />;
-        })}
-      </Stack>
+      <DeploymentSummaryChips summaryEntries={summaryEntries} />
 
-      {failedNodes.length > 0 && (
-        <Paper variant="outlined" sx={{ p: 1.1, borderRadius: 2 }}>
-          <Typography variant="overline" sx={{ color: STATE_META.failed.color }}>Failed nodes · {failedNodes.length}</Typography>
-          <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-            <NodeSetChips names={shownFailedNodes} onSelect={onSelectNode} sx={{ color: STATE_META.failed.color, borderColor: alpha(STATE_META.failed.color, 0.5) }} />
-            {failedNodes.length > shownFailedNodes.length && <Chip size="small" label={`+${failedNodes.length - shownFailedNodes.length} more`} />}
-          </Stack>
-        </Paper>
-      )}
+      {failedNodes.length > 0 && <FailedNodesCard failedNodes={failedNodes} onSelectNode={onSelectNode} />}
 
       <Divider />
       <Typography variant="overline" color="text.secondary">Selected node</Typography>
-      {!selectedNode && <Typography variant="body2" color="text.secondary">Select a canvas node to inspect its Ansible recap and recent tasks.</Typography>}
-      {selectedNode && selectedDetail?.node !== selectedNode && <Box sx={{ display: "grid", placeItems: "center", py: 2 }}><CircularProgress size={20} /></Box>}
-      {selectedNode && selectedDetail?.node === selectedNode && selectedDetail.available && <NodeInspector detail={selectedDetail} />}
-      {selectedNode && selectedDetail?.node === selectedNode && !selectedDetail.available && <Alert severity="info">No deployment data is available for {selectedNode}.</Alert>}
+      <SelectedNodeSection selectedNode={selectedNode} selectedDetail={selectedDetail} />
 
       <DeploymentLogDialog sessionId={sessionId} open={logOpen} initialSection={logSection} onClose={() => setLogOpen(false)} />
     </Stack>

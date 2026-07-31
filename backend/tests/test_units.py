@@ -91,14 +91,13 @@ def test_save_captures_group_styling_from_source_lab(tmp_path):
         json.dumps(
             {
                 "nodeAnnotations": [
-                    {"id": "sw", "groupId": "group-1"},
-                    {"id": "other", "groupId": "group-2"},
+                    {"id": "sw", "groupId": "group-1", "icon": "switch"},
+                    {"id": "other", "groupId": "group-2", "icon": "router"},
                 ],
                 "groupStyleAnnotations": [
                     {"id": "group-1", "name": "Rack", "backgroundColor": "red", "position": {"x": 10, "y": 20}},
                     {"id": "group-2", "name": "Unrelated"},
                 ],
-                "icons": {"sw": "switch", "other": "router"},
             }
         )
     )
@@ -106,7 +105,9 @@ def test_save_captures_group_styling_from_source_lab(tmp_path):
     _save(units_dir, "rack", nodes=[{"name": "sw", "device": "ovs", "x": 5, "y": 5}], source=lab)
 
     loaded = {u["name"]: u for u in units.list_units(units_dir)}["rack"]
-    assert loaded["nodeAnnotations"] == [{"id": "sw", "groupId": "group-1"}]
+    assert loaded["nodeAnnotations"] == [
+        {"id": "sw", "groupId": "group-1", "icon": "switch", "position": {"x": 5, "y": 5}}
+    ]
     assert [s["id"] for s in loaded["groupStyleAnnotations"]] == ["group-1"]
     assert loaded["icons"] == {"sw": "switch"}
 
@@ -161,10 +162,11 @@ def test_instance_annotations_prefix_and_translate(tmp_path):
     }
     out = units.instance_annotations({"rack": unit}, "rack", 2, "rack", {"x": 1000, "y": 2000})
 
-    assert set(out["positions"]) == {"rack1_sw", "rack2_sw"}
-    assert out["positions"]["rack1_sw"] == (1000, 2000)
-    assert out["icons"] == {"rack1_sw": "switch", "rack2_sw": "switch"}
-    assert {e["id"]: e["groupId"] for e in out["nodeAnnotations"]} == {
+    by_id = {e["id"]: e for e in out["nodeAnnotations"]}
+    assert set(by_id) == {"rack1_sw", "rack2_sw"}
+    assert by_id["rack1_sw"]["position"] == {"x": 1000, "y": 2000}
+    assert {nid: e["icon"] for nid, e in by_id.items()} == {"rack1_sw": "switch", "rack2_sw": "switch"}
+    assert {nid: e["groupId"] for nid, e in by_id.items()} == {
         "rack1_sw": "rack1_group-1",
         "rack2_sw": "rack2_group-1",
     }
@@ -194,7 +196,7 @@ def test_export_import_round_trips_topology_and_view_state(tmp_path):
     path = units._unit_path(tmp_path, "rack")
     ann = ann_store.load(path)
     ann["groupStyleAnnotations"] = [{"id": "g1", "name": "Rack", "position": {"x": 5, "y": 5}}]
-    ann["icons"] = {"sw1": "switch"}
+    ann_store.ensure_node_annotation(ann, "sw1")["icon"] = "switch"
     ann_store.save(path, ann)
 
     bundle = units.export_unit(tmp_path, "rack")
@@ -323,7 +325,7 @@ def test_update_composition_preserves_canvas_owned_yaml_and_layout(tmp_path):
     # The canvas-owned YAML (nodes + internal links) is untouched.
     assert path.read_text() == yaml_before
     ann = ann_store.load(path)
-    assert ann["positions"]["sw"] == {"x": 40, "y": 60}  # layout preserved
+    assert ann_store.get_node_annotation(ann, "sw")["position"] == {"x": 40, "y": 60}  # layout preserved
     meta = ann["unit"]
     assert meta["includes"] == [{"template": "wp", "count": 3}]
     assert meta["module"] == ["lag"]

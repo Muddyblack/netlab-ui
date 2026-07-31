@@ -44,7 +44,11 @@ def client():
 
 
 @pytest.fixture
-def topo_path(tmp_path) -> str:
+def topo_path(tmp_path, monkeypatch) -> str:
+    # Session creation requires the topology to sit inside a configured
+    # workspace, so make the temp dir one.
+    monkeypatch.setenv("NETLAB_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("NETLAB_WORKSPACE_CONFIG", str(tmp_path / "ws.json"))
     return str(tmp_path / "lab.yml")
 
 
@@ -173,7 +177,7 @@ def test_move_command_is_layout_only(client, topo_path):
     assert body["snapshot"]["canUndo"] is False
     # Position landed in the sidecar; the topology YAML stays clean (and absent).
     ann = ann_store.load(topo_path)
-    assert ann["positions"]["r1"] == {"x": 42, "y": 7}
+    assert ann_store.get_node_annotation(ann, "r1")["position"] == {"x": 42, "y": 7}
     assert not Path(topo_path).exists()
 
 
@@ -199,8 +203,8 @@ def test_save_positions_command_is_layout_only(client, topo_path):
     # skipHistory live update -> no undo checkpoint.
     assert body["snapshot"]["canUndo"] is False
     ann = ann_store.load(topo_path)
-    assert ann["positions"]["r1"] == {"x": 160, "y": 80}
-    assert ann["positions"]["r2"] == {"x": 320, "y": 80}
+    assert ann_store.get_node_annotation(ann, "r1")["position"] == {"x": 160, "y": 80}
+    assert ann_store.get_node_annotation(ann, "r2")["position"] == {"x": 320, "y": 80}
     assert not Path(topo_path).exists()
 
 
@@ -218,6 +222,66 @@ def test_structural_add_node_bumps_revision_and_writes_yaml(client, topo_path):
     assert body["snapshot"]["canUndo"] is True
     text = Path(topo_path).read_text()
     assert "r9" in text and "frr" in text
+
+
+def test_duplicated_node_matching_lab_default_stays_inherited(client, topo_path):
+    """Duplicating a node that has no explicit `device` (it inherits `defaults.device`)
+    must not pin the resolved default onto the clone. clab-ui always round-trips its
+    rendering `kind` through `extraData.kind` (see commands.py's `_add_node`), even for
+    nodes that never had an explicit device — the clone should still inherit."""
+    Path(topo_path).write_text("name: sample\ndefaults:\n  device: frr\nnodes:\n  r1:\n")
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {"type": "addNode", "id": "r1_copy", "extraData": {"kind": "frr"}},
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r1_copy" in text
+    assert "device" not in text.split("r1_copy", 1)[1].split("\n\n")[0]
+
+
+def test_duplicated_node_with_explicit_device_keeps_it(client, topo_path):
+    """A clone whose device genuinely differs from the lab default (an explicit
+    per-node override, not just the rendered default) must still keep it."""
+    Path(topo_path).write_text("name: sample\ndefaults:\n  device: frr\nnodes:\n  r4:\n    device: linux\n")
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {"type": "addNode", "id": "r4_copy", "extraData": {"kind": "linux"}},
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r4_copy" in text and "linux" in text
+
+
+def test_duplicated_node_carries_full_attrs(client, topo_path):
+    """Ctrl+D/copy-paste must clone everything the source node had — not just
+    device — since clab-ui only round-trips a fixed field whitelist on its own.
+    See snapshot.py's `extraData.netlabAttrs` and commands.py's `_add_node`."""
+    sid = _new_session(client, topo_path)
+    client.post(
+        "/api/topology/command",
+        json={
+            "sessionId": sid,
+            "command": {
+                "type": "addNode",
+                "id": "r9_copy",
+                "extraData": {
+                    "kind": "frr",
+                    "netlabAttrs": {"config": ["custom.j2"], "mgmt": {"ipv4": "10.0.0.9"}},
+                },
+            },
+        },
+    )
+    text = Path(topo_path).read_text()
+    assert "r9_copy" in text
+    assert "custom.j2" in text
+    assert "10.0.0.9" in text
 
 
 def test_undo_redo_round_trip(client, topo_path):
@@ -388,9 +452,7 @@ links:
     ann_store.save(
         topo_path,
         {
-            "positions": {"old": {"x": 10, "y": 20}},
-            "icons": {"old": "router"},
-            "nodeAnnotations": [{"id": "old", "groupId": "rack-1"}],
+            "nodeAnnotations": [{"id": "old", "groupId": "rack-1", "position": {"x": 10, "y": 20}, "icon": "router"}],
         },
     )
     sid = _new_session(client, topo_path)
@@ -422,11 +484,11 @@ links:
     assert topo.links[0].attrs["interfaces"][1] == {"node": "r2", "ifname": "eth2"}
 
     ann = ann_store.load(topo_path)
-    assert "old" not in ann["positions"]
-    assert "old" not in ann["icons"]
-    assert ann["positions"]["new"] == {"x": 10, "y": 20}
-    assert ann["icons"]["new"] == "router"
-    assert ann["nodeAnnotations"] == [{"id": "new", "groupId": "rack-1"}]
+    assert ann_store.get_node_annotation(ann, "old") is None
+    new_ann = ann_store.get_node_annotation(ann, "new")
+    assert new_ann["position"] == {"x": 10, "y": 20}
+    assert new_ann["icon"] == "router"
+    assert new_ann["groupId"] == "rack-1"
 
 
 def test_remove_node_prunes_orphan_annotations(client, topo_path):
@@ -439,13 +501,13 @@ def test_remove_node_prunes_orphan_annotations(client, topo_path):
         "/api/topology/command",
         json={"sessionId": sid, "command": {"type": "move", "id": "r1", "position": {"x": 9, "y": 9}}},
     )
-    assert "r1" in ann_store.load(topo_path)["positions"]
+    assert ann_store.get_node_annotation(ann_store.load(topo_path), "r1") is not None
     client.post(
         "/api/topology/command",
         json={"sessionId": sid, "command": {"type": "removeNode", "id": "r1"}},
     )
     # No orphaned position lingers for the deleted node.
-    assert "r1" not in ann_store.load(topo_path)["positions"]
+    assert ann_store.get_node_annotation(ann_store.load(topo_path), "r1") is None
 
 
 def test_remove_node_sweeps_stale_interface_reference(topo_path, monkeypatch):

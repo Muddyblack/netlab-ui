@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -58,6 +59,40 @@ function CheckCard({ check, onSelectRef }: { check: ReadinessCheck; onSelectRef:
   );
 }
 
+function summaryPartsFor(result: ReadinessResult | null): string[] {
+  if (!result) return [];
+  const parts: string[] = [];
+  if (result.summary.passed) parts.push(`${result.summary.passed} passed`);
+  if (result.summary.warn) parts.push(`${result.summary.warn} warning${result.summary.warn === 1 ? "" : "s"}`);
+  if (result.summary.fail) parts.push(`${result.summary.fail} failed`);
+  return parts;
+}
+
+function ReadinessSummaryCard({ result, recheckButton }: { result: ReadinessResult; recheckButton: ReactNode }) {
+  const ready = result.ready;
+  const status = ready ? STATUS_META.pass : STATUS_META.fail;
+  const StatusIcon = status.icon;
+  const summaryParts = summaryPartsFor(result);
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(status.color, 0.4), bgcolor: alpha(status.color, 0.08) }}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        <Box sx={{ width: 34, height: 34, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(status.color, 0.16), color: status.color }}>
+          <StatusIcon sx={{ fontSize: 20 }} />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: status.color, lineHeight: 1.25 }}>
+            {ready ? "Ready to deploy" : "Not ready"}
+          </Typography>
+          {summaryParts.length > 0 && (
+            <Typography variant="caption" color="text.secondary">{summaryParts.join(" · ")}</Typography>
+          )}
+        </Box>
+        {recheckButton}
+      </Stack>
+    </Paper>
+  );
+}
+
 interface ReadinessPanelProps {
   result: ReadinessResult | null;
   loading: boolean;
@@ -66,17 +101,6 @@ interface ReadinessPanelProps {
 }
 
 export function ReadinessPanel({ result, loading, onRefresh, onSelectRef }: ReadinessPanelProps) {
-  const ready = result?.ready ?? false;
-  const status = ready ? STATUS_META.pass : STATUS_META.fail;
-  const StatusIcon = status.icon;
-
-  const summaryParts: string[] = [];
-  if (result) {
-    if (result.summary.passed) summaryParts.push(`${result.summary.passed} passed`);
-    if (result.summary.warn) summaryParts.push(`${result.summary.warn} warning${result.summary.warn === 1 ? "" : "s"}`);
-    if (result.summary.fail) summaryParts.push(`${result.summary.fail} failed`);
-  }
-
   const recheckButton = (
     <Button size="small" startIcon={loading ? <CircularProgress size={14} /> : <RefreshIcon />} disabled={loading} onClick={onRefresh} sx={{ textTransform: "none", flexShrink: 0 }}>
       Re-check
@@ -86,22 +110,7 @@ export function ReadinessPanel({ result, loading, onRefresh, onSelectRef }: Read
   return (
     <Stack spacing={1.25}>
       {result ? (
-        <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(status.color, 0.4), bgcolor: alpha(status.color, 0.08) }}>
-          <Stack direction="row" alignItems="center" spacing={1.25}>
-            <Box sx={{ width: 34, height: 34, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(status.color, 0.16), color: status.color }}>
-              <StatusIcon sx={{ fontSize: 20 }} />
-            </Box>
-            <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: status.color, lineHeight: 1.25 }}>
-                {ready ? "Ready to deploy" : "Not ready"}
-              </Typography>
-              {summaryParts.length > 0 && (
-                <Typography variant="caption" color="text.secondary">{summaryParts.join(" · ")}</Typography>
-              )}
-            </Box>
-            {recheckButton}
-          </Stack>
-        </Paper>
+        <ReadinessSummaryCard result={result} recheckButton={recheckButton} />
       ) : (
         <Stack direction="row" alignItems="center">
           <Box sx={{ flex: 1 }} />

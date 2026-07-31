@@ -20,6 +20,8 @@ documented/expected set and are easy to extend.
 
 from __future__ import annotations
 
+import copy
+import json
 from pathlib import Path
 from typing import Any
 
@@ -106,9 +108,11 @@ def _set_yaml_content(path: str, cmd: dict[str, Any]) -> bool:
 
 
 def _set_annotations_content(path: str, cmd: dict[str, Any]) -> bool:
-    """Replace the annotations sidecar content (from direct JSON editing)."""
+    """Replace the annotations content (from direct JSON editing). Routes
+    through the normal save path so the result still splits across clab-ui's
+    own annotations file and the netlab-gui-only sidecar."""
     content = cmd.get("content", "").strip() or "{}"
-    ann_store.sidecar_path(path).write_text(content)
+    ann_store.save(path, json.loads(content))
     return False
 
 
@@ -116,8 +120,23 @@ def _add_node(path: str, cmd: dict[str, Any]) -> bool:
     topo = load_topology(path)
     if topo.node(cmd["id"]) is None:
         # `device` may be sent directly or nested inside `extraData.kind` (netlab-gui palette drops).
+        # Duplicating/pasting an existing node round-trips `extraData.kind` too, but there it's
+        # just the canvas's *resolved* device (clab-ui always needs a concrete kind to pick an
+        # icon — see snapshot.py's device/kind reconciliation), not something the user actually
+        # chose. If it merely matches the lab-wide default, drop it so the clone keeps inheriting
+        # instead of pinning a redundant explicit value.
         device = cmd.get("device") or (cmd.get("extraData") or {}).get("kind") or None
-        topo.nodes.append(Node(name=cmd["id"], device=device))
+        default_device = topo.defaults.get("device")
+        if device is not None and default_device is not None and device == default_device:
+            device = None
+        # Duplicating/pasting an existing node carries its full declarative
+        # attrs (module config, mgmt, anything the user set) under
+        # extraData.netlabAttrs — see snapshot.py. Fresh nodes from the
+        # palette never set this, so they still start blank. No attribute
+        # names are hardcoded here; whatever the source node had is copied.
+        source_attrs = (cmd.get("extraData") or {}).get("netlabAttrs")
+        attrs = copy.deepcopy(source_attrs) if isinstance(source_attrs, dict) else {}
+        topo.nodes.append(Node(name=cmd["id"], device=device, attrs=attrs))
     save_topology(path, topo)
     # Position (if the canvas placed it) is layout, not topology.
     if "position" in cmd:
@@ -381,10 +400,6 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
     node_name = node_to_update.name
 
     if old_name and old_name != node_name:
-        if old_name in ann.get("positions", {}):
-            ann["positions"][node_name] = ann["positions"].pop(old_name)
-        if old_name in ann.get("icons", {}):
-            ann["icons"][node_name] = ann["icons"].pop(old_name)
         for entry in ann.get("nodeAnnotations", []):
             if entry.get("id") == old_name:
                 entry["id"] = node_name
@@ -394,9 +409,11 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
         if key in ui_keys:
             if key == "topoViewerRole":
                 if val:
-                    ann.setdefault("icons", {})[node_name] = val
+                    ann_store.ensure_node_annotation(ann, node_name)["icon"] = val
                 else:
-                    ann.setdefault("icons", {}).pop(node_name, None)
+                    entry = ann_store.get_node_annotation(ann, node_name)
+                    if entry:
+                        entry.pop("icon", None)
         else:
             if val is not None and val != "":
                 node_to_update.attrs[key] = val

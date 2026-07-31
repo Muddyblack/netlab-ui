@@ -109,11 +109,14 @@ def preview_edit(topology_path: str, commands_list: list[dict[str, Any]]) -> tup
     with tempfile.TemporaryDirectory(prefix="netlab-assistant-") as tmp:
         work = Path(tmp) / source.name
         work.write_text(before_text)
-        # Commands that touch memberships/positions read the sidecar; copy it
-        # so a preview behaves exactly like the real apply would.
-        sidecar = ann_store.sidecar_path(source)
-        if sidecar.exists():
-            shutil.copyfile(sidecar, ann_store.sidecar_path(work))
+        # Commands that touch memberships/positions read the annotation files;
+        # copy both so a preview behaves exactly like the real apply would.
+        for src_path, dst_path in (
+            (ann_store.clab_annotations_path(source), ann_store.clab_annotations_path(work)),
+            (ann_store.sidecar_path(source), ann_store.sidecar_path(work)),
+        ):
+            if src_path.exists():
+                shutil.copyfile(src_path, dst_path)
 
         for command in commands_list:
             command_dispatch.apply(str(work), command)

@@ -43,6 +43,8 @@ interface Options {
   /** Ref to the active host — used by fetchFiles to call listLabFiles when available. */
   hostRef: React.RefObject<HostWithFiles | null>;
   onFilesChanged?: () => void;
+  /** A background `netlab create` finished — the canvas projection is ready. */
+  onTransformDone?: () => void;
 }
 
 // Cache the last successful health result so a page reload (e.g. Vite HMR
@@ -75,9 +77,11 @@ function startupErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Unable to reach the backend.";
 }
 
-export function useAppData({ hostRef, onFilesChanged }: Options) {
+export function useAppData({ hostRef, onFilesChanged, onTransformDone }: Options) {
   const onFilesChangedRef = useRef(onFilesChanged);
   useEffect(() => { onFilesChangedRef.current = onFilesChanged; }, [onFilesChanged]);
+  const onTransformDoneRef = useRef(onTransformDone);
+  useEffect(() => { onTransformDoneRef.current = onTransformDone; }, [onTransformDone]);
   const [startup, setStartup] = useState<StartupState>(() => {
     if (DEMO_MODE) {
       return { status: "ready", health: { ok: false, netlab: false, containerlab: false, netlabComponents: [] }, error: null };
@@ -259,6 +263,9 @@ export function useAppData({ hostRef, onFilesChanged }: Options) {
         void fetchWorkspaces();
         void fetchFiles();
         onFilesChangedRef.current?.();
+      }
+      if (event.type === "transform") {
+        onTransformDoneRef.current?.();
       }
     });
     const filesPoll = window.setInterval(() => {

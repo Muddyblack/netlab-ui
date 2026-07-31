@@ -8,6 +8,52 @@ interface LogLine {
   line: string;
 }
 
+interface CleanupFrame {
+  line?: string;
+  stream?: string;
+  done?: boolean;
+  code?: number;
+  error?: string;
+}
+
+function applyCleanupFrame(frame: CleanupFrame, addLine: (line: LogLine) => void): number | null {
+  if (frame.line !== undefined) {
+    addLine({ stream: frame.stream === "stderr" ? "stderr" : "stdout", line: frame.line });
+    return null;
+  }
+  if (frame.done) {
+    return typeof frame.code === "number" ? frame.code : 1;
+  }
+  if (frame.error) {
+    addLine({ stream: "stderr", line: frame.error });
+    return 1;
+  }
+  return null;
+}
+
+async function streamCleanupOutput(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  addLine: (line: LogLine) => void,
+): Promise<number | null> {
+  const decoder = new TextDecoder();
+  let buf = "";
+  let code: number | null = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const parts = buf.split("\n\n");
+    buf = parts.pop() ?? "";
+    for (const part of parts) {
+      const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
+      if (!dataLine) continue;
+      const frameCode = applyCleanupFrame(JSON.parse(dataLine.slice(6)) as CleanupFrame, addLine);
+      if (frameCode !== null) code = frameCode;
+    }
+  }
+  return code;
+}
+
 interface ForceCleanupProgressDialogProps {
   open: boolean;
   instanceId: string | null;
@@ -41,29 +87,7 @@ export function ForceCleanupProgressDialog({ open, instanceId, onClose, onDone }
       });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let code: number | null = null;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split("\n\n");
-        buf = parts.pop() ?? "";
-        for (const part of parts) {
-          const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
-          if (!dataLine) continue;
-          const frame = JSON.parse(dataLine.slice(6));
-          if (frame.line !== undefined) {
-            setLines((prev) => [...prev, { stream: frame.stream === "stderr" ? "stderr" : "stdout", line: frame.line }]);
-          } else if (frame.done) {
-            code = typeof frame.code === "number" ? frame.code : 1;
-          } else if (frame.error) {
-            setLines((prev) => [...prev, { stream: "stderr", line: frame.error }]);
-            code = 1;
-          }
-        }
-      }
+      const code = await streamCleanupOutput(reader, (entry) => setLines((prev) => [...prev, entry]));
       setExitCode(code ?? 1);
       onDone((code ?? 1) === 0);
     } catch (err) {

@@ -2,6 +2,96 @@ import { useId } from "react";
 
 export type MascotState = "idle" | "thinking" | "sleeping" | "alarm" | "offline";
 
+interface MascotPalette {
+  local: string;
+  localDark: string;
+  peer: string;
+  peerDark: string;
+  link: string;
+  linkHot: string;
+  eye: string;
+  pupil: string;
+  led: string;
+}
+
+const IDLE_PALETTE: MascotPalette = {
+  local: "#ffba42", localDark: "#d26400", peer: "#e88e2a",
+  peerDark: "#a04a00", link: "#e88e2a", linkHot: "#ff9f01",
+  eye: "#fff8ec", pupil: "#5a2a00", led: "#4ade80",
+};
+const SLEEPING_PALETTE: MascotPalette = {
+  local: "#8a7a60", localDark: "#5a4e3a", peer: "#6b5a42",
+  peerDark: "#3a3020", link: "#5a4e3a", linkHot: "#5a4e3a",
+  eye: "#c8bfa8", pupil: "#3a3020", led: "#5a4e3a",
+};
+const ALARM_PALETTE: MascotPalette = {
+  local: "#e0453f", localDark: "#7a1414", peer: "#b21a1a",
+  peerDark: "#5a0a0a", link: "#c73a3a", linkHot: "#ff5252",
+  eye: "#fff0ee", pupil: "#4a1010", led: "#ff5252",
+};
+
+function getMascotVisuals(state: MascotState): {
+  alarm: boolean;
+  sleeping: boolean;
+  thinking: boolean;
+  stateClass: string;
+  stateName: string;
+  stateLabel: string;
+  palette: MascotPalette;
+} {
+  const alarm = state === "alarm";
+  const sleeping = state === "sleeping" || state === "offline";
+  const thinking = state === "thinking";
+
+  if (alarm) return { alarm, sleeping, thinking, stateClass: "bg-alarm", stateName: "Idle↔Idle", stateLabel: "session flapping", palette: ALARM_PALETTE };
+  if (sleeping) return { alarm, sleeping, thinking, stateClass: "bg-sleep", stateName: "Idle*", stateLabel: "admin down", palette: SLEEPING_PALETTE };
+  if (thinking) return { alarm, sleeping, thinking, stateClass: "bg-think", stateName: "OpenSent", stateLabel: "negotiating", palette: IDLE_PALETTE };
+  return { alarm, sleeping, thinking, stateClass: "", stateName: "Established", stateLabel: "session established", palette: IDLE_PALETTE };
+}
+
+function MascotFace({ alarm, sleeping, palette }: { alarm: boolean; sleeping: boolean; palette: MascotPalette }) {
+  if (alarm) {
+    return (
+      <g>
+        <g className="bg-brow" stroke={palette.pupil} strokeWidth="1.4" strokeLinecap="round">
+          <path d="M 8 13.8 L 12.2 15" />
+          <path d="M 20 13.8 L 15.8 15" />
+        </g>
+        <rect className="bg-eye" x="8.5" y="15.5" width="4.5" height="5.2" rx="1.8" fill={palette.eye} />
+        <rect className="bg-eye" x="16" y="15.5" width="4.5" height="5.2" rx="1.8" fill={palette.eye} />
+        <g className="bg-pupil">
+          <circle cx="10.75" cy="18.1" r="1.2" fill={palette.pupil} />
+          <circle cx="18.25" cy="18.1" r="1.2" fill={palette.pupil} />
+        </g>
+      </g>
+    );
+  }
+  if (sleeping) {
+    return (
+      <g>
+        <g stroke={palette.eye} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.8">
+          <path d="M 8.5 17 Q 11 19 13.5 17" />
+          <path d="M 15.5 17 Q 18 19 20.5 17" />
+        </g>
+        <g fill={palette.eye} fontFamily="sans-serif" fontWeight="700" opacity="0.55">
+          <text className="bg-zzz" x="22" y="5" fontSize="3.5">z</text>
+          <text className="bg-zzz bg-zzz-b" x="25" y="2.2" fontSize="2.6">z</text>
+        </g>
+      </g>
+    );
+  }
+  return (
+    <g>
+      <rect className="bg-eye" x="8.5" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
+      <rect className="bg-eye" x="16" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
+      <g className="bg-pupil">
+        <circle cx="10.75" cy="17.4" r="1.15" fill={palette.pupil} />
+        <circle cx="18.25" cy="17.4" r="1.15" fill={palette.pupil} />
+      </g>
+    </g>
+  );
+}
+
 /**
  * Nettie v3.1 — Compact Square BGP Session Mascot (1:1 aspect ratio).
  *
@@ -27,95 +117,8 @@ export function NetlabMascot({
     glow: `bg-gl-${uid}`,
   };
 
-  const alarm = state === "alarm";
-  const sleeping = state === "sleeping" || state === "offline";
-  const thinking = state === "thinking";
-
-  let stateClass = "";
-  let stateName = "Established";
-  let stateLabel = "session established";
-  if (thinking) {
-    stateClass = "bg-think";
-    stateName = "OpenSent";
-    stateLabel = "negotiating";
-  }
-  if (sleeping) {
-    stateClass = "bg-sleep";
-    stateName = "Idle*";
-    stateLabel = "admin down";
-  }
-  if (alarm) {
-    stateClass = "bg-alarm";
-    stateName = "Idle\u2194Idle";
-    stateLabel = "session flapping";
-  }
-
-  let palette = {
-    local: "#ffba42",
-    localDark: "#d26400",
-    peer: "#e88e2a",
-    peerDark: "#a04a00",
-    link: "#e88e2a",
-    linkHot: "#ff9f01",
-    eye: "#fff8ec",
-    pupil: "#5a2a00",
-    led: "#4ade80",
-  };
-  if (sleeping) {
-    palette = {
-      local: "#8a7a60", localDark: "#5a4e3a", peer: "#6b5a42",
-      peerDark: "#3a3020", link: "#5a4e3a", linkHot: "#5a4e3a",
-      eye: "#c8bfa8", pupil: "#3a3020", led: "#5a4e3a",
-    };
-  }
-  if (alarm) {
-    palette = {
-      local: "#e0453f", localDark: "#7a1414", peer: "#b21a1a",
-      peerDark: "#5a0a0a", link: "#c73a3a", linkHot: "#ff5252",
-      eye: "#fff0ee", pupil: "#4a1010", led: "#ff5252",
-    };
-  }
-
-  let face = (
-    <g>
-      <rect className="bg-eye" x="8.5" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
-      <rect className="bg-eye" x="16" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
-      <g className="bg-pupil">
-        <circle cx="10.75" cy="17.4" r="1.15" fill={palette.pupil} />
-        <circle cx="18.25" cy="17.4" r="1.15" fill={palette.pupil} />
-      </g>
-    </g>
-  );
-  if (alarm) {
-    face = (
-      <g>
-        <g className="bg-brow" stroke={palette.pupil} strokeWidth="1.4" strokeLinecap="round">
-          <path d="M 8 13.8 L 12.2 15" />
-          <path d="M 20 13.8 L 15.8 15" />
-        </g>
-        <rect className="bg-eye" x="8.5" y="15.5" width="4.5" height="5.2" rx="1.8" fill={palette.eye} />
-        <rect className="bg-eye" x="16" y="15.5" width="4.5" height="5.2" rx="1.8" fill={palette.eye} />
-        <g className="bg-pupil">
-          <circle cx="10.75" cy="18.1" r="1.2" fill={palette.pupil} />
-          <circle cx="18.25" cy="18.1" r="1.2" fill={palette.pupil} />
-        </g>
-      </g>
-    );
-  }
-  if (sleeping) {
-    face = (
-      <g>
-        <g stroke={palette.eye} strokeWidth="1.6" strokeLinecap="round" fill="none" opacity="0.8">
-          <path d="M 8.5 17 Q 11 19 13.5 17" />
-          <path d="M 15.5 17 Q 18 19 20.5 17" />
-        </g>
-        <g fill={palette.eye} fontFamily="sans-serif" fontWeight="700" opacity="0.55">
-          <text className="bg-zzz" x="22" y="5" fontSize="3.5">z</text>
-          <text className="bg-zzz bg-zzz-b" x="25" y="2.2" fontSize="2.6">z</text>
-        </g>
-      </g>
-    );
-  }
+  const { alarm, sleeping, stateClass, stateName, stateLabel, palette } = getMascotVisuals(state);
+  const face = <MascotFace alarm={alarm} sleeping={sleeping} palette={palette} />;
 
   return (
     <svg

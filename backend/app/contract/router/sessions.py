@@ -13,6 +13,7 @@ from ruamel.yaml import YAMLError
 from app.contract import commands, snapshot
 from app.contract.responses import CommandAck, CreateSessionResult, OkResult, SnapshotResponse
 from app.contract.router._shared import logger, router, session_or_404
+from app.lab import common
 from app.sessions.store import store
 from services.netlab import runner
 
@@ -34,7 +35,11 @@ class CommandRequest(BaseModel):
 
 @router.post("/sessions", response_model=CreateSessionResult)
 def create_session(body: CreateSession):
-    session = store.create(body.topologyPath, body.mode)
+    # The single chokepoint where a client-supplied topology path enters the
+    # backend: everything downstream (the model store, annotation sidecars, the
+    # unit library) derives its paths from `session.topology_path`. Pin it to a
+    # configured workspace here so no later writer has to re-validate.
+    session = store.create(str(common.resolve_workspace_path(body.topologyPath)), body.mode)
     return {"sessionId": session.id, "topologyRef": session.topology_path, "mode": session.mode}
 
 

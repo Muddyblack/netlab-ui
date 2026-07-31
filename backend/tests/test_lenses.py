@@ -163,7 +163,7 @@ def test_bundle_extracts_addressing_and_control_plane():
     assert bgp["routeReflectorNodes"] == ["r1"]
     assert "neighbor:" in bgp["resolvedYaml"]
     assert any(marker["label"] == "RR" for marker in bundle["controlPlane"]["markers"])
-    assert next(item for item in bundle["addressing"]["segments"] if item["physicalEdgeIds"] == ["e0"])
+    assert next(item for item in bundle["addressing"]["segments"] if item["physicalEdgeIds"] == ["r1--r2"])
 
 
 def test_markdown_reports_become_searchable_tables():
@@ -239,7 +239,7 @@ def test_create_cache_coalesces_unchanged_topology(tmp_path: Path, monkeypatch):
     topology.write_text("name: cached\nnodes: {r1: {}}\n")
     calls = 0
 
-    async def fake_run(args, cwd=None):
+    async def fake_run(args, cwd=None, *, env_extra=None):
         nonlocal calls
         calls += 1
         assert args.index("config") < args.index("provider")
@@ -262,9 +262,77 @@ def test_create_cache_coalesces_unchanged_topology(tmp_path: Path, monkeypatch):
     assert first == second
 
 
+def test_isolated_create_runs_off_the_lab_dir_and_ignores_the_lock(tmp_path: Path, monkeypatch):
+    """`isolated=True` must run in a scratch cwd with an absolute topology path,
+    and must NOT divert to `netlab inspect` when the lab is locked — that
+    diversion is what made a deployed lab's edits unrenderable."""
+    topology = tmp_path / "lab.yml"
+    topology.write_text("name: iso\nnodes: {r1: {}}\n")
+    (tmp_path / "netlab.lock").write_text("")
+    seen: dict = {}
+
+    async def fake_run(args, cwd=None, *, env_extra=None):
+        seen["args"] = args
+        seen["cwd"] = Path(cwd)
+        seen["env_extra"] = env_extra
+        destination = next(arg.split("=", 1)[1] for arg in args if arg.startswith("json="))
+        Path(destination).write_text(json.dumps({"name": "iso", "nodes": {"r1": {}}}))
+        return runner.CommandResult(0, "created", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_read_clab_projection", lambda _cwd, _snapshot: {"name": "iso"})
+    runner._create_cache.clear()
+    runner._create_locks.clear()
+
+    artifact = asyncio.run(runner.create(topology, isolated=True))
+
+    assert artifact["clab"] == {"name": "iso"}
+    # Ran `create` (not `inspect`) despite the lock...
+    assert seen["args"][0] == "create"
+    # ...from a scratch cwd, not the lab dir...
+    assert seen["cwd"] != tmp_path
+    # ...against an absolute path, since the cwd is no longer the lab dir.
+    assert seen["args"][1] == str(topology.resolve())
+    # ...and without leaving a __pycache__ behind in the lab dir.
+    assert seen["env_extra"] == {"PYTHONDONTWRITEBYTECODE": "1"}
+    # The scratch dir is cleaned up once the projection has been read.
+    assert not seen["cwd"].exists()
+
+
+def test_isolated_and_in_place_creates_do_not_share_a_cache_entry(tmp_path: Path, monkeypatch):
+    """On a deployed lab the two modes return different topologies — the edited
+    YAML vs. what is actually running — so one must never serve the other's
+    cached artifact."""
+    topology = tmp_path / "lab.yml"
+    topology.write_text("name: dual\nnodes: {r1: {}}\n")
+    (tmp_path / "netlab.lock").write_text("")
+
+    async def fake_run(args, cwd=None, *, env_extra=None):
+        if args[0] == "inspect":
+            return runner.CommandResult(0, json.dumps({"name": "running"}), "")
+        destination = next(arg.split("=", 1)[1] for arg in args if arg.startswith("json="))
+        Path(destination).write_text(json.dumps({"name": "edited"}))
+        return runner.CommandResult(0, "created", "")
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    monkeypatch.setattr(runner, "_read_clab_projection", lambda _cwd, snapshot: {"name": snapshot["name"]})
+    runner._create_cache.clear()
+    runner._create_locks.clear()
+
+    async def both():
+        return await runner.create(topology, isolated=True), await runner.create(topology)
+
+    isolated, in_place = asyncio.run(both())
+
+    assert isolated["snapshot"]["name"] == "edited"
+    assert in_place["snapshot"]["name"] == "running"
+
+
 def test_lens_endpoint_resolves_the_live_session(tmp_path: Path, monkeypatch):
     topology = tmp_path / "lab.yml"
     topology.write_text("name: lab\nnodes: {r1: {}}\n")
+    monkeypatch.setenv("NETLAB_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("NETLAB_WORKSPACE_CONFIG", str(tmp_path / "ws.json"))
 
     async def fake_bundle(path, revision):
         assert path == str(topology)
@@ -375,7 +443,7 @@ def test_service_explorer_maps_vlans_vrfs_and_vxlan():
     assert explorer["available"] is True
     vlans = {vlan["name"]: vlan for vlan in explorer["vlans"]}
     assert vlans["red"]["vni"] == 101000
-    assert vlans["red"]["physicalEdgeIds"] == ["e0"]
+    assert vlans["red"]["physicalEdgeIds"] == ["h1--s1"]
     assert vlans["red"]["evpn"]["evi"] == 1000
     assert set(vlans["red"]["nodeIds"]) == {"s1", "h1"}
     assert vlans["blue"]["mode"] == "irb"
@@ -442,6 +510,17 @@ def _path_topology() -> dict:
     }
 
 
+def test_node_pickers_are_ordered_naturally_not_lexicographically():
+    """The Paths source/destination pickers render this list in backend order.
+    Plain string sorting interleaves the numbers — r1, r10, r11, …, r2 — which is
+    never what someone scanning for r15 expects."""
+    nodes = {f"r{n}": {"interfaces": [], "loopback": {"ipv4": f"10.0.0.{n}/32"}} for n in (1, 2, 9, 10, 12, 15)}
+
+    reachability = path_explorer.build_reachability({"nodes": nodes})
+
+    assert reachability["nodes"] == ["r1", "r2", "r9", "r10", "r12", "r15"]
+
+
 def test_path_explorer_prefers_cheaper_igp_path():
     snap = _path_topology()
     result = path_explorer.compute_path(snap, source="r1", target="r3", family="ipv4", vrf="default")
@@ -451,7 +530,7 @@ def test_path_explorer_prefers_cheaper_igp_path():
     assert result["hopCount"] == 2
     assert [hop["toNode"] for hop in result["hops"]] == ["r2", "r3"]
     assert result["protocols"] == ["ospf"]
-    assert "e0" in result["objectRefs"] and "e1" in result["objectRefs"]
+    assert "r1--r2" in result["objectRefs"] and "r2--r3" in result["objectRefs"]
 
 
 def test_path_explorer_reports_blockages():

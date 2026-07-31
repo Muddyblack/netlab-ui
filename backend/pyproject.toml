@@ -32,7 +32,7 @@ assistant = [
 ]
 dev = [
     "pytest>=8.0",
-    "httpx2>=0.28",
+    "httpx>=0.28",
     "ruff>=0.10.0",
 ]
 

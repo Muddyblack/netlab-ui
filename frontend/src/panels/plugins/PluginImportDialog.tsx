@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
   Alert,
   Box,
@@ -21,6 +22,110 @@ import { api } from "../../api/client";
 import type { PluginImportRequest, PluginImportResult } from "../../api/client";
 
 type ImportMode = "upload" | "path" | "template";
+
+function canSubmitImport(mode: ImportMode, busy: boolean, name: string, content: string | null, sourcePath: string): boolean {
+  if (busy || name.trim() === "") return false;
+  if (mode === "template") return true;
+  if (mode === "upload") return content !== null;
+  return sourcePath.trim() !== "";
+}
+
+function UploadModeFields({
+  fileInput,
+  content,
+  onFile,
+}: {
+  fileInput: RefObject<HTMLInputElement | null>;
+  content: string | null;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <Box sx={{ display: "grid", gap: 1 }}>
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".py"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFile(file);
+        }}
+      />
+      <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => fileInput.current?.click()}>
+        {content === null ? "Choose a .py file" : "Choose a different file"}
+      </Button>
+      {content !== null && (
+        <Typography variant="caption" color="text.secondary">
+          {content.split("\n").length} lines loaded. It is checked for
+          syntax errors and netlab hooks before being written.
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+function PathModeFields({
+  sourcePath,
+  setSourcePath,
+  link,
+  setLink,
+  name,
+  setName,
+}: {
+  sourcePath: string;
+  setSourcePath: (value: string) => void;
+  link: boolean;
+  setLink: (value: boolean) => void;
+  name: string;
+  setName: (value: string) => void;
+}) {
+  return (
+    <Box sx={{ display: "grid", gap: 1 }}>
+      <TextField
+        label="Path to the .py file on this machine"
+        placeholder="/home/you/plugins/my_tweak.py"
+        size="small"
+        value={sourcePath}
+        onChange={(e) => setSourcePath(e.target.value)}
+        onBlur={() => {
+          const stem = sourcePath.trim().split("/").pop()?.replace(/\.py$/, "");
+          if (stem && !name) setName(stem);
+        }}
+      />
+      <FormControlLabel
+        control={<Checkbox size="small" checked={link} onChange={(e) => setLink(e.target.checked)} />}
+        label={
+          <Typography variant="caption">
+            Symlink instead of copying — keep editing the original and
+            netlab picks up every change
+          </Typography>
+        }
+      />
+    </Box>
+  );
+}
+
+function ImportErrorAlert({
+  error,
+  overwrite,
+  setOverwrite,
+}: {
+  error: string;
+  overwrite: boolean;
+  setOverwrite: (value: boolean) => void;
+}) {
+  return (
+    <Alert severity="error" sx={{ py: 0.5 }}>
+      {error}
+      {/\balready exists\b/.test(error) && (
+        <FormControlLabel
+          control={<Checkbox size="small" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />}
+          label={<Typography variant="caption">Replace the existing file</Typography>}
+        />
+      )}
+    </Alert>
+  );
+}
 
 /**
  * Add a user-written plugin to netlab's plugin search path.
@@ -81,10 +186,7 @@ export function PluginImportDialog({
     }
   };
 
-  const canSubmit =
-    !busy &&
-    name.trim() !== "" &&
-    (mode === "template" || (mode === "upload" ? content !== null : sourcePath.trim() !== ""));
+  const canSubmit = canSubmitImport(mode, busy, name, content, sourcePath);
 
   const handleSubmit = async () => {
     setBusy(true);
@@ -139,56 +241,11 @@ export function PluginImportDialog({
         </Tabs>
 
         {mode === "upload" && (
-          <Box sx={{ display: "grid", gap: 1 }}>
-            <input
-              ref={fileInput}
-              type="file"
-              accept=".py"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-              }}
-            />
-            <Button
-              variant="outlined"
-              startIcon={<UploadFileIcon />}
-              onClick={() => fileInput.current?.click()}
-            >
-              {content === null ? "Choose a .py file" : "Choose a different file"}
-            </Button>
-            {content !== null && (
-              <Typography variant="caption" color="text.secondary">
-                {content.split("\n").length} lines loaded. It is checked for
-                syntax errors and netlab hooks before being written.
-              </Typography>
-            )}
-          </Box>
+          <UploadModeFields fileInput={fileInput} content={content} onFile={(file) => void handleFile(file)} />
         )}
 
         {mode === "path" && (
-          <Box sx={{ display: "grid", gap: 1 }}>
-            <TextField
-              label="Path to the .py file on this machine"
-              placeholder="/home/you/plugins/my_tweak.py"
-              size="small"
-              value={sourcePath}
-              onChange={(e) => setSourcePath(e.target.value)}
-              onBlur={() => {
-                const stem = sourcePath.trim().split("/").pop()?.replace(/\.py$/, "");
-                if (stem && !name) setName(stem);
-              }}
-            />
-            <FormControlLabel
-              control={<Checkbox size="small" checked={link} onChange={(e) => setLink(e.target.checked)} />}
-              label={
-                <Typography variant="caption">
-                  Symlink instead of copying — keep editing the original and
-                  netlab picks up every change
-                </Typography>
-              }
-            />
-          </Box>
+          <PathModeFields sourcePath={sourcePath} setSourcePath={setSourcePath} link={link} setLink={setLink} name={name} setName={setName} />
         )}
 
         {mode === "template" && (
@@ -227,23 +284,7 @@ export function PluginImportDialog({
           </TextField>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ py: 0.5 }}>
-            {error}
-            {/\balready exists\b/.test(error) && (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={overwrite}
-                    onChange={(e) => setOverwrite(e.target.checked)}
-                  />
-                }
-                label={<Typography variant="caption">Replace the existing file</Typography>}
-              />
-            )}
-          </Alert>
-        )}
+        {error && <ImportErrorAlert error={error} overwrite={overwrite} setOverwrite={setOverwrite} />}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={busy}>

@@ -76,9 +76,6 @@ def instantiate_template(body: InstantiateRequest):
                     unit_map, body.template, body.count, body.prefix or body.template, body.origin
                 )
                 ann = ann_store.load(session.topology_path)
-                for name, (x, y) in extras["positions"].items():
-                    ann["positions"][name] = {"x": x, "y": y}
-                ann.setdefault("icons", {}).update(extras["icons"])
                 new_node_anns = {e["id"] for e in extras["nodeAnnotations"]}
                 ann["nodeAnnotations"] = [
                     e for e in ann.get("nodeAnnotations", []) if e.get("id") not in new_node_anns

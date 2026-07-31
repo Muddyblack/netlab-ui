@@ -67,11 +67,28 @@ def from_dict(data: dict[str, Any] | None) -> Topology:
     topo.links = [_parse_link(item, node_names) for item in (data.get("links") or [])]
     topo.groups = _parse_groups(data.get("groups"))
     topo.attrs = {k: v for k, v in data.items() if k not in _KNOWN_TOP}
+
+    existing_nodes = {n.name for n in topo.nodes}
+    existing_groups = {g.name for g in topo.groups}
+    for link in topo.links:
+        for ep in link.endpoints:
+            if ep and ep not in existing_nodes and ep not in existing_groups:
+                topo.nodes.append(Node(name=ep))
+                existing_nodes.add(ep)
+
     return topo
 
 
 def from_yaml(text: str) -> Topology:
-    return from_dict(_yaml.load(text) or {})
+    data = _yaml.load(text) or {}
+    # ruamel's round-trip loader remembers a document's ``%YAML`` directive on
+    # the *shared* YAML() instance (``_yaml.version``), not per-document. Left
+    # alone, loading one file that happens to carry the directive (e.g. a
+    # cloned netlab-examples lab) would leak it into every later dump for the
+    # rest of the process — stamping "%YAML 1.1" onto unrelated topologies
+    # that never had it. Reset it after every load so dumps stay directive-free.
+    _yaml.version = None
+    return from_dict(data)
 
 
 def _parse_nodes(raw: Any) -> list[Node]:

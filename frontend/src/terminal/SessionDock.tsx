@@ -43,6 +43,143 @@ function tabCloseLabel(tab: SessionTab): string {
   return `Close ${tab.node} ${tab.kind === "shell" ? "terminal" : "logs"}`;
 }
 
+function SessionDockTabStrip({ tabs, activeTab, onSelect, onClose }: {
+  tabs: SessionTab[];
+  activeTab: SessionTab | null;
+  onSelect: (key: string) => void;
+  onClose: (key: string) => void;
+}) {
+  return (
+    <Tabs
+      value={activeTab ? activeTab.key : false}
+      onChange={(_event, key: string) => onSelect(key)}
+      variant="scrollable"
+      scrollButtons="auto"
+      sx={{ minHeight: 34, flex: 1, "& .MuiTab-root": { minHeight: 34, py: 0, px: 1.25, textTransform: "none" } }}
+    >
+      {tabs.map((tab) => (
+        <Tab
+          key={tab.key}
+          value={tab.key}
+          label={
+            <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              {tabIcon(tab.kind)}
+              <Typography component="span" variant="caption" sx={{ fontFamily: "monospace" }}>{tabLabel(tab)}</Typography>
+              <IconButton
+                component="span"
+                size="small"
+                aria-label={tabCloseLabel(tab)}
+                onClick={(event) => { event.stopPropagation(); onClose(tab.key); }}
+                sx={{ width: 20, height: 20 }}
+              >
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Box>
+          }
+        />
+      ))}
+    </Tabs>
+  );
+}
+
+function RecentConnectionsMenu({ anchorEl, onClose, recentOutsideTabs, onOpenShell }: {
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  recentOutsideTabs: string[];
+  onOpenShell: (node: string) => void;
+}) {
+  return (
+    <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={onClose}>
+      {recentOutsideTabs.length === 0 ? (
+        <MenuItem disabled>No closed connections</MenuItem>
+      ) : recentOutsideTabs.map((node) => (
+        <MenuItem key={node} onClick={() => { onOpenShell(node); onClose(); }}>{node}</MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
+function SessionDockHeader({
+  tabs, activeTab, open, maximized, onSelect, onClose, onToggleOpen, onOpenShell, onPopOut,
+  historyAnchor, setHistoryAnchor, recentOutsideTabs, setRecentNodes, setMaximized,
+}: {
+  tabs: SessionTab[];
+  activeTab: SessionTab | null;
+  open: boolean;
+  maximized: boolean;
+  onSelect: (key: string) => void;
+  onClose: (key: string) => void;
+  onToggleOpen: () => void;
+  onOpenShell: (node: string) => void;
+  onPopOut: (tab: SessionTab) => void;
+  historyAnchor: HTMLElement | null;
+  setHistoryAnchor: (el: HTMLElement | null) => void;
+  recentOutsideTabs: string[];
+  setRecentNodes: (nodes: string[]) => void;
+  setMaximized: (updater: (value: boolean) => boolean) => void;
+}) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, pr: 0.5, ...(open ? { borderBottom: 1, borderColor: "divider" } : {}) }}>
+      <SessionDockTabStrip tabs={tabs} activeTab={activeTab} onSelect={onSelect} onClose={onClose} />
+
+      <Tooltip title="Recent node connections">
+        <IconButton
+          size="small"
+          aria-label="Recent node connections"
+          onClick={(event) => { setRecentNodes(loadRecentShellNodes()); setHistoryAnchor(event.currentTarget); }}
+        >
+          <HistoryIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <RecentConnectionsMenu anchorEl={historyAnchor} onClose={() => setHistoryAnchor(null)} recentOutsideTabs={recentOutsideTabs} onOpenShell={onOpenShell} />
+
+      {activeTab && (
+        <Tooltip title="Move to its own window">
+          <IconButton size="small" aria-label="Move session to its own window" onClick={() => onPopOut(activeTab)}>
+            <OpenInNewIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
+      {open && (
+        <Tooltip title={maximized ? "Restore panel size" : "Maximize panel"}>
+          <IconButton size="small" aria-label={maximized ? "Restore panel size" : "Maximize panel"} onClick={() => setMaximized((value) => !value)}>
+            {maximized ? <CloseFullscreenIcon sx={{ fontSize: 16 }} /> : <OpenInFullIcon sx={{ fontSize: 16 }} />}
+          </IconButton>
+        </Tooltip>
+      )}
+      <Tooltip title={open ? "Collapse panel" : "Expand panel"}>
+        <IconButton size="small" aria-label={open ? "Collapse panel" : "Expand panel"} onClick={onToggleOpen}>
+          {open ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+}
+
+function sessionTabContent(tab: SessionTab, sessionId: string, onClose: (key: string) => void) {
+  if (tab.kind === "shell") return <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+  if (tab.kind === "drawio") return <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+  return <NodeLogsPanel node={tab.node} sessionId={sessionId} />;
+}
+
+function SessionDockPanels({ tabs, sessionId, activeKey, open, onClose }: {
+  tabs: SessionTab[];
+  sessionId: string;
+  activeKey: string | null;
+  open: boolean;
+  onClose: (key: string) => void;
+}) {
+  return (
+    <Box sx={{ flex: open ? 1 : "0 0 0px", minHeight: 0, position: "relative", overflow: "hidden" }}>
+      {tabs.map((tab) => (
+        <Box key={tab.key} sx={{ display: tab.key === activeKey ? "block" : "none", position: "absolute", inset: 0 }}>
+          <Suspense fallback={null}>{sessionTabContent(tab, sessionId, onClose)}</Suspense>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 interface SessionDockProps {
   sessionId: string;
   tabs: SessionTab[];
@@ -129,89 +266,26 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
           <Box onPointerDown={startResize} sx={{ height: 5, flexShrink: 0, cursor: "ns-resize", "&:hover": { bgcolor: "action.hover" } }} />
         )}
 
-        <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, pr: 0.5, ...(open ? { borderBottom: 1, borderColor: "divider" } : {}) }}>
-          <Tabs
-            value={activeTab ? activeTab.key : false}
-            onChange={(_event, key: string) => onSelect(key)}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{ minHeight: 34, flex: 1, "& .MuiTab-root": { minHeight: 34, py: 0, px: 1.25, textTransform: "none" } }}
-          >
-            {tabs.map((tab) => (
-              <Tab
-                key={tab.key}
-                value={tab.key}
-                label={
-                  <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    {tabIcon(tab.kind)}
-                    <Typography component="span" variant="caption" sx={{ fontFamily: "monospace" }}>{tabLabel(tab)}</Typography>
-                    <IconButton
-                      component="span"
-                      size="small"
-                      aria-label={tabCloseLabel(tab)}
-                      onClick={(event) => { event.stopPropagation(); onClose(tab.key); }}
-                      sx={{ width: 20, height: 20 }}
-                    >
-                      <CloseIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </Box>
-                }
-              />
-            ))}
-          </Tabs>
-
-          <Tooltip title="Recent node connections">
-            <IconButton
-              size="small"
-              aria-label="Recent node connections"
-              onClick={(event) => { setRecentNodes(loadRecentShellNodes()); setHistoryAnchor(event.currentTarget); }}
-            >
-              <HistoryIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Menu anchorEl={historyAnchor} open={Boolean(historyAnchor)} onClose={() => setHistoryAnchor(null)}>
-            {recentOutsideTabs.length === 0 ? (
-              <MenuItem disabled>No closed connections</MenuItem>
-            ) : recentOutsideTabs.map((node) => (
-              <MenuItem key={node} onClick={() => { onOpenShell(node); setHistoryAnchor(null); }}>{node}</MenuItem>
-            ))}
-          </Menu>
-
-          {activeTab && (
-            <Tooltip title="Move to its own window">
-              <IconButton size="small" aria-label="Move session to its own window" onClick={() => onPopOut(activeTab)}>
-                <OpenInNewIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {open && (
-            <Tooltip title={maximized ? "Restore panel size" : "Maximize panel"}>
-              <IconButton size="small" aria-label={maximized ? "Restore panel size" : "Maximize panel"} onClick={() => setMaximized((value) => !value)}>
-                {maximized ? <CloseFullscreenIcon sx={{ fontSize: 16 }} /> : <OpenInFullIcon sx={{ fontSize: 16 }} />}
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title={open ? "Collapse panel" : "Expand panel"}>
-            <IconButton size="small" aria-label={open ? "Collapse panel" : "Expand panel"} onClick={onToggleOpen}>
-              {open ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <SessionDockHeader
+          tabs={tabs}
+          activeTab={activeTab}
+          open={open}
+          maximized={maximized}
+          onSelect={onSelect}
+          onClose={onClose}
+          onToggleOpen={onToggleOpen}
+          onOpenShell={onOpenShell}
+          onPopOut={onPopOut}
+          historyAnchor={historyAnchor}
+          setHistoryAnchor={setHistoryAnchor}
+          recentOutsideTabs={recentOutsideTabs}
+          setRecentNodes={setRecentNodes}
+          setMaximized={setMaximized}
+        />
 
         {/* Collapsing shrinks this to zero height instead of unmounting so
             shells and log streams keep their connections. */}
-        <Box sx={{ flex: open ? 1 : "0 0 0px", minHeight: 0, position: "relative", overflow: "hidden" }}>
-          {tabs.map((tab) => {
-            let content = <NodeLogsPanel node={tab.node} sessionId={sessionId} />;
-            if (tab.kind === "shell") content = <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
-            if (tab.kind === "drawio") content = <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />;
-            return (
-              <Box key={tab.key} sx={{ display: tab.key === activeKey ? "block" : "none", position: "absolute", inset: 0 }}>
-                <Suspense fallback={null}>{content}</Suspense>
-              </Box>
-            );
-          })}
-        </Box>
+        <SessionDockPanels tabs={tabs} sessionId={sessionId} activeKey={activeKey} open={open} onClose={onClose} />
       </Paper>
     </Box>
   );

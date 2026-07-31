@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from services.model import serialize
 
 
 @pytest.fixture
@@ -29,6 +30,7 @@ def test_tree_lists_sources_and_flags_generated(client, workspace):
     (workspace / "hosts.yml").write_text("{}\n")
     (workspace / "ansible.cfg").write_text("[defaults]\n")
     (workspace / "topo.netlab-ui.json").write_text("{}\n")
+    (workspace / "topo.yml.annotations.json").write_text("{}\n")
     (workspace / "group_vars").mkdir()
     (workspace / "configs").mkdir()
     (workspace / ".hidden").write_text("x")
@@ -42,7 +44,14 @@ def test_tree_lists_sources_and_flags_generated(client, workspace):
     assert entries["notes.md"]["generated"] is False
     assert entries["configs"]["kind"] == "dir"
     assert entries["configs"]["generated"] is False
-    for name in ("clab.yml", "hosts.yml", "ansible.cfg", "topo.netlab-ui.json", "group_vars"):
+    for name in (
+        "clab.yml",
+        "hosts.yml",
+        "ansible.cfg",
+        "topo.netlab-ui.json",
+        "topo.yml.annotations.json",
+        "group_vars",
+    ):
         assert entries[name]["generated"] is True, name
 
     # Directories sort before files
@@ -88,3 +97,41 @@ def test_clone_rejects_parent_directory_destination(client, workspace, monkeypat
 
     assert res.status_code == 400
     assert workspace.is_dir()
+
+
+def test_new_lab_scaffold_is_transformable(client, workspace):
+    """A scaffolded lab must survive `netlab create` as soon as the first node is
+    dropped on the canvas. Canvas drops may leave `device` unset, and netlab
+    aborts the whole transform when no default device exists — which silently
+    downgrades the canvas to the model-derived projection."""
+    resp = client.post("/api/lab/new", json={"name": "scaffold-check"})
+    assert resp.status_code == 200
+
+    text = Path(resp.json()["path"]).read_text()
+    topo = serialize.from_yaml(text)
+    assert topo.defaults.get("device"), f"scaffold has no default device:\n{text}"
+
+    # A device-less node (what a canvas drop produces) must inherit the default.
+    assert "device:" not in text.split("nodes:")[1]
+
+
+@pytest.mark.parametrize("name", ["../escape", "/etc/passwd", "..", "sub/lab", "a" * 200])
+def test_new_lab_keeps_the_file_inside_the_workspace(client, workspace, name):
+    """Whatever the name, the created file lands directly in the workspace."""
+    resp = client.post("/api/lab/new", json={"name": name})
+    if resp.status_code == 200:
+        assert Path(resp.json()["path"]).parent == workspace.resolve()
+    else:
+        assert resp.status_code == 400
+
+    assert not (workspace.parent / "escape.yml").exists()
+
+
+def test_session_rejects_a_topology_outside_every_workspace(client, workspace, tmp_path):
+    outside = tmp_path / "elsewhere" / "lab.yml"
+    outside.parent.mkdir()
+    outside.write_text("name: lab\n")
+
+    resp = client.post("/api/topology/sessions", json={"topologyPath": str(outside)})
+
+    assert resp.status_code == 403

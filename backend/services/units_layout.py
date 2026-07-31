@@ -23,7 +23,8 @@ def instance_layout(
 ) -> dict[str, tuple[float, float]]:
     """Positions for the nodes an instantiate call will create (see
     :func:`instance_annotations` for the full view-state)."""
-    return instance_annotations(units, template_name, count, prefix, origin)["positions"]
+    out = instance_annotations(units, template_name, count, prefix, origin)
+    return {n["id"]: (n["position"]["x"], n["position"]["y"]) for n in out["nodeAnnotations"] if n.get("position")}
 
 
 def instance_annotations(
@@ -38,19 +39,17 @@ def instance_annotations(
     (recentered on the drop point) so a dropped room looks like the room the
     user drew — layout, group boxes with their colors, and icon overrides.
 
-    Returns ``{"positions": {node: (x, y)}, "nodeAnnotations": [...],
-    "groupStyleAnnotations": [...], "icons": {...}}`` with every id prefixed
-    by its instance name.
+    Returns ``{"nodeAnnotations": [{id, position, icon, groupId}, ...],
+    "groupStyleAnnotations": [...]}`` (clab-ui's own per-node shape) with every
+    id prefixed by its instance name.
 
     Mirrors the instance naming of ``services.model.templates`` exactly:
     top-level instances ``<prefix>`` / ``<prefix>1..N``, child instances
     ``<inst>_<child>`` / ``<inst>_<child>1..M``, nodes ``<inst>_<node>``.
     """
     out: dict[str, Any] = {
-        "positions": {},
         "nodeAnnotations": [],
         "groupStyleAnnotations": [],
-        "icons": {},
     }
     ox, oy = float(origin.get("x", 0)), float(origin.get("y", 0))
     for i in range(1, count + 1):
@@ -106,21 +105,28 @@ def _place_instance(
     if unit is None or name in _stack:
         return
     own = _own_layout(unit)
-    for node_name, (dx, dy) in own.items():
-        out["positions"][f"{inst}_{node_name}"] = (ox + dx, oy + dy)
 
-    # Carry the unit's canvas formatting onto this instance: icons and group
-    # membership follow the prefixed node names; group boxes get a prefixed id
-    # and are translated by the same offset as the nodes they contain.
-    for node_name, icon in (unit.get("icons") or {}).items():
-        if node_name in own:
-            out["icons"][f"{inst}_{node_name}"] = icon
+    # Carry the unit's canvas formatting onto this instance: position, icon,
+    # and group membership follow the prefixed node names; group boxes get a
+    # prefixed id and are translated by the same offset as the nodes they
+    # contain.
+    icons = unit.get("icons") or {}
+    group_of = {
+        entry.get("id"): entry.get("groupId")
+        for entry in (unit.get("nodeAnnotations") or [])
+        if entry.get("id") in own and entry.get("groupId")
+    }
     used_groups: set[str] = set()
-    for entry in unit.get("nodeAnnotations") or []:
-        node_id, group_id = entry.get("id"), entry.get("groupId")
-        if node_id in own and group_id:
-            out["nodeAnnotations"].append({**entry, "id": f"{inst}_{node_id}", "groupId": f"{inst}_{group_id}"})
+    for node_name, (dx, dy) in own.items():
+        entry: dict[str, Any] = {"id": f"{inst}_{node_name}", "position": {"x": ox + dx, "y": oy + dy}}
+        if node_name in icons:
+            entry["icon"] = icons[node_name]
+        group_id = group_of.get(node_name)
+        if group_id:
+            entry["groupId"] = f"{inst}_{group_id}"
             used_groups.add(group_id)
+        out["nodeAnnotations"].append(entry)
+
     if used_groups:
         placed = [(float(n["x"]), float(n["y"])) for n in unit["nodes"] if "x" in n and "y" in n]
         min_x = min((x for x, _ in placed), default=0.0)

@@ -20,6 +20,8 @@ from typing import Any
 
 from services.lenses._helpers import as_dict as _dict
 from services.lenses._helpers import as_list as _list
+from services.lenses._helpers import edge_ids_by_linkindex, natural_key
+from services.model.edge_ids import edge_id
 
 DEFAULT_VRF = "default"
 _FAMILY_LABEL = {"ipv4": "IPv4", "ipv6": "IPv6"}
@@ -74,10 +76,24 @@ def _iface_cost(interface: dict[str, Any]) -> int:
     return 1
 
 
-def _edge_id(interface: dict[str, Any]) -> list[str]:
+def _edge_id(interface: dict[str, Any], by_linkindex: dict[int, list[str]], source: str, target: str) -> list[str]:
+    """The canvas edge this interface's adjacency runs over, if it maps to one.
+
+    Resolved through the link list where possible, so parallel links between the
+    same pair resolve to the specific one netlab indexed rather than always the
+    first (see services/model/edge_ids.py for the id scheme).
+
+    Not every transformed topology carries a top-level link list, and netlab does
+    not index every interface, so fall back to deriving the id from the adjacency
+    itself — the pair is all the scheme needs. Parallel links then all resolve to
+    the first edge of the pair, which is the best available guess and still binds
+    the overlay to a real edge instead of dropping it.
+    """
     link_index = interface.get("linkindex")
-    if isinstance(link_index, int) and link_index >= 1:
-        return [f"e{link_index - 1}"]
+    if isinstance(link_index, int) and link_index in by_linkindex:
+        return by_linkindex[link_index]
+    if source and target:
+        return [edge_id(source, target, {})]
     return []
 
 
@@ -86,7 +102,7 @@ def available_vrfs(transformed: dict[str, Any]) -> list[str]:
     for raw_node in _dict(transformed.get("nodes")).values():
         for raw_iface in _list(_dict(raw_node).get("interfaces")):
             vrfs.add(_iface_vrf(_dict(raw_iface)))
-    return sorted(vrfs)
+    return sorted(vrfs, key=natural_key)
 
 
 def build_reachability(transformed: dict[str, Any]) -> dict[str, Any]:
@@ -103,13 +119,16 @@ def build_reachability(transformed: dict[str, Any]) -> dict[str, Any]:
         "available": len(nodes) >= 2,
         "families": [family for family in ("ipv4", "ipv6") if family in families],
         "vrfs": available_vrfs(transformed),
-        "nodes": sorted(str(name) for name in nodes),
+        # Feeds the Paths source/destination pickers — natural order so r15 sits
+        # after r9, not between r14 and r2.
+        "nodes": sorted((str(name) for name in nodes), key=natural_key),
     }
 
 
 def _build_graph(transformed: dict[str, Any], family: str, vrf: str) -> dict[str, list[dict[str, Any]]]:
     graph: dict[str, list[dict[str, Any]]] = {}
     nodes = _dict(transformed.get("nodes"))
+    edge_ids_by_index = edge_ids_by_linkindex(transformed)
     for node_name, raw_node in nodes.items():
         node_name = str(node_name)
         graph.setdefault(node_name, [])
@@ -134,7 +153,7 @@ def _build_graph(transformed: dict[str, Any], family: str, vrf: str) -> dict[str
                         "subnet": _subnet(local_address),
                         "protocol": _iface_protocol(interface),
                         "cost": _iface_cost(interface),
-                        "edgeIds": _edge_id(interface),
+                        "edgeIds": _edge_id(interface, edge_ids_by_index, node_name, neighbor_node),
                     }
                 )
     return graph

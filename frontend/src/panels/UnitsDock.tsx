@@ -1,36 +1,16 @@
 import { useMemo, useEffect, useState, useCallback, useRef, type RefObject } from "react";
 import { getApiBase } from "../api/endpoint";
-import {
-  Box,
-  Typography,
-  IconButton,
-  Button,
-  CircularProgress,
-  Tooltip,
-  TextField,
-  InputAdornment,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Paper
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import WidgetsIcon from "@mui/icons-material/Widgets";
+import { Box, Typography, CircularProgress, Paper } from "@mui/material";
 
 import { useIsLocked, useNodes } from "@srl-labs/clab-ui";
 import { CreateUnitDialog } from "../components/dialogs/CreateUnitDialog";
 import { PlaceUnitDialog } from "../components/dialogs/PlaceUnitDialog";
-import { UnitPreview } from "../components/UnitPreview";
-import { blurTrigger } from "../utils/focus";
 import { usePanelInsets } from "./units-dock/usePanelInsets";
-import { UNIT_DRAG_MIME, useCanvasDropTarget } from "./units-dock/useCanvasDropTarget";
+import { useCanvasDropTarget } from "./units-dock/useCanvasDropTarget";
 import { UnitCard } from "./units-dock/UnitCard";
+import { CollapsedStrip } from "./units-dock/CollapsedStrip";
+import { DockHeader } from "./units-dock/DockHeader";
+import { DeleteUnitDialog } from "./units-dock/DeleteUnitDialog";
 import type { UnitInfo, UnitInstance } from "./units-dock/types";
 
 export type { UnitInfo, UnitNode, UnitLink, UnitInclude } from "./units-dock/types";
@@ -357,65 +337,7 @@ export function UnitsDock({ sessionId, refreshKey, onRefresh, onToast, onOpenUni
       }}
     >
       {!open ? (
-        // Collapsed: a slim strip that still shows every unit as a tiny
-        // draggable preview, so collapsing never hides the library.
-        <Paper
-          elevation={3}
-          sx={{
-            pointerEvents: "auto",
-            mb: 1,
-            pl: 1.25,
-            pr: 0.5,
-            py: 0.25,
-            display: "flex",
-            alignItems: "center",
-            gap: 0.75,
-            borderRadius: 4,
-            maxWidth: "70%",
-            overflow: "hidden"
-          }}
-        >
-          <WidgetsIcon sx={{ fontSize: 16, color: "text.secondary", flexShrink: 0 }} />
-          <Box sx={{ display: "flex", gap: 0.5, overflowX: "auto", alignItems: "center" }}>
-            {sortedUnits.map((unit) => (
-              <Tooltip key={unit.name} title={isLocked ? "Unlock the lab to place units" : `${unit.name} — drag onto the canvas`} arrow>
-                <Box
-                  draggable={!isLocked}
-                  onDragStart={(e) => {
-                    if (isLocked) {
-                      e.preventDefault();
-                      return;
-                    }
-                    e.dataTransfer.setData(UNIT_DRAG_MIME, unit.name);
-                    e.dataTransfer.effectAllowed = "copyMove";
-                  }}
-                  sx={{
-                    display: "flex",
-                    borderRadius: 0.75,
-                    cursor: isLocked ? "not-allowed" : "grab",
-                    opacity: isLocked ? 0.5 : 1,
-                    flexShrink: 0,
-                    bgcolor: "action.hover",
-                    "&:active": { cursor: "grabbing" },
-                    "&:hover": { outline: 1, outlineColor: "primary.main" }
-                  }}
-                >
-                  <UnitPreview unit={unit} unitsByName={unitsByName} width={40} height={22} />
-                </Box>
-              </Tooltip>
-            ))}
-            {units.length === 0 && (
-              <Typography variant="caption" color="text.secondary">
-                Units
-              </Typography>
-            )}
-          </Box>
-          <Tooltip title="Expand units dock" arrow>
-            <IconButton size="small" onClick={toggleOpen} aria-label="Expand units dock" sx={{ p: 0.25, flexShrink: 0 }}>
-              <ExpandLessIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-        </Paper>
+        <CollapsedStrip units={sortedUnits} unitsByName={unitsByName} isLocked={isLocked} onExpand={toggleOpen} />
       ) : (
         <Paper
           square
@@ -429,81 +351,16 @@ export function UnitsDock({ sessionId, refreshKey, onRefresh, onToast, onOpenUni
             flexDirection: "column"
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, px: 1.5, pt: 0.75 }}>
-            <WidgetsIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-            <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>
-              Units
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
-              {isLocked ? "unlock the lab to place units" : "drag onto the canvas to place"}
-            </Typography>
-            <Box sx={{ flex: 1 }} />
-            <TextField
-              size="small"
-              placeholder="Search units..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              variant="outlined"
-              sx={{
-                width: 200,
-                minWidth: 120,
-                flexShrink: 1,
-                "& .MuiOutlinedInput-root": {
-                  fontSize: "0.75rem",
-                  bgcolor: "action.hover",
-                  "& fieldset": { borderColor: "divider" },
-                  "& .MuiOutlinedInput-input": { py: 0.5 }
-                }
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-                  </InputAdornment>
-                ),
-                endAdornment: searchQuery ? (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setSearchQuery("")} edge="end" sx={{ color: "text.secondary", p: 0.25 }}>
-                      <ClearIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null
-              }}
-            />
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={(event) => {
-                blurTrigger(event.currentTarget);
-                setCreateDialogOpen(true);
-              }}
-              sx={{ textTransform: "none", py: 0.25, flexShrink: 0 }}
-            >
-              {selectedNodes.length > 0 ? `Package ${selectedNodes.length} selected` : "New Unit"}
-            </Button>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".json,application/json"
-              hidden
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void handleImportFile(file);
-                event.target.value = "";
-              }}
-            />
-            <Tooltip title="Import a unit (.netlab-unit.json)" arrow>
-              <IconButton size="small" onClick={() => importInputRef.current?.click()} aria-label="Import unit" sx={{ flexShrink: 0 }}>
-                <FileUploadOutlinedIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Collapse units dock" arrow>
-              <IconButton size="small" onClick={toggleOpen} aria-label="Collapse units dock">
-                <ExpandMoreIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          <DockHeader
+            isLocked={isLocked}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            selectedCount={selectedNodes.length}
+            onNewUnit={() => setCreateDialogOpen(true)}
+            importInputRef={importInputRef}
+            onImportFile={(file) => void handleImportFile(file)}
+            onCollapse={toggleOpen}
+          />
 
           <Box sx={{ display: "flex", gap: 1, px: 1.5, py: 1, overflowX: "auto", minHeight: 108, alignItems: "stretch" }}>
             {(() => {
@@ -567,23 +424,7 @@ export function UnitsDock({ sessionId, refreshKey, onRefresh, onToast, onOpenUni
         onToast={onToast}
       />
 
-      <Dialog open={Boolean(unitToDelete)} onClose={() => setUnitToDelete("")} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Delete Unit</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2">
-            Are you sure you want to delete the unit <strong>{unitToDelete}</strong>? Its file is
-            removed from the workspace. This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUnitToDelete("")} size="small">
-            Cancel
-          </Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained" size="small">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteUnitDialog unitName={unitToDelete} onCancel={() => setUnitToDelete("")} onConfirm={handleConfirmDelete} />
     </Box>
   );
 }

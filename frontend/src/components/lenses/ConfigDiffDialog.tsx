@@ -114,6 +114,100 @@ function ConfigDiffWorkspace({ result, onlyChanged, themeMode }: { result: Confi
   );
 }
 
+function ConfigDiffToolbar({ nodes, left, right, setLeft, setRight, onlyChanged, setOnlyChanged }: {
+  nodes: string[];
+  left: string;
+  right: string;
+  setLeft: (value: string) => void;
+  setRight: (value: string) => void;
+  onlyChanged: boolean;
+  setOnlyChanged: (updater: (value: boolean) => boolean) => void;
+}) {
+  return (
+    <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 1.5, bgcolor: "action.hover", borderBottom: 1, borderColor: "divider" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} spacing={1}>
+        <FormControl size="small" sx={{ minWidth: 180, flex: { sm: 1 }, maxWidth: { sm: 300 } }}>
+          <InputLabel>Original node</InputLabel>
+          <Select label="Original node" value={left} onChange={(event) => setLeft(event.target.value)}>
+            {nodes.map((node) => <MenuItem key={node} value={node}>{node}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <Tooltip title="Swap nodes">
+          <span>
+            <IconButton
+              size="small"
+              disabled={!left || !right}
+              onClick={() => { setLeft(right); setRight(left); }}
+              aria-label="Swap compared nodes"
+              sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper", transform: { xs: "rotate(90deg)", sm: "none" }, alignSelf: "center" }}
+            >
+              <SwapHorizIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <FormControl size="small" sx={{ minWidth: 180, flex: { sm: 1 }, maxWidth: { sm: 300 } }}>
+          <InputLabel>Modified node</InputLabel>
+          <Select label="Modified node" value={right} onChange={(event) => setRight(event.target.value)}>
+            {nodes.map((node) => <MenuItem key={node} value={node}>{node}</MenuItem>)}
+          </Select>
+        </FormControl>
+        <Box sx={{ flex: 1 }} />
+        <Button
+          size="small"
+          color={onlyChanged ? "warning" : "inherit"}
+          variant={onlyChanged ? "contained" : "outlined"}
+          onClick={() => setOnlyChanged((value) => !value)}
+          aria-pressed={onlyChanged}
+          sx={{ whiteSpace: "nowrap", boxShadow: "none" }}
+        >
+          Changed only
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
+function ConfigDiffResultBody({ loading, errorMsg, nodes, result, left, right, onlyChanged, themeMode }: {
+  loading: boolean;
+  errorMsg: string;
+  nodes: string[];
+  result: ConfigDiffResult | null;
+  left: string;
+  right: string;
+  onlyChanged: boolean;
+  themeMode: "light" | "dark";
+}) {
+  if (loading) return <Box sx={{ display: "grid", placeItems: "center", height: "100%" }}><CircularProgress /></Box>;
+  if (nodes.length === 0) return <Alert severity="info">This topology has no nodes to compare.</Alert>;
+  if (errorMsg) {
+    return (
+      <Alert severity="warning" sx={{ alignItems: "flex-start" }}>
+        The topology must transform before configs can be generated — check the <strong>Readiness</strong> lens for what&apos;s wrong.
+        <Box component="pre" sx={{ m: 0, mt: 1, fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-word", opacity: 0.8 }}>{errorMsg.split("\n").slice(0, 3).join("\n")}</Box>
+      </Alert>
+    );
+  }
+  if (!result) return null;
+  if (!result.available) {
+    return (
+      <Alert severity="info">
+        No generated config found. Run <code>netlab create</code> (or deploy) so per-node config files exist to compare.
+      </Alert>
+    );
+  }
+  return (
+    <Stack spacing={1.5} sx={{ flex: 1, minHeight: 0 }}>
+      <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+        <Chip size="small" color={result.summary.different ? "warning" : "default"} variant="outlined" label={`${result.summary.different} changed`} />
+        <Chip size="small" variant="outlined" label={`${result.summary.same} identical`} />
+        <Chip size="small" color={result.summary.onlyLeft ? "error" : "default"} variant="outlined" label={`${result.summary.onlyLeft} only in ${left}`} />
+        <Chip size="small" color={result.summary.onlyRight ? "success" : "default"} variant="outlined" label={`${result.summary.onlyRight} only in ${right}`} />
+      </Stack>
+      <ConfigDiffWorkspace result={result} onlyChanged={onlyChanged} themeMode={themeMode} />
+    </Stack>
+  );
+}
+
 export function ConfigDiffDialog({ open, sessionId, nodes: fallbackNodes, themeMode, onClose }: ConfigDiffDialogProps) {
   const [nodes, setNodes] = useState<string[]>(fallbackNodes);
   const [left, setLeft] = useState("");
@@ -188,74 +282,26 @@ export function ConfigDiffDialog({ open, sessionId, nodes: fallbackNodes, themeM
         </Stack>
       </DialogTitle>
       <Divider />
-      <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 1.5, bgcolor: "action.hover", borderBottom: 1, borderColor: "divider" }}>
-        <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} spacing={1}>
-          <FormControl size="small" sx={{ minWidth: 180, flex: { sm: 1 }, maxWidth: { sm: 300 } }}>
-            <InputLabel>Original node</InputLabel>
-            <Select label="Original node" value={left} onChange={(event) => setLeft(event.target.value)}>
-              {nodes.map((node) => <MenuItem key={node} value={node}>{node}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <Tooltip title="Swap nodes">
-            <span>
-              <IconButton
-                size="small"
-                disabled={!left || !right}
-                onClick={() => { setLeft(right); setRight(left); }}
-                aria-label="Swap compared nodes"
-                sx={{ border: 1, borderColor: "divider", bgcolor: "background.paper", transform: { xs: "rotate(90deg)", sm: "none" }, alignSelf: "center" }}
-              >
-                <SwapHorizIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <FormControl size="small" sx={{ minWidth: 180, flex: { sm: 1 }, maxWidth: { sm: 300 } }}>
-            <InputLabel>Modified node</InputLabel>
-            <Select label="Modified node" value={right} onChange={(event) => setRight(event.target.value)}>
-              {nodes.map((node) => <MenuItem key={node} value={node}>{node}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <Box sx={{ flex: 1 }} />
-          <Button
-            size="small"
-            color={onlyChanged ? "warning" : "inherit"}
-            variant={onlyChanged ? "contained" : "outlined"}
-            onClick={() => setOnlyChanged((value) => !value)}
-            aria-pressed={onlyChanged}
-            sx={{ whiteSpace: "nowrap", boxShadow: "none" }}
-          >
-            Changed only
-          </Button>
-        </Stack>
-      </Box>
+      <ConfigDiffToolbar
+        nodes={nodes}
+        left={left}
+        right={right}
+        setLeft={setLeft}
+        setRight={setRight}
+        onlyChanged={onlyChanged}
+        setOnlyChanged={setOnlyChanged}
+      />
       <DialogContent sx={{ p: { xs: 2, sm: 2.5 }, display: "flex", flexDirection: "column", minHeight: 0, bgcolor: "background.default" }}>
-        {loading && <Box sx={{ display: "grid", placeItems: "center", height: "100%" }}><CircularProgress /></Box>}
-        {!loading && nodes.length === 0 && (
-          <Alert severity="info">This topology has no nodes to compare.</Alert>
-        )}
-        {!loading && errorMsg && (
-          <Alert severity="warning" sx={{ alignItems: "flex-start" }}>
-            The topology must transform before configs can be generated — check the <strong>Readiness</strong> lens for what&apos;s wrong.
-            <Box component="pre" sx={{ m: 0, mt: 1, fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-word", opacity: 0.8 }}>{errorMsg.split("\n").slice(0, 3).join("\n")}</Box>
-          </Alert>
-        )}
-        {!loading && !errorMsg && result && (
-          result.available ? (
-            <Stack spacing={1.5} sx={{ flex: 1, minHeight: 0 }}>
-              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
-                <Chip size="small" color={result.summary.different ? "warning" : "default"} variant="outlined" label={`${result.summary.different} changed`} />
-                <Chip size="small" variant="outlined" label={`${result.summary.same} identical`} />
-                <Chip size="small" color={result.summary.onlyLeft ? "error" : "default"} variant="outlined" label={`${result.summary.onlyLeft} only in ${left}`} />
-                <Chip size="small" color={result.summary.onlyRight ? "success" : "default"} variant="outlined" label={`${result.summary.onlyRight} only in ${right}`} />
-              </Stack>
-              <ConfigDiffWorkspace result={result} onlyChanged={onlyChanged} themeMode={themeMode} />
-            </Stack>
-          ) : (
-            <Alert severity="info">
-              No generated config found. Run <code>netlab create</code> (or deploy) so per-node config files exist to compare.
-            </Alert>
-          )
-        )}
+        <ConfigDiffResultBody
+          loading={loading}
+          errorMsg={errorMsg}
+          nodes={nodes}
+          result={result}
+          left={left}
+          right={right}
+          onlyChanged={onlyChanged}
+          themeMode={themeMode}
+        />
       </DialogContent>
     </Dialog>
   );

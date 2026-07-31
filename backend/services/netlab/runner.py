@@ -92,6 +92,7 @@ async def _spawn(
     cwd: Path | None = None,
     *,
     pipe_stdin: bool = False,
+    env_extra: dict[str, str] | None = None,
 ) -> asyncio.subprocess.Process:
     _require()
     netlab_bin = location.netlab_command()
@@ -107,7 +108,7 @@ async def _spawn(
             netlab_bin,
             *args,
             cwd=str(cwd) if cwd else None,
-            env=_child_env(),
+            env=_child_env() | (env_extra or {}),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE if pipe_stdin else asyncio.subprocess.DEVNULL,
@@ -121,8 +122,14 @@ async def _spawn(
         ) from None
 
 
-async def _run(args: list[str], cwd: Path | None = None, *, input_text: str | None = None) -> CommandResult:
-    proc = await _spawn(args, cwd, pipe_stdin=input_text is not None)
+async def _run(
+    args: list[str],
+    cwd: Path | None = None,
+    *,
+    input_text: str | None = None,
+    env_extra: dict[str, str] | None = None,
+) -> CommandResult:
+    proc = await _spawn(args, cwd, pipe_stdin=input_text is not None, env_extra=env_extra)
     out, err = await proc.communicate(input_text.encode() if input_text is not None else None)
     return CommandResult(proc.returncode or 0, out.decode(), err.decode())
 
@@ -199,12 +206,12 @@ async def _run_checked(args: list[str], cwd: Path | None = None) -> str:
     return res.stdout
 
 
-_create_locks: dict[str, asyncio.Lock] = {}
+_create_locks: dict[tuple[str, bool], asyncio.Lock] = {}
 _CREATE_CACHE_LIMIT = 16
-_create_cache: dict[str, tuple[str, dict[str, Any]]] = {}
+_create_cache: dict[tuple[str, bool], tuple[str, dict[str, Any]]] = {}
 
 
-async def create(topology_path: str | Path) -> dict[str, Any]:
+async def create(topology_path: str | Path, *, isolated: bool = False) -> dict[str, Any]:
     """Transform a topology into the render-ready clab projection plus the full
     transformed snapshot — **without deploying anything**.
 
@@ -215,9 +222,26 @@ async def create(topology_path: str | Path) -> dict[str, Any]:
     ``netlab create`` refuses to run, so ``netlab inspect --format json`` is used
     instead. Returns ``{"snapshot": <transformed topology json>, "clab": <clab
     topology>, ...}``.
+
+    With ``isolated=True`` the command runs in a scratch directory instead, with
+    an absolute topology path. Two consequences, both wanted by the canvas:
+
+    * **Nothing is written to the lab directory.** Every artifact (``clab.yml``,
+      ``node_files/``) lands in the scratch dir and is discarded. Lab-relative
+      resources still resolve, because netlab searches ``topology:`` — the
+      topology *file's* directory — alongside the cwd for plugins and custom
+      templates (see ``netsim/defaults/paths.yml``).
+    * **It works on a deployed lab.** netlab's "cannot create configuration
+      files in a locked directory" check is against the cwd, so a scratch cwd
+      runs normally and yields a real transform of the *edited* YAML rather than
+      ``netlab inspect``'s view of what is currently running.
+
+    That last difference is why this is opt-in: callers wanting the deployed
+    reality (the config diff reads the ``node_files/`` that a plain ``create``
+    writes into the lab dir) must keep using the default.
     """
     path = Path(topology_path)
-    cwd = path.parent
+    lab_dir = path.parent
     # `-o config` must come before `-o provider`: netlab processes output
     # generators in argument order, and the clab provider validates bind sources
     # in node_files/. On a clean workspace those files do not exist until the
@@ -226,7 +250,11 @@ async def create(topology_path: str | Path) -> dict[str, Any]:
     # interleaves progress messages ("Created provider configuration file...")
     # with stdout output. (netlab >= 25.x syntax: `format=dest`; the old
     # `-o clab` / `-o json:-` forms are rejected by current netlab.)
-    lock = _create_locks.setdefault(str(path.resolve()), asyncio.Lock())
+    # The cache and lock are keyed by mode as well as path: on a deployed lab the
+    # two modes legitimately return different topologies (edited vs. running), so
+    # they must never hand each other's artifact back.
+    cache_key = (str(path.resolve()), isolated)
+    lock = _create_locks.setdefault(cache_key, asyncio.Lock())
     async with lock:
         # The canvas projection, Netlab Lenses and structured reports all use
         # the same transformed topology. Cache the complete artifact here so
@@ -236,44 +264,62 @@ async def create(topology_path: str | Path) -> dict[str, Any]:
             source_hash = hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError:
             source_hash = ""
-        cache_key = str(path.resolve())
         cached = _create_cache.get(cache_key)
         if source_hash and cached and cached[0] == source_hash:
             return cached[1]
 
-        if (cwd / "netlab.lock").exists():
+        if not isolated and (lab_dir / "netlab.lock").exists():
             # `netlab create` refuses to run while the lab is deployed
             # ("Cannot create configuration files in a locked directory") —
             # and it already ran as part of `netlab up`. Read the deployed
             # transform back from the lab snapshot instead; it describes the
             # topology that is actually running.
-            result = await _run(["inspect", "--format", "json"], cwd=cwd)
+            result = await _run(["inspect", "--format", "json"], cwd=lab_dir)
             if result.code != 0:
                 raise NetlabError(["netlab", "inspect"], result.code, result.stderr or result.stdout)
             snapshot = json.loads(result.stdout)
+            clab = _read_clab_projection(lab_dir, snapshot)
         else:
-            fd, json_path = tempfile.mkstemp(prefix="netlab_create_", suffix=".json")
-            os.close(fd)
-            try:
-                result = await _run(
-                    [
-                        "create",
-                        path.name,
-                        "-o",
-                        "config",
-                        "-o",
-                        "provider",
-                        "-o",
-                        f"json={json_path}",
-                    ],
-                    cwd=cwd,
-                )
-                if result.code != 0:
-                    raise NetlabError(["netlab", "create", path.name], result.code, result.stderr or result.stdout)
-                snapshot = json.loads(Path(json_path).read_text())
-            finally:
-                Path(json_path).unlink(missing_ok=True)
-        clab = _read_clab_projection(cwd, snapshot)
+            with contextlib.ExitStack() as stack:
+                if isolated:
+                    # Scratch cwd: keeps every generated artifact out of the lab
+                    # directory and sidesteps the locked-directory refusal.
+                    cwd = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="netlab_isolated_")))
+                    topology_arg = str(path.resolve())
+                    # Importing a lab-local plugin would otherwise drop a
+                    # __pycache__ into the lab directory — the one write that
+                    # would still escape the scratch dir.
+                    env_extra = {"PYTHONDONTWRITEBYTECODE": "1"}
+                else:
+                    cwd = lab_dir
+                    topology_arg = path.name
+                    env_extra = None
+                fd, json_path = tempfile.mkstemp(prefix="netlab_create_", suffix=".json")
+                os.close(fd)
+                try:
+                    result = await _run(
+                        [
+                            "create",
+                            topology_arg,
+                            "-o",
+                            "config",
+                            "-o",
+                            "provider",
+                            "-o",
+                            f"json={json_path}",
+                        ],
+                        cwd=cwd,
+                        env_extra=env_extra,
+                    )
+                    if result.code != 0:
+                        raise NetlabError(
+                            ["netlab", "create", topology_arg], result.code, result.stderr or result.stdout
+                        )
+                    snapshot = json.loads(Path(json_path).read_text())
+                finally:
+                    Path(json_path).unlink(missing_ok=True)
+                # Read the projection before the scratch dir is cleaned up.
+                clab = _read_clab_projection(cwd, snapshot)
         artifact = {
             "snapshot": snapshot,
             "clab": clab,

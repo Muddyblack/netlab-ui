@@ -339,77 +339,96 @@ function jsonValue(value: unknown): JsonValue {
   return String(value);
 }
 
+function foldUserMessage(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  if (!frame.text) return messages;
+  return [
+    ...messages,
+    {
+      id: frame.messageId ?? `user-${messages.length}`,
+      role: "user",
+      text: frame.text,
+      createdAt: frame.createdAt ? new Date(frame.createdAt * 1000) : new Date(),
+    },
+  ];
+}
+
+function foldTextDelta(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  return updateAssistantTurn(messages, frame.turnId, (parts) => {
+    const last = parts.at(-1);
+    if (last?.type === "text") {
+      return [...parts.slice(0, -1), { ...last, text: last.text + (frame.text ?? "") }];
+    }
+    return [...parts, { type: "text", text: frame.text ?? "" }];
+  });
+}
+
+function foldToolCall(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  return updateAssistantTurn(messages, frame.turnId, (parts) => [
+    ...parts,
+    {
+      type: "tool",
+      toolCallId: frame.toolUseId ?? `tool-${parts.length}`,
+      toolName: frame.tool ?? "tool",
+      args: frame.args,
+    },
+  ]);
+}
+
+function foldToolResult(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  return updateAssistantTurn(messages, frame.turnId, (parts) =>
+    parts.map((part) =>
+      part.type === "tool" && part.toolCallId === frame.toolUseId
+        ? {
+            ...part,
+            result: frame.preview ?? (frame.ok === false ? "Tool call failed." : "Completed."),
+            isError: frame.ok === false,
+          }
+        : part
+    )
+  );
+}
+
+function foldProposal(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  if (!frame.proposal) return messages;
+  return updateAssistantTurn(messages, frame.turnId, (parts) => [
+    ...parts,
+    { type: "proposal", proposal: frame.proposal! },
+  ]);
+}
+
+function foldProposalUpdate(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  if (!frame.proposalId || !frame.status) return messages;
+  return updateProposalStatus(messages, frame.proposalId, frame.status);
+}
+
+function foldError(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
+  return updateAssistantTurn(messages, frame.turnId, (parts) => [
+    ...parts,
+    { type: "error", message: frame.message ?? "Unknown assistant error." },
+  ]);
+}
+
 /** Fold one backend frame into a structured assistant-ui-compatible thread. */
 export function foldChatFrame(messages: ChatMessage[], frame: ChatFrame): ChatMessage[] {
   switch (frame.type) {
     case "user_message":
-      if (!frame.text) return messages;
-      return [
-        ...messages,
-        {
-          id: frame.messageId ?? `user-${messages.length}`,
-          role: "user",
-          text: frame.text,
-          createdAt: frame.createdAt ? new Date(frame.createdAt * 1000) : new Date(),
-        },
-      ];
-
+      return foldUserMessage(messages, frame);
     case "turn_started":
       return ensureAssistantTurn(messages, frame.turnId);
-
     case "text_delta":
-      return updateAssistantTurn(messages, frame.turnId, (parts) => {
-        const last = parts.at(-1);
-        if (last?.type === "text") {
-          return [...parts.slice(0, -1), { ...last, text: last.text + (frame.text ?? "") }];
-        }
-        return [...parts, { type: "text", text: frame.text ?? "" }];
-      });
-
+      return foldTextDelta(messages, frame);
     case "tool_call":
-      return updateAssistantTurn(messages, frame.turnId, (parts) => [
-        ...parts,
-        {
-          type: "tool",
-          toolCallId: frame.toolUseId ?? `tool-${parts.length}`,
-          toolName: frame.tool ?? "tool",
-          args: frame.args,
-        },
-      ]);
-
+      return foldToolCall(messages, frame);
     case "tool_result":
-      return updateAssistantTurn(messages, frame.turnId, (parts) =>
-        parts.map((part) =>
-          part.type === "tool" && part.toolCallId === frame.toolUseId
-            ? {
-                ...part,
-                result: frame.preview ?? (frame.ok === false ? "Tool call failed." : "Completed."),
-                isError: frame.ok === false,
-              }
-            : part
-        )
-      );
-
+      return foldToolResult(messages, frame);
     case "proposal":
-      if (!frame.proposal) return messages;
-      return updateAssistantTurn(messages, frame.turnId, (parts) => [
-        ...parts,
-        { type: "proposal", proposal: frame.proposal! },
-      ]);
-
+      return foldProposal(messages, frame);
     case "proposal_update":
-      if (!frame.proposalId || !frame.status) return messages;
-      return updateProposalStatus(messages, frame.proposalId, frame.status);
-
+      return foldProposalUpdate(messages, frame);
     case "error":
-      return updateAssistantTurn(messages, frame.turnId, (parts) => [
-        ...parts,
-        { type: "error", message: frame.message ?? "Unknown assistant error." },
-      ]);
-
+      return foldError(messages, frame);
     case "turn_done":
       return finishAssistantTurn(messages, frame.turnId, frame.stopReason);
-
     default:
       return messages;
   }

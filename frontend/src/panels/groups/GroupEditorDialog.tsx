@@ -24,6 +24,43 @@ import { ModuleAttributeForms } from "../../components/module-editor/ModuleAttri
 import type { GroupInfo, MemberOption } from "./types";
 import { MODULE_SECTIONS, STRUCTURED_MODULES, attrsToStrings, groupContains, isStructuredAttribute, parseAttributeValue } from "./helpers";
 
+const GROUP_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+
+function isInvalidGroupName(name: string): boolean {
+  return Boolean(name) && !GROUP_NAME_PATTERN.test(name);
+}
+
+function getNameHelperText(nameTaken: boolean, invalidName: boolean, editing: boolean): string {
+  if (nameTaken) return "A group with this name already exists.";
+  if (invalidName) return "Use letters, numbers, dots, dashes, or underscores.";
+  if (editing) return "Group names stay stable so nested references do not break.";
+  return "Use a short YAML-safe name, for example edge_routers.";
+}
+
+function useGroupDraft(open: boolean, original: GroupInfo | null, selectedNodes: string[]) {
+  const [draft, setDraft] = useState<GroupInfo>({ name: "", members: [], module: [], attrs: {} });
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(original
+      ? { ...original, members: [...original.members], module: [...original.module], attrs: { ...original.attrs } }
+      : { name: "", members: [...selectedNodes], module: [], attrs: {} });
+  }, [open, original, selectedNodes]);
+
+  return [draft, setDraft] as const;
+}
+
+function useMemberOptions(nodes: string[], groups: GroupInfo[], draftName: string) {
+  const options = useMemo<MemberOption[]>(() => [
+    ...nodes.map((name) => ({ name, kind: "Node" as const })),
+    ...groups
+      .filter((group) => group.name !== draftName && !groupContains(groups, group.name, draftName))
+      .map((group) => ({ name: group.name, kind: "Nested group" as const }))
+  ], [draftName, groups, nodes]);
+  const optionByName = useMemo(() => new Map(options.map((option) => [option.name, option])), [options]);
+  return { options, optionByName };
+}
+
 export function GroupEditorDialog({
   open,
   original,
@@ -45,34 +82,17 @@ export function GroupEditorDialog({
   onClose: () => void;
   onSave: (group: GroupInfo) => void;
 }) {
-  const [draft, setDraft] = useState<GroupInfo>({ name: "", members: [], module: [], attrs: {} });
   const editing = original !== null;
-
-  useEffect(() => {
-    if (!open) return;
-    setDraft(original
-      ? { ...original, members: [...original.members], module: [...original.module], attrs: { ...original.attrs } }
-      : { name: "", members: [...selectedNodes], module: [], attrs: {} });
-  }, [open, original, selectedNodes]);
-
-  const options = useMemo<MemberOption[]>(() => [
-    ...nodes.map((name) => ({ name, kind: "Node" as const })),
-    ...groups
-      .filter((group) => group.name !== draft.name && !groupContains(groups, group.name, draft.name))
-      .map((group) => ({ name: group.name, kind: "Nested group" as const }))
-  ], [draft.name, groups, nodes]);
-  const optionByName = useMemo(() => new Map(options.map((option) => [option.name, option])), [options]);
+  const [draft, setDraft] = useGroupDraft(open, original, selectedNodes);
+  const { options, optionByName } = useMemberOptions(nodes, groups, draft.name);
   const selectedOptions = draft.members.map((name) => optionByName.get(name) ?? { name, kind: "Node" as const });
   const attributeStrings = attrsToStrings(Object.fromEntries(Object.entries(draft.attrs).filter(([key]) => !isStructuredAttribute(key))));
   const nameTaken = !editing && groups.some((group) => group.name === draft.name.trim());
-  const invalidName = Boolean(draft.name.trim()) && !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(draft.name.trim());
+  const invalidName = isInvalidGroupName(draft.name.trim());
+  const canSave = !saving && Boolean(draft.name.trim()) && !nameTaken && !invalidName;
 
   const saveButtonLabel = editing ? "Save changes" : "Create group";
-
-  let nameHelperText = "Use a short YAML-safe name, for example edge_routers.";
-  if (nameTaken) nameHelperText = "A group with this name already exists.";
-  else if (invalidName) nameHelperText = "Use letters, numbers, dots, dashes, or underscores.";
-  else if (editing) nameHelperText = "Group names stay stable so nested references do not break.";
+  const nameHelperText = getNameHelperText(nameTaken, invalidName, editing);
 
   const toggleModule = (module: string) => {
     setDraft((current) => ({
@@ -187,7 +207,7 @@ export function GroupEditorDialog({
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5 }}>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="contained" disabled={saving || !draft.name.trim() || nameTaken || invalidName} onClick={() => onSave({ ...draft, name: draft.name.trim() })}>
+        <Button variant="contained" disabled={!canSave} onClick={() => onSave({ ...draft, name: draft.name.trim() })}>
           {saving ? <CircularProgress size={18} color="inherit" /> : saveButtonLabel}
         </Button>
       </DialogActions>
