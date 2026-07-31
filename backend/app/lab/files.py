@@ -430,10 +430,10 @@ async def clone_repo(body: CloneRepoAction):
         # Clone into the chosen workspace (validated) or the primary one — never
         # the process CWD, which would leave the repo outside any workspace.
         dest_root = common.resolve_workspace_path(body.targetWorkspace) if body.targetWorkspace else common.workspace()
-        dest_root = dest_root.resolve()
-        dest_path = (dest_root / repo_name).resolve(strict=False)
-        if not dest_path.is_relative_to(dest_root) or dest_path.parent != dest_root:
-            raise HTTPException(400, "Repository destination is outside the workspace.")
+        try:
+            dest_path = common.resolve_within(dest_root, repo_name)
+        except HTTPException:
+            raise HTTPException(400, "Repository destination is outside the workspace.") from None
         if dest_path.exists():
             if dest_path.is_dir():
                 shutil.rmtree(dest_path)

@@ -105,10 +105,14 @@ def units_dir_for(topology_path: str | Path) -> Path:
 def _unit_path(units_dir: Path, name: str) -> Path:
     if not _UNIT_NAME_RE.fullmatch(name) or name in {".", ".."}:
         raise ValueError(f"invalid unit name: {name!r}")
-    # Compare fully-normalized strings (not `is_relative_to`) so a traversal
-    # that only appears after symlink resolution can't escape `units_dir`.
-    root = os.path.normpath(os.path.realpath(units_dir))
+    # Normalize through `realpath` (so a symlinked unit file can't point out of
+    # the library) and containment-check the result. The normalize-then-
+    # `startswith` pair is kept literal and local on purpose — see the note in
+    # `app.lab.common`.
+    root = os.path.normpath(os.path.realpath(str(units_dir)))
     path = os.path.normpath(os.path.realpath(os.path.join(root, f"{name}.yml")))
+    if not path.startswith(root + os.sep):
+        raise ValueError(f"invalid unit path: {name!r}")
     if os.path.dirname(path) != root:
         raise ValueError(f"invalid unit path: {name!r}")
     return Path(path)
