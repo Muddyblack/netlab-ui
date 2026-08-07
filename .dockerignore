@@ -1,0 +1,19 @@
+# The image only needs backend sources and the frontend source tree. Without
+# this file the whole repo — including local node_modules, labs/ and .git —
+# is uploaded as build context and `COPY frontend/ ./` clobbers the
+# container's freshly installed node_modules with the host's.
+.git
+.github
+# A developer's local .npmrc holds a real token — keep it out of the build
+# context entirely; the Dockerfile writes its own from the BuildKit secret.
+**/.npmrc
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+.venv
+labs
+desktop
+docs
+**/.pytest_cache
+**/.ruff_cache

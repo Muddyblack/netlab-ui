@@ -1,0 +1,99 @@
+name: Publish Container Image
+
+# `desktop-v*` tags are handled by desktop-release.yml. Regular semver tags
+# produce the all-in-one web application image from the root Dockerfile.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # the release job creates the GitHub Release for the tag
+  packages: write
+
+concurrency:
+  group: container-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The registry config now lives in the Dockerfile so local and CI builds
+      # take the same path; all this job supplies is the token itself, as a
+      # BuildKit secret. GitHub Packages requires auth to read npm packages
+      # even when they are public, which is why clab-ui needs a token at all.
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          # arm64 matters for Apple Silicon and arm-based lab hosts. Only the
+          # Python stage is emulated — the frontend stage builds natively.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          secrets: |
+            github_token=${{ secrets.GH_PACKAGES_TOKEN }}
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The GitHub Release is the landing page people reach from the tag, so
+      # it leads with the pull command rather than only a source zip.
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            docker-compose.yml
+            Dockerfile
+          body: |
+            ## Run it
+
+            ```bash
+            docker run -d --name netlab-ui \
+              -p 8000:8000 \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/labs:/work" \
+              ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ```
+
+            Then open <http://localhost:8000>.
+
+            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest`.
+
+            `netlab` and Ansible are deliberately **not** in the image — point
+            Settings → Environment at a mounted `netlab` executable, or set
+            `NETLAB_BIN`. containerlab is included.

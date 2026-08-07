@@ -10,10 +10,23 @@
 #   DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=GITHUB_TOKEN -t netlab-ui .
 
 # ---- frontend build stage ----
-FROM node:24-slim AS frontend-build
+# Pinned to the *build* platform: the frontend output is arch-independent, so
+# building it under QEMU for the arm64 variant would cost minutes for nothing.
+FROM --platform=$BUILDPLATFORM node:24-slim AS frontend-build
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
-COPY frontend/.npmrc ./
+# Generated here rather than copied from the build context: the token normally
+# lives in the developer's ~/.npmrc, which Docker cannot see. Only the
+# *variable name* is written to the layer — the value arrives from the secret
+# mount at `npm ci` time and is never baked in.
+RUN printf '%s\n' \
+      '@srl-labs:registry=https://npm.pkg.github.com' \
+      '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' \
+      > .npmrc
+# patches/ must land before `npm ci`: the postinstall hook runs patch-package,
+# and with no patches directory it silently no-ops — shipping an unpatched
+# clab-ui (wrong palette tab order) instead of failing the build.
+COPY frontend/patches ./patches
 RUN --mount=type=secret,id=github_token \
     NODE_AUTH_TOKEN="$(cat /run/secrets/github_token)" npm ci
 COPY frontend/ ./
@@ -27,7 +40,16 @@ WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 COPY backend/services ./services
-RUN pip install --no-cache-dir .
+# `[assistant]` ships the AI assistant's SDKs, so the API-key providers
+# (OpenAI, Gemini, OpenAI-compatible) work in the container once the user
+# supplies a key. The feature still stays off until NETLAB_APP_ASSISTANT is
+# set — this means "available without rebuilding", not "on by default".
+#
+# The CLI-driven providers (Claude Code, Codex, Antigravity) are a different
+# story: they drive an already-logged-in CLI on the host, so they stay
+# unavailable here unless that CLI and its credentials are mounted in. The
+# provider probes report exactly that in Settings, so nothing breaks silently.
+RUN pip install --no-cache-dir ".[assistant]"
 
 # netlab and Ansible intentionally are not installed in this UI image. Point
 # Settings → Environment at an existing/mounted netlab executable, or set
@@ -36,7 +58,9 @@ RUN pip install --no-cache-dir .
 
 # containerlab — netlab's default provider — so `netlab up`, status and shell
 # actions work out of the box. libvirt-based providers are still not included.
-RUN bash -c "$(curl -sL https://get.containerlab.dev)"
+# Pinned so a rebuild of an old tag produces the same image; bump deliberately.
+ARG CONTAINERLAB_VERSION=v0.77.0
+RUN bash -c "$(curl -sL https://get.containerlab.dev)" -- -v "${CONTAINERLAB_VERSION}"
 
 COPY --from=frontend-build /app/dist ./frontend_dist
 ENV FRONTEND_DIST_DIR=/app/frontend_dist
@@ -47,3 +71,9 @@ ENV FRONTEND_DIST_DIR=/app/frontend_dist
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Populates the GHCR package page (README, repo link, license) instead of the
+# "no description" placeholder a pulled-from-nowhere image would show.
+LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" \
+      org.opencontainers.image.description="Web UI for netlab — topology editor, lab lifecycle and device consoles in one container." \
+      org.opencontainers.image.licenses="Apache-2.0"
