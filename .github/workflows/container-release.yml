@@ -94,6 +94,15 @@ jobs:
 
             Images: `linux/amd64`, `linux/arm64`. Also tagged `latest`.
 
-            `netlab` and Ansible are deliberately **not** in the image — point
-            Settings → Environment at a mounted `netlab` executable, or set
-            `NETLAB_BIN`. containerlab is included.
+            ### Scope
+
+            This image is the **UI only**. `netlab`, Ansible and containerlab
+            stay on your host — run it on a machine that already has netlab
+            set up, and point Settings → Environment at that install (or set
+            `NETLAB_BIN`).
+
+            Features that call containerlab directly — link impairment,
+            orphaned-instance cleanup, post-start link reconcile — need the
+            binary visible inside the container. It is a static Go binary, so
+            add `-v /usr/bin/containerlab:/usr/bin/containerlab:ro` to enable
+            them. Everything else works without it.

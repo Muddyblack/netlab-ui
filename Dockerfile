@@ -1,11 +1,19 @@
-# Single-container "web app" image: builds the frontend, then serves the
-# built static assets straight from the FastAPI backend on one port. This is
-# the containerized alternative to the two-process dev setup in
-# docker-compose.yml — one image, `docker run`, open a browser.
+# Single-container "web app" image: builds the frontend, then serves the built
+# static assets straight from the FastAPI backend on one port. This is the
+# containerized alternative to the two-process dev setup in docker-compose.yml
+# — one image, `docker run`, open a browser.
 #
-# @srl-labs/clab-ui is a private GitHub Packages dependency, so the frontend
-# build stage needs a token with `read:packages` passed as a BuildKit secret
-# (never baked into a layer as a build ARG):
+# Scope: this is the *UI*, not a netlab distribution. netlab, Ansible and
+# containerlab all stay on the host, where whoever runs this already has them.
+# The container talks to that host install through NETLAB_BIN / Settings →
+# Environment and the mounted Docker socket. Keeping the toolchain out means
+# no version skew against the netlab the user actually runs, and it is what
+# lets this ship as a netlab *tool* rather than a parallel install of one.
+#
+# @srl-labs/clab-ui (Apache-2.0) is published to GitHub Packages, whose npm
+# registry requires authentication for every read — even for public packages.
+# So the frontend build stage needs a token with `read:packages`, passed as a
+# BuildKit secret (never baked into a layer as a build ARG):
 #
 #   DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=GITHUB_TOKEN -t netlab-ui .
 
@@ -34,7 +42,12 @@ RUN npm run build
 
 # ---- backend runtime stage ----
 FROM python:3.11-slim
-RUN apt-get update && apt-get install -y git docker.io curl && rm -rf /var/lib/apt/lists/*
+# git — lab file history/diffs (app/lab/files.py) and the version string in
+# app/main.py. docker.io — the backend enumerates and cleans up lab containers
+# through the Docker CLI. curl is gone with the containerlab installer that
+# was its only user.
+RUN apt-get update && apt-get install -y --no-install-recommends git docker.io \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY backend/pyproject.toml ./
@@ -56,17 +69,28 @@ RUN pip install --no-cache-dir ".[assistant]"
 # NETLAB_BIN. The backend probes that executable's Python environment for
 # netsim metadata, so it does not need a second netlab installation of its own.
 
-# containerlab — netlab's default provider — so `netlab up`, status and shell
-# actions work out of the box. libvirt-based providers are still not included.
-# Pinned so a rebuild of an old tag produces the same image; bump deliberately.
-ARG CONTAINERLAB_VERSION=v0.77.0
-RUN bash -c "$(curl -sL https://get.containerlab.dev)" -- -v "${CONTAINERLAB_VERSION}"
+# containerlab is deliberately absent too. It is the host's job: this image is
+# aimed at a machine that already runs netlab, and netlab already brings its
+# own containerlab. Shipping a second copy only invites version skew between
+# the one netlab drives and the one the backend would call.
+#
+# A few backend features shell out to `containerlab` directly rather than
+# through netlab — link impairment (`tools netem set`), orphaned-instance
+# cleanup (`destroy --cleanup`) and post-start link reconcile (`apply`). They
+# need the binary on this container's PATH, so bind-mount the host's copy to
+# enable them:
+#
+#   -v /usr/bin/containerlab:/usr/bin/containerlab:ro
+#
+# It is a static Go binary, so that mount works with no further plumbing.
+# Without it those three features report containerlab as unavailable in
+# Settings → Environment; nothing else is affected.
 
 COPY --from=frontend-build /app/dist ./frontend_dist
 ENV FRONTEND_DIST_DIR=/app/frontend_dist
 
-# NOTE: containerlab drives the host's Docker daemon to create lab nodes, so
-# the container must be run with access to a Docker daemon — mount the socket
+# NOTE: the backend inspects lab containers through the Docker CLI, so the
+# container needs access to a Docker daemon — mount the socket
 # (`-v /var/run/docker.sock:/var/run/docker.sock`) or run with `--privileged`.
 
 EXPOSE 8000
