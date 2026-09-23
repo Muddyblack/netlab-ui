@@ -1,4 +1,4 @@
-"""Build the ``TopologySnapshot`` that ``@srl-labs/clab-ui`` renders.
+"""Build the ``TopologySnapshot`` that ``@containerlab/clab-ui`` renders.
 
 clab-ui's integrator contract (INTEGRATORS.md) expects a snapshot shaped roughly
 as::

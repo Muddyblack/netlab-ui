@@ -5,14 +5,14 @@ import {
   type TopoViewerNodeAction,
   type TopologyUiContext,
   type TopologyUiRequestOptions
-} from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/host";
 
 type WindowHostOptions = NonNullable<Parameters<typeof createWindowClabUiHost>[0]>;
 import {
   type TopologyHostCommand,
   type TopologyHostResponseMessage,
   type TopologySnapshot
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 import type { AppClabUiHost } from "./createHost";
 import { BrowserStorageFs, normalizePath } from "./demoFs";
 import {

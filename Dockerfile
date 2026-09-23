@@ -9,13 +9,6 @@
 # Environment and the mounted Docker socket. Keeping the toolchain out means
 # no version skew against the netlab the user actually runs, and it is what
 # lets this ship as a netlab *tool* rather than a parallel install of one.
-#
-# @srl-labs/clab-ui (Apache-2.0) is published to GitHub Packages, whose npm
-# registry requires authentication for every read — even for public packages.
-# So the frontend build stage needs a token with `read:packages`, passed as a
-# BuildKit secret (never baked into a layer as a build ARG):
-#
-#   DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=GITHUB_TOKEN -t netlab-ui .
 
 # ---- frontend build stage ----
 # Pinned to the *build* platform: the frontend output is arch-independent, so
@@ -23,20 +16,11 @@
 FROM --platform=$BUILDPLATFORM node:24-slim AS frontend-build
 WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
-# Generated here rather than copied from the build context: the token normally
-# lives in the developer's ~/.npmrc, which Docker cannot see. Only the
-# *variable name* is written to the layer — the value arrives from the secret
-# mount at `npm ci` time and is never baked in.
-RUN printf '%s\n' \
-      '@srl-labs:registry=https://npm.pkg.github.com' \
-      '//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}' \
-      > .npmrc
 # patches/ must land before `npm ci`: the postinstall hook runs patch-package,
 # and with no patches directory it silently no-ops — shipping an unpatched
 # clab-ui (wrong palette tab order) instead of failing the build.
 COPY frontend/patches ./patches
-RUN --mount=type=secret,id=github_token \
-    NODE_AUTH_TOKEN="$(cat /run/secrets/github_token)" npm ci
+RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 

@@ -1,19 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useIsLocked, useNodes, useTopoViewerActions } from "@srl-labs/clab-ui";
+import { useIsLocked, useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import {
   createClabUiRuntime,
   type ClabUiRuntime,
   type HostRuntimeContainer,
   type TopologyUiContext,
   type TopologyUiRequestOptions,
-} from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/host";
 import {
   applyRuntimeEdgeStatsToGraph,
   executeTopologyCommand,
   refreshTopologySnapshot,
   type TopologySessionClient,
   type TopologySnapshot,
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 import { createApiClabUiHost, type AppClabUiHost } from "../host/createHost";
 import { createDemoClabUiHost } from "../host/createDemoHost";
 import { type DeploymentProgress } from "../components/CanvasDeploymentProgress";

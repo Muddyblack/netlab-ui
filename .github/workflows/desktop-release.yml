@@ -48,7 +48,7 @@ jobs:
       - name: Check
         run: npm run check
 
-      # electron-builder doesn't need @srl-labs/clab-ui or any registry auth —
+      # electron-builder doesn't need @containerlab/clab-ui —
       # the desktop app has no frontend build step of its own, it only points
       # a sandboxed window at a backend URL at runtime.
       - name: Package

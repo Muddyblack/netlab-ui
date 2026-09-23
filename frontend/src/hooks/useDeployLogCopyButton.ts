@@ -3,7 +3,7 @@ import { useEffect } from "react";
 /**
  * Injects a "Copy" button into clab-ui's vendored LifecycleProgressModal (the
  * "Deploying lab / Live command output" dialog). That modal ships as built JS
- * in `@srl-labs/clab-ui` with no props or test-ids to hook into, so — following
+ * in `@containerlab/clab-ui` with no props or test-ids to hook into, so — following
  * the same DOM-patch approach as usePortalInjection's "Networks" section — we
  * find it by its "Live command output" caption and drop a button into the
  * dialog header that copies the whole log transcript to the clipboard.

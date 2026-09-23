@@ -469,7 +469,7 @@ def _set_lab_settings(path: str, cmd: dict[str, Any]) -> bool:
 
 _HANDLERS = {
     "batch": _batch,
-    "n": _set_lab_settings,  # current @srl-labs/clab-ui verb
+    "n": _set_lab_settings,  # current @containerlab/clab-ui verb
     "setLabSettings": _set_lab_settings,  # older bundle verb (alias)
     "move": _move,
     "position": _move,

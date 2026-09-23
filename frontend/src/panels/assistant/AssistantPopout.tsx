@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 // Same font as the main app — a popped-out window otherwise falls back to the
 // browser's default sans-serif and looks like a foreign page.
 import "@fontsource/roboto/300.css";

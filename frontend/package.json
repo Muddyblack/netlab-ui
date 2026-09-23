@@ -16,12 +16,12 @@
   },
   "dependencies": {
     "@assistant-ui/react": "^0.14.27",
+    "@containerlab/clab-ui": "0.3.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@fontsource/roboto": "^5.2.10",
     "@mui/icons-material": "^7.3.10",
     "@mui/material": "^7.3.10",
-    "@srl-labs/clab-ui": "0.3.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "@xyflow/react": "^12.10.2",
@@ -48,8 +48,9 @@
     "vite": "^8.1.5"
   },
   "overrides": {
-    "dompurify": "3.4.12",
-    "js-yaml": "4.3.0",
+    "dompurify": "3.4.15",
+    "js-yaml": "4.3.2",
+    "markdown-it": "14.3.2",
     "minimatch": "10.2.6"
   }
 }

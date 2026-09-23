@@ -23,7 +23,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 
-import { useNodes } from "@srl-labs/clab-ui";
+import { useNodes } from "@containerlab/clab-ui";
 import { getApiBase } from "../api/endpoint";
 import { blurTrigger } from "../utils/focus";
 import type { GroupInfo, GroupsPayload } from "./groups/types";

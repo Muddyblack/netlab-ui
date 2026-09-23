@@ -4,7 +4,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import BoltIcon from "@mui/icons-material/Bolt";
 
-import { DynamicList, PanelAddSection } from "@srl-labs/clab-ui";
+import { DynamicList, PanelAddSection } from "@containerlab/clab-ui";
 import { getApiBase } from "../api/endpoint";
 import { UnitPreview } from "../components/UnitPreview";
 import type { UnitInfo } from "./units-dock/types";

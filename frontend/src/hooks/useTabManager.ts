@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import type React from "react";
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
-import { refreshTopologySnapshot } from "@srl-labs/clab-ui/session";
-import type { ClabUiRuntime } from "@srl-labs/clab-ui/host";
-import type { TopologyRef as ClabTopologyRef } from "@srl-labs/clab-ui/session";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
+import { refreshTopologySnapshot } from "@containerlab/clab-ui/session";
+import type { ClabUiRuntime } from "@containerlab/clab-ui/host";
+import type { TopologyRef as ClabTopologyRef } from "@containerlab/clab-ui/session";
 import { getApiBase } from "../api/endpoint";
 import {
   resolveOpenLabTab,

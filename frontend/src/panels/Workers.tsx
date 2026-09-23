@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, CircularProgress, Divider, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import HubIcon from "@mui/icons-material/Hub";
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
 
 import { api, type MultiserverResult, type WorkerInfo } from "../api/client";
 import { blurTrigger } from "../utils/focus";

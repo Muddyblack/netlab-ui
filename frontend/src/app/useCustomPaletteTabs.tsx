@@ -1,5 +1,5 @@
 import { useMemo, type Dispatch, type SetStateAction } from "react";
-import type { CustomPaletteTab } from "@srl-labs/clab-ui/host";
+import type { CustomPaletteTab } from "@containerlab/clab-ui/host";
 import type { AssistantCapabilities } from "../api/client";
 import type { NetlabLensesState } from "../hooks/useNetlabLenses";
 import type { ValidationIssue } from "../hooks/useLabLifecycle";

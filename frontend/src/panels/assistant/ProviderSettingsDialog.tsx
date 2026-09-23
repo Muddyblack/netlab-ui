@@ -136,7 +136,15 @@ function useOrderedProviders(providers: AssistantProvider[]) {
 }
 
 function isKnownConfigurableProvider(providers: AssistantProvider[], id: string): boolean {
-  return Boolean(providers.find((p) => p.id === id)?.configurable || PROVIDER_KEY_CONFIG[id]);
+  const provider = providers.find((p) => p.id === id);
+  // Trust the backend's `configurable` flag whenever it knows this provider —
+  // PROVIDER_KEY_CONFIG also carries entries for CLI providers like Claude
+  // Code/Codex (just to supply their "Get access" link), so falling back to
+  // "is it in that map" here would wrongly treat a CLI provider as
+  // configurable. Only fall back to the map when the provider is absent from
+  // the catalog entirely (older backend / stale response).
+  if (provider) return Boolean(provider.configurable);
+  return Boolean(PROVIDER_KEY_CONFIG[id]);
 }
 
 function useProviderSettingsLoader(providers: AssistantProvider[], ordered: AssistantProvider[], active: boolean, initialProviderId?: string) {
@@ -230,8 +238,8 @@ function buildSaveValues(apiKey: string, isOpenAiCompat: boolean, baseUrl: strin
 }
 
 function computeIsConfigurable(provider: AssistantProvider | undefined, providerId: string): boolean {
-  const fallback = PROVIDER_KEY_CONFIG[providerId];
-  return Boolean(provider?.configurable || fallback);
+  if (provider) return Boolean(provider.configurable);
+  return Boolean(PROVIDER_KEY_CONFIG[providerId]);
 }
 
 function computeEnvLocks(settings: AssistantProviderSettings | null) {

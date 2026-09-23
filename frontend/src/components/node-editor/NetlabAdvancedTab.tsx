@@ -7,7 +7,7 @@ import {
   PanelAddSection,
   PanelSection,
   type NodeEditorTabProps
-} from "@srl-labs/clab-ui";
+} from "@containerlab/clab-ui";
 import type { NetlabNodeEditorData, NetlabOnChange } from "./types";
 
 const KNOWN_KEYS = new Set([

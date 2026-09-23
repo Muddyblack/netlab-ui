@@ -21,7 +21,7 @@ import {
   PanelAddSection,
   PanelSection,
   type NodeEditorTabProps
-} from "@srl-labs/clab-ui";
+} from "@containerlab/clab-ui";
 import { api, type ConfigPreviewResult } from "../../api/client";
 import { useNodeEditorSession } from "./NodeEditorSessionContext";
 import type { NetlabNodeEditorData, NetlabOnChange } from "./types";

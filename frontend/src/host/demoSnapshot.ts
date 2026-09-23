@@ -1,5 +1,5 @@
-import type { ClabUiTopoViewerEvent, TopoViewerLifecycleAction } from "@srl-labs/clab-ui/host";
-import type { TopologySnapshot } from "@srl-labs/clab-ui/session";
+import type { ClabUiTopoViewerEvent, TopoViewerLifecycleAction } from "@containerlab/clab-ui/host";
+import type { TopologySnapshot } from "@containerlab/clab-ui/session";
 import YAML from "yaml";
 import { basename } from "./demoFs";
 

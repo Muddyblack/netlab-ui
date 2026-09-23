@@ -1,6 +1,6 @@
 """Reshape raw netlab CLI output so it's readable in the lifecycle progress modal.
 
-The frontend modal (from the ``@srl-labs/clab-ui`` package) renders each streamed
+The frontend modal (from the ``@containerlab/clab-ui`` package) renders each streamed
 line as flat monospace text. It does **not** interpret ANSI escapes and there is
 no useful color, so this module does not bother with coloring. What makes raw
 netlab output unreadable in a plain-text box is the *shape* of the text:

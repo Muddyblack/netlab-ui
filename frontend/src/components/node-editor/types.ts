@@ -1,4 +1,4 @@
-import type { NodeEditorData } from "@srl-labs/clab-ui";
+import type { NodeEditorData } from "@containerlab/clab-ui";
 
 /**
  * clab-ui's NodeEditorData models containerlab node fields only. netlab nodes

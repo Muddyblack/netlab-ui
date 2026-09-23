@@ -68,7 +68,7 @@ netlab_gui/
       App.tsx        Root — wiring point (~550 lines; logic lives in hooks/)
 ```
 
-`@srl-labs/clab-ui` itself is an npm dependency (published on GitHub Packages, pinned in `frontend/package.json`), not source in this repo. It provides the ReactFlow canvas, graph/canvas stores, `topologyHostSync`, `createApiClabUiHost`/`createExplorerController`, and the explorer tree/action registry — consumed via imports from `@srl-labs/clab-ui` (and its declared sub-entries like `@srl-labs/clab-ui/host`).
+`@containerlab/clab-ui` itself is an npm dependency (published on the public npm registry, pinned in `frontend/package.json`), not source in this repo. It provides the ReactFlow canvas, graph/canvas stores, `topologyHostSync`, `createApiClabUiHost`/`createExplorerController`, and the explorer tree/action registry — consumed via imports from `@containerlab/clab-ui` (and its declared sub-entries like `@containerlab/clab-ui/host`).
 
 ---
 
@@ -76,7 +76,7 @@ netlab_gui/
 
 ### The two-layer model
 
-**clab-ui** is a generic topology canvas library originally built for the Containerlab VS Code extension, consumed here as a published npm package (`@srl-labs/clab-ui`). The netlab-gui treats it as an opaque dependency and extends it only through its public prop surface — never by patching its source, since there is none checked into this repo.
+**clab-ui** is a generic topology canvas library originally built for the Containerlab VS Code extension, consumed here as a published npm package (`@containerlab/clab-ui`). The netlab-gui treats it as an opaque dependency and extends it only through its public prop surface — never by patching its source, since there is none checked into this repo.
 
 **The backend** implements the `ClabUiHost` contract (`/api/topology/sessions`, `/api/topology/snapshot`, `/api/topology/command`) that clab-ui expects. It translates between netlab topology files and the graph JSON format clab-ui renders.
 
@@ -84,7 +84,7 @@ netlab_gui/
 
 1. `App.tsx` → `host.createSession(yamlPath)` → `POST /api/topology/sessions`
 2. Backend runs `netlab create -o clab` (cached by YAML hash), merges saved positions from `*.netlab-ui.json`, returns a `TopologySnapshot`.
-3. `refreshTopologySnapshot()` → `applySnapshotToStores()` (from `@srl-labs/clab-ui`) → pushes nodes+edges into its graph store (Zustand). If no saved positions: runs a force layout then persists positions via `savePositions` command.
+3. `refreshTopologySnapshot()` → `applySnapshotToStores()` (from `@containerlab/clab-ui`) → pushes nodes+edges into its graph store (Zustand). If no saved positions: runs a force layout then persists positions via `savePositions` command.
 4. clab-ui's `ReactFlowCanvas` renders the canvas from the graph store.
 
 ### Node positions (sidecar pattern)
@@ -93,11 +93,11 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 
 ### Explorer tree
 
-`createExplorerController` (from `@srl-labs/clab-ui`) builds a snapshot-based tree. `App.tsx` passes a `buildProviders` function that returns `runningProvider` (from SSE status) and `fileProvider` (from `GET /api/lab/files`). Each snapshot rebuilds `actionBindings` — a map from opaque `actionRef` strings to `{ commandId, args }`. The tree is rendered in clab-ui's webview; clicking invokes `executeAction` in `App.tsx`.
+`createExplorerController` (from `@containerlab/clab-ui`) builds a snapshot-based tree. `App.tsx` passes a `buildProviders` function that returns `runningProvider` (from SSE status) and `fileProvider` (from `GET /api/lab/files`). Each snapshot rebuilds `actionBindings` — a map from opaque `actionRef` strings to `{ commandId, args }`. The tree is rendered in clab-ui's webview; clicking invokes `executeAction` in `App.tsx`.
 
 ### Monaco editor (two-instance trap)
 
-`@srl-labs/clab-ui/monaco/core` exports are **pre-built dist** and register Monaco contributions on load. If anything in `frontend/src/` also imports from `@srl-labs/clab-ui/monaco/core`, Monaco contributions register twice → crash. Always import `monaco-editor` directly from `frontend/src/` code.
+`@containerlab/clab-ui/monaco/core` exports are **pre-built dist** and register Monaco contributions on load. If anything in `frontend/src/` also imports from `@containerlab/clab-ui/monaco/core`, Monaco contributions register twice → crash. Always import `monaco-editor` directly from `frontend/src/` code.
 
 ### Known gotchas (fixed, but watch for regressions)
 
@@ -112,11 +112,11 @@ Never put netlab text, branding, or logic into clab-ui — it's a third-party de
 
 ### Installing / upgrading clab-ui
 
-`@srl-labs/clab-ui` is published on GitHub Packages, pinned in `frontend/package.json`. `frontend/.npmrc` + a `NODE_AUTH_TOKEN` with `read:packages` are required to install. To upgrade, bump the version and run `npm install` — there's no build step on our side.
+`@containerlab/clab-ui` is published on the public npm registry (source: the [srl-labs/containerlab-app](https://github.com/srl-labs/containerlab-app) monorepo), pinned in `frontend/package.json`. No auth is needed to install. To upgrade, bump the version, port `frontend/patches/@containerlab+clab-ui+<version>.patch`, and run `npm install` — there's no build step on our side.
 
 ### Public API only
 
-Import from `@srl-labs/clab-ui` (the package root or its declared sub-entries like `@srl-labs/clab-ui/host`). Never use `@srl-labs/clab-ui/src/...` or `@srl-labs/clab-ui/dist/...` deep paths.
+Import from `@containerlab/clab-ui` (the package root or its declared sub-entries like `@containerlab/clab-ui/host`). Never use `@containerlab/clab-ui/src/...` or `@containerlab/clab-ui/dist/...` deep paths.
 
 ### API types are generated
 
@@ -128,10 +128,10 @@ Every FastAPI route must declare `response_model=`. This is what feeds `openapi.
 
 ### Grep before implementing
 
-Before writing a new hook, util, or component, check whether `@srl-labs/clab-ui` already ships it (toasts, panels, dialogs, stores, and many utilities). Duplicating them creates divergence.
+Before writing a new hook, util, or component, check whether `@containerlab/clab-ui` already ships it (toasts, panels, dialogs, stores, and many utilities). Duplicating them creates divergence.
 
 ```bash
-grep -r "YourConcept" frontend/node_modules/@srl-labs/clab-ui --include="*.d.ts" -l
+grep -r "YourConcept" frontend/node_modules/@containerlab/clab-ui --include="*.d.ts" -l
 ```
 
 ---

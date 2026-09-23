@@ -1,5 +1,5 @@
 import { Box, Typography } from "@mui/material";
-import { InputField, SelectField } from "@srl-labs/clab-ui";
+import { InputField, SelectField } from "@containerlab/clab-ui";
 
 const BOOLEAN_OPTIONS = [
   { value: "", label: "Inherited / Default" },

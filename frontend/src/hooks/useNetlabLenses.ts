@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useTopoViewerActions, useTopoViewerStore } from "@srl-labs/clab-ui";
+import { useTopoViewerActions, useTopoViewerStore } from "@containerlab/clab-ui";
 
 import {
   api,

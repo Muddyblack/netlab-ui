@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import type React from "react";
-import { createExplorerController } from "@srl-labs/clab-ui/host";
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import { createExplorerController } from "@containerlab/clab-ui/host";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 import { buildFileProvider } from "../host/fileProvider";
 import { buildRunningProvider, buildHelpProvider } from "../host/runningProvider";
 import { readPersistedExplorerUiState, persistExplorerUiState, closeExplorerTransientUi } from "../lifecycle/persistence";

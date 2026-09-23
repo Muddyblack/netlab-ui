@@ -1,6 +1,6 @@
 import { useCallback } from "react";
-import { useTopoViewerActions } from "@srl-labs/clab-ui";
-import type { ClabUiTopoViewerEvent } from "@srl-labs/clab-ui/host";
+import { useTopoViewerActions } from "@containerlab/clab-ui";
+import type { ClabUiTopoViewerEvent } from "@containerlab/clab-ui/host";
 import { getApiBase } from "../api/endpoint";
 import type { DeploymentProgress } from "../components/CanvasDeploymentProgress";
 
