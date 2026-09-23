@@ -227,7 +227,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({
         {
             name: "clab-ui",
             description: "Shared UI runtime code",
-            url: "https://github.com/srl-labs/clab-ui",
+            url: "https://github.com/srl-labs/containerlab-app",
             icon: <GitHubIcon fontSize="small" />
         }
     ];

@@ -33,7 +33,13 @@ function tabLabel(element: Element | null): string {
 }
 
 function isPanelTab(element: Element | null): boolean {
-  return PANEL_TAB_LABELS.has(tabLabel(element).toLowerCase());
+  if (!PANEL_TAB_LABELS.has(tabLabel(element).toLowerCase())) return false;
+  // clab-ui's palette lives in the main canvas chrome, never inside a modal.
+  // Settings (and any other dialog) can have its own unrelated tab strip
+  // that happens to share a label (e.g. "Assistant") — without this guard
+  // the MutationObserver below mistakes it for the palette tab and force-
+  // reselects it, fighting the user's clicks inside that dialog.
+  return element?.closest('[role="dialog"]') == null;
 }
 
 function panelTabs(): HTMLElement[] {

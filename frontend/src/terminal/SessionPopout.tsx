@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Box } from "@mui/material";
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import type { SessionKind } from "../hooks/useSessionDock";
 // Same font as the main app (App.tsx) — a popped-out window otherwise falls
 // back to the browser's default sans-serif and looks like a foreign page.

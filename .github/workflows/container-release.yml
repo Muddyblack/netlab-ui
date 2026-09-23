@@ -25,10 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The registry config now lives in the Dockerfile so local and CI builds
-      # take the same path; all this job supplies is the token itself, as a
-      # BuildKit secret. GitHub Packages requires auth to read npm packages
-      # even when they are public, which is why clab-ui needs a token at all.
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -60,8 +56,6 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          secrets: |
-            github_token=${{ secrets.GH_PACKAGES_TOKEN }}
 
   release:
     needs: publish

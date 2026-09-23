@@ -1,4 +1,4 @@
-import type { FileSystemAdapter } from "@srl-labs/clab-ui/session";
+import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 const DEMO_FS_PREFIX = "netlab:demo-fs:";
 

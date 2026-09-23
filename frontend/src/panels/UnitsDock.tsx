@@ -2,7 +2,7 @@ import { useMemo, useEffect, useState, useCallback, useRef, type RefObject } fro
 import { getApiBase } from "../api/endpoint";
 import { Box, Typography, CircularProgress, Paper } from "@mui/material";
 
-import { useIsLocked, useNodes } from "@srl-labs/clab-ui";
+import { useIsLocked, useNodes } from "@containerlab/clab-ui";
 import { CreateUnitDialog } from "../components/dialogs/CreateUnitDialog";
 import { PlaceUnitDialog } from "../components/dialogs/PlaceUnitDialog";
 import { usePanelInsets } from "./units-dock/usePanelInsets";

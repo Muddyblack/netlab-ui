@@ -1,10 +1,10 @@
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { Box } from "@mui/material";
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
-import "@srl-labs/clab-ui/styles/global.css";
+import "@containerlab/clab-ui/styles/global.css";
 import "highlight.js/styles/github-dark.css";
 
 import { StartupGate } from "./components/StartupGate";

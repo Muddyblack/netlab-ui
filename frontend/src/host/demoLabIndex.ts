@@ -1,4 +1,4 @@
-import type { FileSystemAdapter, TopologyRef } from "@srl-labs/clab-ui/session";
+import type { FileSystemAdapter, TopologyRef } from "@containerlab/clab-ui/session";
 import type { LabFileEntry } from "../api/client";
 import { basename, normalizePath } from "./demoFs";
 

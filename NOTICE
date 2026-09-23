@@ -3,11 +3,11 @@ Copyright 2024-2026 Muddyblack and contributors
 
 This product includes software developed by third parties:
 
-- @srl-labs/clab-ui (https://github.com/srl-labs/clab-ui)
+- @containerlab/clab-ui (https://github.com/srl-labs/containerlab-app)
   Copyright SRL Labs / Nokia
   Licensed under the Apache License, Version 2.0.
   Consumed as an npm dependency; the frontend build bundles its compiled
-  output. See frontend/node_modules/@srl-labs/clab-ui/LICENSE for the
+  output. See frontend/node_modules/@containerlab/clab-ui/LICENSE for the
   full license text of the version in use.
 
 - netlab (https://github.com/ipspace/netlab)

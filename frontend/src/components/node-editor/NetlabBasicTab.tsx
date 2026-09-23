@@ -25,7 +25,7 @@ import {
   type NodeType,
   generateEncodedSVG,
   DEFAULT_ICON_COLOR
-} from "@srl-labs/clab-ui";
+} from "@containerlab/clab-ui";
 import { blurTrigger } from "../../utils/focus";
 import type { NetlabNodeEditorData, NetlabOnChange } from "./types";
 

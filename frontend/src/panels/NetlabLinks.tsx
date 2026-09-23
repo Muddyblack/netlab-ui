@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Box, CircularProgress, Stack, Typography } from "@mui/material";
-import { useNodes } from "@srl-labs/clab-ui";
+import { useNodes } from "@containerlab/clab-ui";
 import { api } from "../api/client";
 import type { LinkKind } from "./netlab-links/types";
 import { LINK_KIND_LABEL } from "./netlab-links/types";

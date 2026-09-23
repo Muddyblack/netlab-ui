@@ -1,5 +1,5 @@
-import { createApiClabUiHost as officialCreateApiClabUiHost } from "@srl-labs/clab-ui/host";
-import type { ClabUiHost, ClabUiTopoViewerHost, ClabUiTopoViewerEvent, HostRuntimeContainer, TopoViewerLifecycleAction, TopoViewerNodeAction, TopoViewerSvgExportPayload } from "@srl-labs/clab-ui/host";
+import { createApiClabUiHost as officialCreateApiClabUiHost } from "@containerlab/clab-ui/host";
+import type { ClabUiHost, ClabUiTopoViewerHost, ClabUiTopoViewerEvent, HostRuntimeContainer, TopoViewerLifecycleAction, TopoViewerNodeAction, TopoViewerSvgExportPayload } from "@containerlab/clab-ui/host";
 import type { DeploymentProgress } from "../components/CanvasDeploymentProgress";
 import type { LifecycleCompletion } from "../hooks/useLabLifecycle";
 import { api, type LabFileEntry } from "../api/client";

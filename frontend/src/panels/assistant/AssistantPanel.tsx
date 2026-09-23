@@ -11,7 +11,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
 
 import { type AssistantCapabilities } from "../../api/client";
 import { AssistantThread } from "./AssistantThread";

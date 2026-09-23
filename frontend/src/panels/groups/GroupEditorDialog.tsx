@@ -19,7 +19,7 @@ import {
 } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 
-import { KeyValueList, PanelSection } from "@srl-labs/clab-ui";
+import { KeyValueList, PanelSection } from "@containerlab/clab-ui";
 import { ModuleAttributeForms } from "../../components/module-editor/ModuleAttributeForms";
 import type { GroupInfo, MemberOption } from "./types";
 import { MODULE_SECTIONS, STRUCTURED_MODULES, attrsToStrings, groupContains, isStructuredAttribute, parseAttributeValue } from "./helpers";

@@ -6,7 +6,7 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import { Box, Chip, Dialog, DialogContent, InputAdornment, List, ListItemButton, ListItemIcon, ListItemText, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import { useNodes, useTopoViewerActions } from "@srl-labs/clab-ui";
+import { useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import { getApiBase } from "../api/endpoint";
 import type { LabFileEntry } from "../api/client";
 import type { UnitInfo } from "../panels/UnitsDock";

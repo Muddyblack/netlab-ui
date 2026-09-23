@@ -1,4 +1,4 @@
-import { applyThemeVars } from "@srl-labs/clab-ui/theme";
+import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 export type AppThemeMode = "light" | "dark";
 

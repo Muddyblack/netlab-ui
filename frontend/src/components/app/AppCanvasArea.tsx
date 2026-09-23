@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { App as ClabUiApp } from "@srl-labs/clab-ui";
-import type { createClabUiRuntime, ClabUiRuntime } from "@srl-labs/clab-ui/host";
+import { App as ClabUiApp } from "@containerlab/clab-ui";
+import type { createClabUiRuntime, ClabUiRuntime } from "@containerlab/clab-ui/host";
 import { NodeEditorSessionProvider } from "../node-editor/NodeEditorSessionContext";
 import { TransformIndicator } from "../TransformIndicator";
 import { AttractorEmptyState } from "../AttractorEmptyState";

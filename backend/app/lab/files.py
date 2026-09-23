@@ -245,7 +245,7 @@ def make_folder(body: NewFolderRequest):
     name = body.name.strip().strip("/\\")
     if not name or "/" in name or "\\" in name or name in (".", ".."):
         raise HTTPException(400, "invalid folder name")
-    target = parent / name
+    target = common.resolve_within(parent, name)
     if target.exists():
         raise HTTPException(409, f"{name} already exists")
     target.mkdir(parents=True)

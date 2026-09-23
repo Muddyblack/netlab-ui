@@ -1,5 +1,5 @@
 import { Box, Chip, Typography } from "@mui/material";
-import { PanelSection, type NodeEditorTabProps } from "@srl-labs/clab-ui";
+import { PanelSection, type NodeEditorTabProps } from "@containerlab/clab-ui";
 import { ModuleAttributeForms } from "../module-editor/ModuleAttributeForms";
 import type { NetlabNodeEditorData, NetlabOnChange } from "./types";
 

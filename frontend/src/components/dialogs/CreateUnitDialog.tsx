@@ -18,7 +18,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import AutoAwesomeMotionIcon from "@mui/icons-material/AutoAwesomeMotion";
 
-import { useNodes, useEdges } from "@srl-labs/clab-ui";
+import { useNodes, useEdges } from "@containerlab/clab-ui";
 import type { Edge } from "@xyflow/react";
 import type { UnitInfo } from "../../panels/UnitsDock";
 import { VIEW_STATE_KEYS } from "./create-group-template/helpers";

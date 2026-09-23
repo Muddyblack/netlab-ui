@@ -1,4 +1,4 @@
-import type { ClabUiImageHost } from "@srl-labs/clab-ui/host";
+import type { ClabUiImageHost } from "@containerlab/clab-ui/host";
 
 export function createImagesHost(safeFetch: typeof fetch, base: string): ClabUiImageHost {
   return {

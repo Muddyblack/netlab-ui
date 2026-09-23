@@ -237,7 +237,7 @@ export const NetlabAboutModal: React.FC<{ isOpen: boolean; onClose: () => void; 
                 <RepoCard
                     name="SRL Labs / Nokia"
                     description="Open-source TopoViewer and clab-ui foundation"
-                    url="https://github.com/srl-labs/clab-ui"
+                    url="https://github.com/srl-labs/containerlab-app"
                     icon={<Avatar src="https://github.com/srl-labs.png" sx={{ width: 20, height: 20 }} />}
                 />
                 <Box sx={{ px: 0.5, pt: 0.5 }}>
@@ -263,7 +263,7 @@ export const NetlabAboutModal: React.FC<{ isOpen: boolean; onClose: () => void; 
             {
                 name: "clab-ui",
                 description: "Shared topology UI runtime",
-                url: "https://github.com/srl-labs/clab-ui",
+                url: "https://github.com/srl-labs/containerlab-app",
                 icon: <GitHubIcon fontSize="small" />
             }
         ]}
@@ -316,7 +316,7 @@ export const NetlabAboutContent: React.FC = () => (
             <RepoCard
                 name="SRL Labs / Nokia"
                 description="Open-source TopoViewer and clab-ui foundation"
-                url="https://github.com/srl-labs/clab-ui"
+                url="https://github.com/srl-labs/containerlab-app"
                 icon={<Avatar src="https://github.com/srl-labs.png" sx={{ width: 20, height: 20 }} />}
             />
             <Box sx={{ px: 0.5, pt: 0.5 }}>
@@ -345,7 +345,7 @@ export const NetlabAboutContent: React.FC = () => (
             <RepoCard
                 name="clab-ui"
                 description="Shared topology UI runtime"
-                url="https://github.com/srl-labs/clab-ui"
+                url="https://github.com/srl-labs/containerlab-app"
                 icon={<GitHubIcon fontSize="small" />}
             />
         </Box>

@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import type { App as ClabUiApp } from "@srl-labs/clab-ui";
+import type { App as ClabUiApp } from "@containerlab/clab-ui";
 
 export type InitialGraphData = NonNullable<ComponentProps<typeof ClabUiApp>["initialData"]>;
 

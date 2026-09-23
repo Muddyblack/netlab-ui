@@ -11,7 +11,7 @@
 
 Welcome to **netlab-ui**! This project is a refurbished, tailormade topology viewer and editor for [**netlab**](https://github.com/ipspace/netlab) (ipspace/netlab).
 
-Ideally, this would have been a generic plugin system built directly into [**Containerlab**](https://github.com/srl-labs/containerlab-app)'s topology viewer. But as both have their own kinda of ways to do things instead of over-engineering a perfect plugin architecture, we built this: a dedicated version of [**clab-ui**](https://github.com/srl-labs/clab-ui) adjusted for the netlab ecosystem.
+Ideally, this would have been a generic plugin system built directly into [**Containerlab**](https://github.com/srl-labs/containerlab-app)'s topology viewer. But as both have their own kinda of ways to do things instead of over-engineering a perfect plugin architecture, we built this: a dedicated version of [**clab-ui**](https://github.com/srl-labs/containerlab-app) adjusted for the netlab ecosystem.
 
 It lets you visualize, author, and inspect netlab topologies, then manage their lifecycles (`netlab up`, status, shell)
 
@@ -23,7 +23,7 @@ It lets you visualize, author, and inspect netlab topologies, then manage their 
 
 ## Why this approach?
 
-We consume `@srl-labs/clab-ui` as a normal **npm dependency** (not a fork or local checkout) and feed it netlab data through a thin Python adapter.
+We consume `@containerlab/clab-ui` as a normal **npm dependency** (not a fork or local checkout) and feed it netlab data through a thin Python adapter.
 
 - **No Rebasing Debt:** Because `clab-ui` moves fast and is published as a reusable library with an integrator contract, we get design updates via simple version bumps.
 - **Single Source of Truth:** Netlab remains the ultimate source of truth. The netlab-to-clab projection (`netlab create -o clab`) is what gets rendered.
@@ -36,7 +36,7 @@ We consume `@srl-labs/clab-ui` as a normal **npm dependency** (not a fork or loc
 flowchart TD
     subgraph Frontend ["Frontend (React 19 + Vite)"]
         App["App.tsx<br>(runtime + host wiring)"]
-        Canvas["@srl-labs/clab-ui<br>(Canvas, explorer, palette, lifecycle UI)"]
+        Canvas["@containerlab/clab-ui<br>(Canvas, explorer, palette, lifecycle UI)"]
         Panels["Netlab UI Extensions<br>(Lenses, Units, Links, Groups, Plugins, Workers, Assistant)"]
         Editor["Lazy Tooling<br>(Monaco file editor, xterm shells/logs)"]
         Client["Generated API Client<br>(OpenAPI TypeScript types)"]
@@ -151,7 +151,7 @@ container at the same path.
 
 ```bash
 cd frontend
-npm install                              # See "Installing @srl-labs/clab-ui" below for the required token
+npm install
 npm run dev                              # Frontend runs at http://localhost:5173
 ```
 
@@ -178,21 +178,13 @@ nix develop        # Drop into the dev shell (or run `direnv allow`)
 
 ---
 
-## Installing `@srl-labs/clab-ui`
+## About `@containerlab/clab-ui`
 
-`@srl-labs/clab-ui` lives on **GitHub Packages** and requires **Node ≥ 24**:
+[`@containerlab/clab-ui`](https://www.npmjs.com/package/@containerlab/clab-ui) is published on the public npm registry (source lives in the [containerlab-app](https://github.com/srl-labs/containerlab-app) monorepo), so a plain `npm install` is all it takes — no token or `.npmrc`. It requires **Node ≥ 24**.
 
-1. Create a GitHub personal access token (PAT) with `read:packages` permissions.
-2. Create `frontend/.npmrc` (copy `frontend/.npmrc.sample`) pointing `@srl-labs:registry` at `https://npm.pkg.github.com`, and set `export NODE_AUTH_TOKEN=your_token_here`.
-3. Install dependencies as usual:
-   ```bash
-   cd frontend
-   npm install
-   ```
+The frontend imports `@containerlab/clab-ui` directly wherever it's needed (see `frontend/src/App.tsx`, `frontend/src/host/`, etc.) — there is no local checkout, stub, or swap-point to configure.
 
-The frontend imports `@srl-labs/clab-ui` directly wherever it's needed (see `frontend/src/App.tsx`, `frontend/src/host/`, etc.) — there is no local checkout, stub, or swap-point to configure.
-
-> **Note:** `@srl-labs/clab-ui` is currently pinned to an exact version (`0.3.0`)
+> **Note:** `@containerlab/clab-ui` is currently pinned to an exact version (`0.3.2`)
 > with a `patch-package` patch applied on install (`frontend/patches/`) to
 > restore exports an upstream cleanup accidentally dropped. This is temporary —
 > see `frontend/AGENTS.md` for details and the removal plan once upstream
@@ -339,10 +331,8 @@ Written down so they don't get lost, not because they're scheduled:
 
 The dev setup above runs the backend and frontend as two separate processes. The root [`Dockerfile`](Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
 
-`@srl-labs/clab-ui` is a private GitHub Packages dependency, so the build needs a token with `read:packages` passed in as a BuildKit secret — never as a build `ARG`, which would leak it into the image layers:
-
 ```bash
-DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=GITHUB_TOKEN -t netlab-ui .
+docker build -t netlab-ui .
 ```
 
 Run it:
@@ -397,4 +387,4 @@ That prefix (`desktop-v*`, not `v*`) is deliberate — it keeps desktop releases
 
 ## Thanks
 
-None of this exists without [ipspace/netlab](https://github.com/ipspace/netlab) and [srl-labs/clab-ui](https://github.com/srl-labs/clab-ui) / [srl-labs/containerlab](https://github.com/srl-labs/containerlab) doing the actual hard work underneath. Big thanks to SRL Labs and Nokia for open-sourcing and maintaining tools this good ❤️
+None of this exists without [ipspace/netlab](https://github.com/ipspace/netlab) and [srl-labs/containerlab-app](https://github.com/srl-labs/containerlab-app) (clab-ui) / [srl-labs/containerlab](https://github.com/srl-labs/containerlab) doing the actual hard work underneath. Big thanks to SRL Labs and Nokia for open-sourcing and maintaining tools this good ❤️

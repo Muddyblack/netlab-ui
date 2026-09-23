@@ -270,7 +270,7 @@ export function usePortalInjection() {
     }, []);
 
     // Palette tab ORDER (netlab workflow tabs before YAML/JSON) is handled at the
-    // source in clab-ui via patches/@srl-labs+clab-ui+0.3.0.patch — it splices the
+    // source in clab-ui via patches/@containerlab+clab-ui+0.3.2.patch — it splices the
     // host's customPaletteTabs in ahead of yaml/json when building visibleTabs.
     // Reordering the rendered DOM from here is intentionally NOT done: MUI Tabs
     // requires DOM child order to match its React children order (it looks up the
