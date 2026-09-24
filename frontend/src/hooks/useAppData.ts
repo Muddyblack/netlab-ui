@@ -19,6 +19,8 @@ export interface RunningLabInfo {
   name?: string;
   path?: string;
   dir?: string;
+  /** Topology file the instance was started from, relative to `dir`. */
+  topology?: string;
   status?: string;
   providers?: string[];
   nodes?: Record<

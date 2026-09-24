@@ -490,7 +490,12 @@ async def lab_preflight(body: LabAction):
     """Transform the topology without deploying and map schema errors to canvas entities."""
     path = common.session_path(body.sessionId)
     try:
-        result = await runner.create(path)
+        # Isolated: validate the YAML that is about to be deployed, even when
+        # the lab is already running. The non-isolated path reads a deployed
+        # lab back through `netlab inspect`, whose stdout is the whole JSON
+        # topology — scanning that for diagnostics turned schema strings like
+        # `"type": "error"` into bogus "errors" in the deploy review.
+        result = await runner.create(path, isolated=True)
         stdout = str(result.get("stdout") or "")
         stderr = str(result.get("stderr") or "")
         code = 0

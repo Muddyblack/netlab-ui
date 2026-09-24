@@ -8,13 +8,18 @@ import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type Cus
 import { createImagesHost } from "./imagesHost";
 
 export interface AppClabUiHost extends ClabUiHost {
+  /** Opens a backend session. Does not make it the host's active session —
+   * helper sessions (explorer actions on a lab that isn't open) must not
+   * redirect canvas callbacks; call `activateSession` for the open tab. */
   createSession(topologyPath: string): Promise<{ sessionId: string }>;
+  /** Marks `sessionId` as the one the canvas is showing (or clears it). */
+  activateSession(sessionId: string | null): void;
   disposeSession(sessionId: string): Promise<void>;
   createLab?: (labName: string) => Promise<{ topologyRef: LabFileEntry["topologyRef"] }>;
   listLabFiles?: () => Promise<LabFileEntry[]>;
   sessionId: string | null;
   onNodeAction?: (action: string, nodeName: string) => void;
-  onBeforeDeploy?: () => Promise<boolean>;
+  onBeforeDeploy?: (sessionId: string) => Promise<boolean>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
   setLifecycleCancel?(cancel: (() => void) | null): void;
@@ -307,7 +312,7 @@ export function createApiClabUiHost(options?: {
         activeLifecycleCancel = cancel;
         try {
           if (backendAction === "up" && resultHost.onBeforeDeploy) {
-            const proceed = await resultHost.onBeforeDeploy();
+            const proceed = await resultHost.onBeforeDeploy(sessionId);
             if (!proceed) {
               cancel();
               return;
@@ -534,13 +539,16 @@ export function createApiClabUiHost(options?: {
         body: JSON.stringify({ topologyPath }),
       });
       if (!res.ok) throw new Error(`createSession failed: ${res.status}`);
-      const data = (await res.json()) as { sessionId: string };
-      currentSessionId = data.sessionId;
-      resultHost.sessionId = data.sessionId;
-
-      try {
-        const cnRes = await safeFetch(`${BASE}/api/topology/custom-nodes?sessionId=${data.sessionId}`);
-        if (cnRes.ok) {
+      return (await res.json()) as { sessionId: string };
+    },
+    activateSession(sessionId: string | null) {
+      if (currentSessionId === sessionId) return;
+      currentSessionId = sessionId;
+      resultHost.sessionId = sessionId;
+      if (!sessionId) return;
+      safeFetch(`${BASE}/api/topology/custom-nodes?sessionId=${sessionId}`)
+        .then(async (cnRes) => {
+          if (!cnRes.ok || currentSessionId !== sessionId) return;
           const cnData = await cnRes.json();
           subscribers.forEach((s) =>
             s({
@@ -549,20 +557,18 @@ export function createApiClabUiHost(options?: {
               defaultNode: cnData.defaultNode || "",
             })
           );
-        }
-      } catch (err) {
-        console.error("Failed to load custom nodes on session creation:", err);
-      }
-
-      return data;
+        })
+        .catch((err) => console.error("Failed to load custom nodes on session activation:", err));
     },
     async disposeSession(sessionId: string) {
+      if (currentSessionId === sessionId) {
+        currentSessionId = null;
+        resultHost.sessionId = null;
+      }
       const res = await safeFetch(`${BASE}/api/topology/sessions/${sessionId}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`disposeSession failed: ${res.status}`);
-      currentSessionId = null;
-      resultHost.sessionId = null;
     },
     emitTopoViewerEvent(event: ClabUiTopoViewerEvent) {
       subscribers.forEach((s) => s(event));

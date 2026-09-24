@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export type SessionKind = "shell" | "logs" | "drawio";
-export type SessionTab = { key: string; kind: SessionKind; node: string };
+export type SessionTab = { key: string; kind: SessionKind; node: string; sessionId?: string | null };
 
 export const sessionTabKey = (kind: SessionKind, node: string) => `${kind}:${node}`;
 
@@ -27,22 +27,28 @@ function recordRecentShellNode(node: string): void {
 }
 
 /** Tab state for the bottom session dock (node shells + log streams). Tabs stay
- * mounted while the dock is collapsed so their WebSockets survive; the whole
- * set is dropped when the topology session changes, since shells and log
- * streams are bound to a sessionId. */
+ * mounted while the dock is collapsed so their WebSockets survive. Each tab is
+ * tagged with the topology session it was opened for and only tabs of the
+ * current session are shown, since shells and log streams are bound to a
+ * sessionId. Tagging (rather than clearing on switch) lets a caller open a lab
+ * and a shell into it in one go without the switch wiping the new tab. */
 export function useSessionDock(sessionId: string | null) {
   const [state, setState] = useState<{ tabs: SessionTab[]; activeKey: string | null }>({ tabs: [], activeKey: null });
   const [open, setOpen] = useState(true);
 
-  const openTab = useCallback((kind: SessionKind, node: string) => {
+  const openTab = useCallback((kind: SessionKind, node: string, forSession?: string | null) => {
     if (kind === "shell") recordRecentShellNode(node);
     const key = sessionTabKey(kind, node);
-    setState((current) => ({
-      tabs: current.tabs.some((tab) => tab.key === key) ? current.tabs : [...current.tabs, { key, kind, node }],
-      activeKey: key
-    }));
+    const sid = forSession === undefined ? sessionId : forSession;
+    setState((current) => {
+      const kept = current.tabs.filter((tab) => tab.sessionId === sid);
+      return {
+        tabs: kept.some((tab) => tab.key === key) ? kept : [...kept, { key, kind, node, sessionId: sid }],
+        activeKey: key
+      };
+    });
     setOpen(true);
-  }, []);
+  }, [sessionId]);
 
   const selectTab = useCallback((key: string) => {
     setState((current) => ({ ...current, activeKey: key }));
@@ -60,9 +66,8 @@ export function useSessionDock(sessionId: string | null) {
     });
   }, []);
 
-  useEffect(() => {
-    setState({ tabs: [], activeKey: null });
-  }, [sessionId]);
+  const tabs = useMemo(() => state.tabs.filter((tab) => tab.sessionId === sessionId), [state.tabs, sessionId]);
+  const activeKey = tabs.some((tab) => tab.key === state.activeKey) ? state.activeKey : (tabs[0]?.key ?? null);
 
-  return { tabs: state.tabs, activeKey: state.activeKey, open, setOpen, openTab, selectTab, closeTab };
+  return { tabs, activeKey, open, setOpen, openTab, selectTab, closeTab };
 }

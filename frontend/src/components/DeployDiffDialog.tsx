@@ -64,9 +64,10 @@ function DeployDiffBody({ diffView, diff }: { diffView: DiffViewKind; diff: Depl
   );
 }
 
-export function DeployDiffDialog({ diff, validationIssues, onCancel, onDeploy }: {
+export function DeployDiffDialog({ diff, validationIssues, labName, onCancel, onDeploy }: {
   diff: DeployDiffResult | null;
   validationIssues: ValidationIssue[];
+  labName?: string | null;
   onCancel: () => void;
   onDeploy: () => void;
 }) {
@@ -75,7 +76,7 @@ export function DeployDiffDialog({ diff, validationIssues, onCancel, onDeploy }:
   const diffView = diffViewKindFor(diff);
   return (
     <Dialog open={diff !== null} onClose={onCancel} maxWidth="md" fullWidth>
-      <DialogTitle>Review changes before deploy</DialogTitle>
+      <DialogTitle>Review changes before deploy{labName ? <> · <strong>{labName}</strong></> : null}</DialogTitle>
       <DialogContent dividers>
         <ValidationSummaryAlert validationIssues={validationIssues} errors={errors} warnings={warnings} />
         <DeployDiffBody diffView={diffView} diff={diff} />

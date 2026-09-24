@@ -52,7 +52,15 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(ref.current);
-    fit.fit();
+    const host = ref.current;
+    let disposed = false;
+    // xterm's renderer has no dimensions while the dock is collapsed/hidden
+    // or mid-teardown, and FitAddon then throws ("reading 'dimensions'").
+    const safeFit = () => {
+      if (disposed || host.clientWidth === 0 || host.clientHeight === 0) return;
+      try { fit.fit(); } catch { /* renderer not ready yet; next resize refits */ }
+    };
+    safeFit();
     termRef.current = term;
     fitRef.current = fit;
 
@@ -75,7 +83,7 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
     term.onData((d) => ws.readyState === ws.OPEN && ws.send(new TextEncoder().encode(d)));
 
     const handleResize = () => {
-      fit.fit();
+      safeFit();
       if (ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
       }
@@ -90,6 +98,7 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
     resizeObserver.observe(ref.current);
 
     return () => {
+      disposed = true;
       resizeObserver.disconnect();
       window.removeEventListener("resize", handleResize);
       ws.close();
@@ -107,7 +116,7 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
     const ws = wsRef.current;
     if (!term) return;
     term.options.fontSize = fontSize;
-    fitRef.current?.fit();
+    try { if (ref.current?.clientHeight) fitRef.current?.fit(); } catch { /* renderer not ready */ }
     if (ws && ws.readyState === ws.OPEN) {
       ws.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
     }

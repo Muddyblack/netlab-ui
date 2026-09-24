@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import { refreshTopologySnapshot } from "@containerlab/clab-ui/session";
@@ -31,53 +31,112 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [restoreComplete, setRestoreComplete] = useState(false);
 
-  useEffect(() => () => { if (sessionId) void host.disposeSession(sessionId); }, [host, sessionId]);
+  // The live backend session, read through a ref: activations overlap (a
+  // double-click in the explorer fires several opens), and each one must
+  // dispose whatever session is current *now*, not the one its render closed
+  // over — otherwise every overlapping open leaks a backend session and later
+  // requests hit 404s on the stale ids.
+  const sessionIdRef = useRef<string | null>(null);
+  const activationSeq = useRef(0);
+  const inflight = useRef<{ tabId: string; promise: Promise<void> } | null>(null);
+  // Topology the active session belongs to, and background sessions opened
+  // for explorer actions on labs that are not the active tab (keyed by YAML
+  // path, reused, and never made the host's active session).
+  const activePathRef = useRef<string | null>(null);
+  const helperSessions = useRef(new Map<string, Promise<string>>());
+  const sessionPaths = useRef(new Map<string, string>());
+  const setCurrentSession = useCallback((sid: string | null, yamlPath: string | null = null) => {
+    sessionIdRef.current = sid;
+    activePathRef.current = sid ? yamlPath : null;
+    host.activateSession(sid);
+    setSessionId(sid);
+  }, [host]);
+
+  // Dispose on unmount and on page unload (keepalive lets the DELETE outlive
+  // the page), so reloads do not pile up orphaned sessions in the backend.
+  useEffect(() => {
+    const onPageHide = () => {
+      const release = (sid: string) => {
+        try {
+          void fetch(`${getApiBase()}/api/topology/sessions/${sid}`, { method: "DELETE", keepalive: true });
+        } catch { /* best effort */ }
+      };
+      if (sessionIdRef.current) release(sessionIdRef.current);
+      for (const pending of helperSessions.current.values()) void pending.then(release, () => undefined);
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      const sid = sessionIdRef.current;
+      if (sid) void host.disposeSession(sid).catch(() => undefined);
+    };
+  }, [host]);
 
   const clearActiveLabSession = useCallback(async () => {
     const rt = runtimeRef.current;
     const resetContext = () => rt?.session.setContext({ sessionId: undefined, topologyRef: undefined, mode: "view", deploymentState: "unknown" });
-
-    if (!sessionId) {
-      host.sessionId = null;
-      if (rt) { resetContext(); await refreshTopologySnapshot({ externalChange: true }, rt.session); }
-      return;
+    // Invalidate any activation still in flight so it cannot resurrect a tab
+    // that was just closed.
+    activationSeq.current += 1;
+    inflight.current = null;
+    const sid = sessionIdRef.current;
+    setCurrentSession(null);
+    if (sid) {
+      try { await host.disposeSession(sid); } catch (err) { console.warn("Failed to dispose session:", err); }
     }
-    try { await host.disposeSession(sessionId); } catch (err) { console.warn("Failed to dispose session:", err); }
-    finally {
-      host.sessionId = null;
-      setSessionId(null);
-      if (rt) { resetContext(); await refreshTopologySnapshot({ externalChange: true }, rt.session); }
-    }
-  }, [host, runtimeRef, sessionId]);
+    if (rt) { resetContext(); await refreshTopologySnapshot({ externalChange: true }, rt.session); }
+  }, [host, runtimeRef, setCurrentSession]);
 
-  const activateLabTab = useCallback(async (tab: OpenLabTab, opts?: { skipDisposeCurrent?: boolean; fitView?: boolean }) => {
-    const rt = runtimeRef.current;
-    try {
-      if (!opts?.skipDisposeCurrent && sessionId) {
-        try { await host.disposeSession(sessionId); }
-        catch (err) { console.warn("Failed to dispose previous session:", err); host.sessionId = null; }
-      }
-      const { sessionId: newSid } = await host.createSession(tab.topologyRef.yamlPath);
-      host.sessionId = newSid;
-      setSessionId(newSid);
-      setActiveTabId(tab.id);
-      persistLastOpenLabPath(tab.topologyRef.yamlPath);
-      if (rt) {
-        // Open every topology view-first. Editing remains one click away via
-        // clab-ui's lock button, but an initial click/drag cannot move nodes.
-        useTopoViewerStore.setState({ isLocked: true });
-        // This app always sets source: "standalone" — the backend's TopologyRef
-        // schema types it as a plain string, clab-ui's as a narrower union.
-        rt.session.setContext({ sessionId: newSid, topologyRef: tab.topologyRef as ClabTopologyRef, mode: "edit", deploymentState: "undeployed" });
-        await refreshTopologySnapshot({ externalChange: true }, rt.session);
-        // Units keep the canvas coordinates of the lab they were drawn in, so
-        // without a fit the viewport can open miles away from the nodes
-        // ("blank canvas"). clab-ui consumes the request once React Flow has
-        // the nodes, so firing right after the snapshot refresh is safe.
-        if (opts?.fitView) host.emitTopoViewerEvent?.({ type: "fitViewport" });
-      }
-    } catch (err) { console.error("Failed to activate lab tab:", err); }
-  }, [host, runtimeRef, sessionId]);
+  const activateLabTab = useCallback((tab: OpenLabTab, opts?: { skipDisposeCurrent?: boolean; fitView?: boolean }): Promise<void> => {
+    // Collapse repeated activations of the same tab into the one in flight.
+    if (inflight.current?.tabId === tab.id) return inflight.current.promise;
+    const seq = ++activationSeq.current;
+    const run = async () => {
+      const rt = runtimeRef.current;
+      try {
+        const previous = sessionIdRef.current;
+        if (!opts?.skipDisposeCurrent && previous) {
+          setCurrentSession(null);
+          try { await host.disposeSession(previous); }
+          catch (err) { console.warn("Failed to dispose previous session:", err); }
+        }
+        const { sessionId: newSid } = await host.createSession(tab.topologyRef.yamlPath);
+        if (seq !== activationSeq.current) {
+          // A newer activation (or a close) superseded this one while the
+          // session was being created — drop it instead of leaking it.
+          void host.disposeSession(newSid).catch(() => undefined);
+          return;
+        }
+        // skipDisposeCurrent callers already released the old session; make
+        // sure nothing that raced in is left behind.
+        const raced = sessionIdRef.current;
+        if (raced && raced !== newSid) void host.disposeSession(raced).catch(() => undefined);
+        sessionPaths.current.set(newSid, tab.topologyRef.yamlPath);
+        setCurrentSession(newSid, tab.topologyRef.yamlPath);
+        setActiveTabId(tab.id);
+        persistLastOpenLabPath(tab.topologyRef.yamlPath);
+        if (rt) {
+          // Open every topology view-first. Editing remains one click away via
+          // clab-ui's lock button, but an initial click/drag cannot move nodes.
+          useTopoViewerStore.setState({ isLocked: true });
+          // This app always sets source: "standalone" — the backend's TopologyRef
+          // schema types it as a plain string, clab-ui's as a narrower union.
+          rt.session.setContext({ sessionId: newSid, topologyRef: tab.topologyRef as ClabTopologyRef, mode: "edit", deploymentState: "undeployed" });
+          await refreshTopologySnapshot({ externalChange: true }, rt.session);
+          // Units keep the canvas coordinates of the lab they were drawn in, so
+          // without a fit the viewport can open miles away from the nodes
+          // ("blank canvas"). clab-ui consumes the request once React Flow has
+          // the nodes, so firing right after the snapshot refresh is safe.
+          if (opts?.fitView) host.emitTopoViewerEvent?.({ type: "fitViewport" });
+        }
+      } catch (err) { console.error("Failed to activate lab tab:", err); }
+    };
+    const promise = run().finally(() => {
+      if (inflight.current?.promise === promise) inflight.current = null;
+    });
+    inflight.current = { tabId: tab.id, promise };
+    return promise;
+  }, [host, runtimeRef, setCurrentSession]);
 
   const handleOpenLab = useCallback(async (topoRef: TopologyRef, opts?: { fitView?: boolean }) => {
     const tab = resolveOpenLabTab(topoRef);
@@ -214,10 +273,24 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     );
   }, []);
 
+  // Session for an action on `topoRef`: the active tab's session when it is
+  // that topology, otherwise a reusable background session. Never falls back
+  // to "whatever is open" — that would run e.g. Destroy on the wrong lab.
   const getOrCreateSession = useCallback(async (topoRef: TopologyRef): Promise<string | null> => {
-    try { return (await host.createSession(topoRef.yamlPath)).sessionId; }
+    if (sessionIdRef.current && activePathRef.current === topoRef.yamlPath) return sessionIdRef.current;
+    const key = topoRef.yamlPath;
+    let pending = helperSessions.current.get(key);
+    if (!pending) {
+      pending = host.createSession(key).then((r) => { sessionPaths.current.set(r.sessionId, key); return r.sessionId; });
+      helperSessions.current.set(key, pending);
+      pending.catch(() => helperSessions.current.delete(key));
+    }
+    try { return await pending; }
     catch (err) { console.error("Failed to get/create session:", err); return null; }
   }, [host]);
+
+  /** Topology path a session was opened for (null for unknown ids). */
+  const topologyPathForSession = useCallback((sid: string): string | null => sessionPaths.current.get(sid) ?? null, []);
 
   const handleCreateLab = useCallback(async (labName: string) => {
     try {
@@ -284,6 +357,6 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     sessionId, openTabs, activeTabId, activeFileTab,
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
-    handleCreateLab, getOrCreateSession, restoreTabSession, restoreComplete
+    handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession, restoreComplete
   };
 }

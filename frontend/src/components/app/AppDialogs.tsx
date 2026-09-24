@@ -39,6 +39,7 @@ interface AppDialogsProps {
   // Deploy diff
   deployDiff: DeployDiffResult | null;
   deployValidationIssues: ValidationIssue[];
+  deployTargetLab?: string | null;
   setDeployDiff: (diff: DeployDiffResult | null) => void;
   setDeployValidationIssues: (issues: ValidationIssue[]) => void;
   deployDecisionRef: MutableRefObject<((proceed: boolean) => void) | null>;
@@ -85,6 +86,7 @@ export function AppDialogs({
   startup,
   deployDiff,
   deployValidationIssues,
+  deployTargetLab,
   setDeployDiff,
   setDeployValidationIssues,
   deployDecisionRef,
@@ -137,6 +139,7 @@ export function AppDialogs({
       <DeployDiffDialog
         diff={deployDiff}
         validationIssues={deployValidationIssues}
+        labName={deployTargetLab}
         onCancel={() => {
           setDeployDiff(null);
           setDeployValidationIssues([]);

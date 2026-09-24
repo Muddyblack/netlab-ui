@@ -20,7 +20,8 @@ interface LabLifecycleOptions {
   refreshStatus?: () => Promise<void>;
   refreshCanvas?: () => void;
   onValidationIssues?: (issues: ValidationIssue[]) => void;
-  beforeDeploy?: () => Promise<boolean>;
+  /** Review gate before `netlab up` of the lab behind `sid`. */
+  beforeDeploy?: (sid: string) => Promise<boolean>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
 }
@@ -136,9 +137,9 @@ async function streamLifecycleCommand(
   return state;
 }
 
-async function shouldAbortForPreflight(action: LifecycleAction, beforeDeploy?: () => Promise<boolean>): Promise<boolean> {
+async function shouldAbortForPreflight(action: LifecycleAction, sid: string, beforeDeploy?: (sid: string) => Promise<boolean>): Promise<boolean> {
   if (action !== "up" || !beforeDeploy) return false;
-  return !(await beforeDeploy());
+  return !(await beforeDeploy(sid));
 }
 
 function reportLifecycleSuccess(
@@ -186,7 +187,7 @@ export function useLabLifecycle({ host, fetchFiles, refreshStatus, refreshCanvas
     processingKind: "deploy" | "destroy" = "deploy",
     refreshFiles = true
   ) => {
-    if (await shouldAbortForPreflight(action, beforeDeploy)) return;
+    if (await shouldAbortForPreflight(action, sid, beforeDeploy)) return;
     setProcessing(true, processingKind);
     const controller = new AbortController();
     host.setLifecycleCancel?.(() => controller.abort());

@@ -1,6 +1,7 @@
 import type React from "react";
 import type { LabFileEntry } from "../api/client";
 import type { RunningLabsStatus } from "../hooks/useAppData";
+import { runningLabMatches, runningLabTopologyPath } from "./runningMatch";
 
 /** clab-ui's explorer sidebar tree node shape — a superset of fields across
  * endpoint, section, lab, container, and help-link nodes; each getChildren
@@ -44,10 +45,7 @@ function isRunningStatus(status: string): boolean {
 }
 
 function isUndeployedFile(file: LabFileEntry, status: RunningLabsStatus): boolean {
-  return !Object.values(status).some((labInfo) =>
-    labInfo.path === file.path || labInfo.name === file.labName ||
-    Boolean(labInfo.dir && file.path.startsWith(`${labInfo.dir}/`))
-  );
+  return !Object.values(status).some((labInfo) => runningLabMatches(labInfo, file.path, file.labName));
 }
 
 function buildEndpointSections(status: RunningLabsStatus, files: LabFileEntry[]): ExplorerTreeNode[] {
@@ -80,16 +78,13 @@ function buildRunningLabNode(
   labFiles: LabFileEntry[]
 ): ExplorerTreeNode {
   const directory = labInfo.dir || labInfo.path || "";
-  const knownFile = labFiles.find((file) =>
-    (!!labInfo.name && file.labName === labInfo.name) ||
-    Boolean(directory && file.path.startsWith(`${directory}/`))
-  );
+  const knownFile = labFiles.find((file) => runningLabMatches(labInfo, file.path, file.labName));
   // Prefer the topology's real lab name over netlab's instance id
   // ("default"), which says nothing about *which* lab is running.
   // The instance id stays visible as a suffix when it differs.
   const labName = labInfo.name || knownFile?.labName || labKey;
   const label = labName === labKey ? labName : `${labName} (${labKey})`;
-  const yamlPath = knownFile?.path || labInfo.path || (directory ? `${directory}/topology.yml` : `labs/${labName}.yml`);
+  const yamlPath = knownFile?.path || runningLabTopologyPath(labInfo) || (directory ? `${directory}/topology.yml` : `labs/${labName}.yml`);
   const topoRef = {
     topologyId: `standalone:local::${yamlPath}`,
     labName,

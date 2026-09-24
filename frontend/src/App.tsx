@@ -141,6 +141,7 @@ export default function App() {
             startup={c.startup}
             deployDiff={c.deployDiff}
             deployValidationIssues={c.deployValidationIssues}
+            deployTargetLab={c.deployTargetLab}
             setDeployDiff={c.setDeployDiff}
             setDeployValidationIssues={c.setDeployValidationIssues}
             deployDecisionRef={c.deployDecisionRef}

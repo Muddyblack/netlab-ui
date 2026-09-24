@@ -126,9 +126,11 @@ export function createDemoClabUiHost(options?: { explorer?: WindowHostOptions["e
       }
       const sessionId = `demo-session-${crypto.randomUUID()}`;
       sessions.set(sessionId, { sessionId, yamlPath, revision: 0 });
+      return { sessionId };
+    },
+    activateSession(sessionId: string | null) {
       currentSessionId = sessionId;
       resultHost.sessionId = sessionId;
-      return { sessionId };
     },
     async disposeSession(sessionId: string) {
       sessions.delete(sessionId);
