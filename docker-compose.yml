@@ -1,34 +1,50 @@
-# Dev convenience. The backend needs the `netlab` CLI and a provider
-# (containerlab and/or libvirt) available on the host it runs on, so for real
-# lab lifecycle you typically run the backend directly on a netlab host rather
-# than in this container. This compose file is primarily for the UI + adapter.
+# netlab-ui as a container — `docker compose up -d`, then open
+# http://localhost:8000.
+#
+# Uses the "full" image (UI + netlab + Ansible + containerlab), so the host only
+# needs Docker. Already have netlab on the host and want the UI to use it?
+# Switch `image:` to the UI-only tag and mount that install instead — see the
+# README's "Container" section.
+#
+# Why each setting is here (the UI checks all of them itself and explains any
+# that are missing under Settings → Environment → Container Setup):
+#   * privileged / host network / host pid — containerlab creates network
+#     namespaces, veth links and sysctls for the lab nodes, and node
+#     management IPs must be reachable for SSH and web UIs.
+#   * docker.sock — labs run on the host's Docker daemon, next to this one.
+#   * the labs directory is mounted at the SAME path it has on the host:
+#     containerlab asks the host daemon to bind-mount node files by their
+#     in-container path, so the two must match.
+#   * ~/.netlab — netlab's running-lab registry. Shared with `netlab status`
+#     on the host and kept across container re-creation (otherwise labs
+#     started from the UI become orphans).
 
 services:
-  backend:
-    build: ./backend
-    working_dir: /work
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+  netlab-ui:
+    image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}-full
+    # `docker compose build` builds the same image from a checkout.
+    build:
+      context: .
+      target: full
+    container_name: netlab-ui
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    pid: host
+    environment:
+      NETLAB_WORKSPACE: ${LABS_DIR:-${PWD}/labs}
+      # The UI can deploy labs and open root shells on their nodes: keep it on
+      # loopback unless you mean to expose it (set NETLAB_UI_HOST=0.0.0.0).
+      UVICORN_HOST: ${NETLAB_UI_HOST:-127.0.0.1}
+      UVICORN_PORT: ${NETLAB_UI_PORT:-8000}
+      NETLAB_GUI_CONTAINER: netlab-ui
     volumes:
-      - ./backend:/app
-      - ./labs:/work
       - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - PYTHONPATH=/app
-      - NETLAB_WORKSPACE=/work
-      - NETLAB_WORKSPACE_CONFIG=/work/.netlab_gui_workspaces.json
-    ports:
-      - "8000:8000"
-    # network_mode: host   # uncomment on Linux so `netlab status`/clab work
+      - /var/run/netns:/var/run/netns
+      - ${LABS_DIR:-${PWD}/labs}:${LABS_DIR:-${PWD}/labs}
+      - ${HOME}/.netlab:/root/.netlab
+      # UI settings, workspaces list, assistant history.
+      - netlab-ui-state:/root
 
-  frontend:
-    image: node:24
-    working_dir: /app
-    command: sh -c "npm run dev -- --host"
-    volumes:
-      - ./frontend:/app
-    environment:
-      - VITE_API_BASE=http://localhost:8000
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
+volumes:
+  netlab-ui-state:

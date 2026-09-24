@@ -15,6 +15,8 @@ import { getApiBase } from "./endpoint";
 type Schemas = components["schemas"];
 
 export type HealthStatus = Schemas["HealthStatus"];
+export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
+export type ContainerCheck = Schemas["ContainerCheck"];
 export type LabFileEntry = Schemas["LabFileEntry"];
 export type LabInstance = Schemas["LabInstance"];
 export type CommandResult = Schemas["CommandResult"];
@@ -169,6 +171,9 @@ export const api = {
   // cannot leave the gate apparently frozen behind the generic 3-attempt
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
+
+  getContainerDiagnostics: (refresh = false) =>
+    http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
 
   getNetlabEnvironment: () =>
     http<NetlabEnvironment>("/api/environment/netlab", { cache: "no-store" }, 1, 15000),

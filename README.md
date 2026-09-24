@@ -331,22 +331,62 @@ Written down so they don't get lost, not because they're scheduled:
 
 The dev setup above runs the backend and frontend as two separate processes. The root [`Dockerfile`](Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
 
+Two images come out of it:
+
+| Image | Target | Contains | Use when |
+| --- | --- | --- | --- |
+| `ghcr.io/muddyblack/netlab-ui:<ver>-full` | `full` | UI + netlab + Ansible + containerlab | the host only has Docker |
+| `ghcr.io/muddyblack/netlab-ui:<ver>` | `ui` (default) | UI only | you already run netlab on the host and want the UI to use *that* install |
+
+### Quick start (everything included)
+
 ```bash
-docker build -t netlab-ui .
+docker compose up -d          # uses docker-compose.yml; labs live in ./labs
 ```
 
-Run it:
+Open `http://localhost:8000`. The equivalent `docker run`:
 
 ```bash
+mkdir -p "$PWD/labs"
 docker run -d --name netlab-ui \
-  -p 8000:8000 \
+  --privileged --network host --pid host \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(pwd)/labs:/work \
-  -e NETLAB_WORKSPACE=/work \
-  netlab-ui
+  -v /var/run/netns:/var/run/netns \
+  -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
+  -v "$HOME/.netlab:/root/.netlab" \
+  -e UVICORN_HOST=127.0.0.1 \
+  ghcr.io/muddyblack/netlab-ui:latest-full
 ```
 
-Open `http://localhost:8000` — that one port serves both the UI and the API. `netlab` and `containerlab` are already installed inside the image (see the `Dockerfile`); the Docker socket mount is what lets `containerlab` drive lab nodes on the host's Docker daemon. libvirt-based providers aren't included yet.
+Why each flag matters — each one fails late and cryptically when missing:
+
+- **`--privileged --network host --pid host`** — containerlab creates network namespaces, veth links and sysctls for the lab nodes (the same flags containerlab's own container image needs). Without them `netlab up` dies with errors like `rp_filter: read-only file system`.
+- **Docker socket** — labs run on the host's Docker daemon, next to the UI container.
+- **Labs directory at the *same path* as on the host** — containerlab asks the host daemon to bind-mount node config files by their in-container path. Mounting `./labs` at `/work` (as older docs suggested) makes every node fail to start.
+- **`~/.netlab`** — netlab's running-lab registry. Shared with `netlab status` on the host and kept across container re-creation; without it labs started from the UI turn into orphans.
+- **`UVICORN_HOST=127.0.0.1`** — the UI can deploy labs and open root shells, so it listens on loopback unless you set `0.0.0.0` on purpose.
+
+You don't have to remember any of this: the backend inspects its own container and lists anything missing — with the exact flag to add — under **Settings → Environment → Container Setup**, plus a banner at startup when a deployment would fail.
+
+### UI-only image with your host's netlab
+
+Same flags, plus mount your netlab install at its own path and point the UI at it (or pick it in **Settings → Environment**):
+
+```bash
+  -v /opt/netlab-venv:/opt/netlab-venv:ro -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
+  -v /usr/bin/containerlab:/usr/bin/containerlab:ro \
+  ghcr.io/muddyblack/netlab-ui:latest
+```
+
+### Building locally
+
+```bash
+docker build -t netlab-ui .                       # UI only
+docker build --target full -t netlab-ui:full .    # with netlab + containerlab
+docker compose build                              # the compose file's image
+```
+
+libvirt-based providers aren't included in either image.
 
 ---
 

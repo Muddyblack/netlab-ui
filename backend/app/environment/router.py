@@ -6,6 +6,8 @@ Settings UI (set the path) and the Info tab (show the resolved environment).
 
 * ``GET  /api/environment/netlab`` — the resolved environment + version/providers
 * ``PUT  /api/environment/netlab`` — set/clear the configured path (validated)
+* ``GET  /api/environment/container`` — self-checks of the containerized UI's
+  ``docker run`` setup (empty outside a container)
 """
 
 from __future__ import annotations
@@ -17,7 +19,8 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from app.contract.responses import NetlabEnvironment, SetNetlabPathRequest
+from app.contract.responses import ContainerDiagnostics, NetlabEnvironment, SetNetlabPathRequest
+from services import container_env
 from services.netlab import location, runner
 
 router = APIRouter(prefix="/api/environment", tags=["environment"])
@@ -101,3 +104,10 @@ async def set_netlab_path(body: SetNetlabPathRequest) -> dict:
     # the response (and later health polls) reflect the newly configured netlab.
     runner.reset_version_cache()
     return _environment()
+
+
+@router.get("/container", response_model=ContainerDiagnostics)
+def get_container_diagnostics(refresh: bool = False) -> dict:
+    # Plain `def`: the self-inspection shells out to `docker inspect`, so it
+    # runs in FastAPI's threadpool instead of blocking the event loop.
+    return container_env.diagnose(refresh=refresh)

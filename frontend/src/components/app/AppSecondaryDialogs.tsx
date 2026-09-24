@@ -3,6 +3,7 @@ import type { TopologyRef } from "../../hooks/useTabManager";
 import { RunningLabsDialog } from "../dialogs/RunningLabsDialog";
 import { WorkspaceDialogs } from "../WorkspaceDialogs";
 import { EnvWarningBanner } from "../EnvWarningBanner";
+import { ContainerSetupBanner } from "../ContainerSetup";
 import { RuntimeSnackbarView } from "../RuntimeSnackbarView";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
@@ -37,6 +38,7 @@ interface AppSecondaryDialogsProps {
   startup: StartupState;
   runtimeSnackbar: RuntimeSnackbarState;
   setRuntimeSnackbar: (snackbar: RuntimeSnackbarState) => void;
+  openEnvironmentSettings: () => void;
 }
 
 export function AppSecondaryDialogs({
@@ -63,7 +65,8 @@ export function AppSecondaryDialogs({
   handleCreateLab,
   startup,
   runtimeSnackbar,
-  setRuntimeSnackbar
+  setRuntimeSnackbar,
+  openEnvironmentSettings,
 }: AppSecondaryDialogsProps) {
   return (
     <>
@@ -95,6 +98,7 @@ export function AppSecondaryDialogs({
       />
 
       <EnvWarningBanner health={DEMO_MODE ? null : startup.health} />
+      {!DEMO_MODE && <ContainerSetupBanner onOpenSettings={openEnvironmentSettings} />}
 
       <RuntimeSnackbarView snackbar={runtimeSnackbar} onClose={() => setRuntimeSnackbar(defaultRuntimeSnackbar)} />
     </>

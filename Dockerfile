@@ -1,9 +1,11 @@
 # Single-container "web app" image: builds the frontend, then serves the built
-# static assets straight from the FastAPI backend on one port. This is the
-# containerized alternative to the two-process dev setup in docker-compose.yml
-# — one image, `docker run`, open a browser.
+# static assets straight from the FastAPI backend on one port — one image,
+# `docker compose up` (docker-compose.yml) or `docker run`, open a browser.
 #
-# Scope: this is the *UI*, not a netlab distribution. netlab, Ansible and
+# Two targets: the default (`ui`) is the UI only; `--target full` adds netlab,
+# Ansible and containerlab for a self-contained install (see the bottom).
+#
+# Scope of the default image: the *UI*, not a netlab distribution. netlab, Ansible and
 # containerlab all stay on the host, where whoever runs this already has them.
 # The container talks to that host install through NETLAB_BIN / Settings →
 # Environment and the mounted Docker socket. Keeping the toolchain out means
@@ -24,8 +26,8 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# ---- backend runtime stage ----
-FROM python:3.11-slim
+# ---- backend runtime base (shared by both images) ----
+FROM python:3.11-slim AS runtime
 # git — lab file history/diffs (app/lab/files.py) and the version string in
 # app/main.py. docker.io — the backend enumerates and cleans up lab containers
 # through the Docker CLI. curl is gone with the containerlab installer that
@@ -46,42 +48,78 @@ COPY backend/services ./services
 # story: they drive an already-logged-in CLI on the host, so they stay
 # unavailable here unless that CLI and its credentials are mounted in. The
 # provider probes report exactly that in Settings, so nothing breaks silently.
+#
+# setuptools-scm has no .git here; the version comes from the build arg below.
+ARG NETLAB_GUI_VERSION=0.0+container
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${NETLAB_GUI_VERSION}
 RUN pip install --no-cache-dir ".[assistant]"
-
-# netlab and Ansible intentionally are not installed in this UI image. Point
-# Settings → Environment at an existing/mounted netlab executable, or set
-# NETLAB_BIN. The backend probes that executable's Python environment for
-# netsim metadata, so it does not need a second netlab installation of its own.
-
-# containerlab is deliberately absent too. It is the host's job: this image is
-# aimed at a machine that already runs netlab, and netlab already brings its
-# own containerlab. Shipping a second copy only invites version skew between
-# the one netlab drives and the one the backend would call.
-#
-# A few backend features shell out to `containerlab` directly rather than
-# through netlab — link impairment (`tools netem set`), orphaned-instance
-# cleanup (`destroy --cleanup`) and post-start link reconcile (`apply`). They
-# need the binary on this container's PATH, so bind-mount the host's copy to
-# enable them:
-#
-#   -v /usr/bin/containerlab:/usr/bin/containerlab:ro
-#
-# It is a static Go binary, so that mount works with no further plumbing.
-# Without it those three features report containerlab as unavailable in
-# Settings → Environment; nothing else is affected.
 
 COPY --from=frontend-build /app/dist ./frontend_dist
 ENV FRONTEND_DIST_DIR=/app/frontend_dist
+# Shown in the About dialog; release builds pass the tag.
+ENV NETLAB_GUI_VERSION=${NETLAB_GUI_VERSION}
+# Enables the container self-checks (Settings → Environment → Container
+# Setup) even where /.dockerenv is missing (podman, some runtimes).
+ENV NETLAB_GUI_IN_CONTAINER=1
 
-# NOTE: the backend inspects lab containers through the Docker CLI, so the
-# container needs access to a Docker daemon — mount the socket
-# (`-v /var/run/docker.sock:/var/run/docker.sock`) or run with `--privileged`.
-
+# The backend drives the *host's* Docker daemon through the mounted socket, so
+# how the container is started decides whether labs can deploy at all. The
+# backend inspects its own container at startup and explains anything missing
+# in the UI; the short version is:
+#
+#   --privileged --network host --pid host          containerlab netns/veth work
+#   -v /var/run/docker.sock:/var/run/docker.sock    the host Docker daemon
+#   -v $PWD/labs:$PWD/labs -e NETLAB_WORKSPACE=$PWD/labs
+#       workspace at the SAME path as on the host: containerlab asks the host
+#       daemon to bind-mount node files by their in-container path
+#   -v $HOME/.netlab:/root/.netlab                  netlab's running-lab registry,
+#       shared with `netlab status` on the host and kept across restarts
+#
+# See docker-compose.yml for the same thing as a ready-to-run file.
+# uvicorn reads UVICORN_HOST/UVICORN_PORT, so `-e UVICORN_HOST=127.0.0.1`
+# (what docker-compose.yml does with host networking) needs no CMD override.
+ENV UVICORN_HOST=0.0.0.0 UVICORN_PORT=8000
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app"]
 
 # Populates the GHCR package page (README, repo link, license) instead of the
 # "no description" placeholder a pulled-from-nowhere image would show.
 LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" \
-      org.opencontainers.image.description="Web UI for netlab — topology editor, lab lifecycle and device consoles in one container." \
       org.opencontainers.image.licenses="Apache-2.0"
+
+# ---- "full" image: UI + netlab + Ansible + containerlab ----
+# `docker build --target full .` — for machines that have Docker but no
+# netlab install, or anyone who wants one pinned, self-contained toolchain.
+# Everything runs against the host's Docker daemon exactly like the UI-only
+# image; the difference is only where the netlab/containerlab binaries live.
+FROM runtime AS full
+ARG CLAB_VERSION=0.79.0
+# openssh-client/sshpass: Ansible's network_cli for SSH-managed devices.
+# iproute2: containerlab and netlab's link/bridge helpers.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        openssh-client sshpass iproute2 \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir ".[netlab]"
+# The official containerlab image ships the static binary at this path.
+COPY --from=ghcr.io/srl-labs/clab:${CLAB_VERSION} /usr/bin/containerlab /usr/bin/containerlab
+LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab bundled — topology editor, lab lifecycle and device consoles in one container."
+
+# ---- default image: the UI only ----
+# netlab, Ansible and containerlab stay on the host, where whoever runs this
+# already has them: no version skew against the netlab the user actually runs.
+# Point Settings → Environment (or NETLAB_BIN) at the host's netlab install,
+# mounted into the container at the same path. The backend probes that
+# executable's Python environment for netsim metadata, so it does not need a
+# second netlab installation of its own.
+#
+# A few backend features shell out to `containerlab` directly rather than
+# through netlab — link impairment (`tools netem set`), orphaned-instance
+# cleanup (`destroy --cleanup`) and post-start link reconcile (`apply`). It is
+# a static Go binary, so bind-mounting the host's copy enables them:
+#
+#   -v /usr/bin/containerlab:/usr/bin/containerlab:ro
+#
+# Without it those three features report containerlab as unavailable in
+# Settings → Environment; nothing else is affected.
+FROM runtime AS ui
+LABEL org.opencontainers.image.description="Web UI for netlab — topology editor, lab lifecycle and device consoles in one container."

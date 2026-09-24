@@ -76,6 +76,23 @@ class NetlabEnvironment(BaseModel):
     libvirt: bool = False
 
 
+class ContainerCheck(BaseModel):
+    id: str
+    ok: bool
+    severity: Literal["error", "warning"]
+    title: str
+    detail: str
+    fix: str | None = None
+
+
+class ContainerDiagnostics(BaseModel):
+    """Self-inspection of the containerized UI's `docker run` setup."""
+
+    inContainer: bool
+    inspected: bool
+    checks: list[ContainerCheck] = []
+
+
 class SetNetlabPathRequest(BaseModel):
     path: str | None = None
 

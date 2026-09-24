@@ -187,6 +187,7 @@ export default function App() {
             startup={c.startup}
             runtimeSnackbar={c.runtimeSnackbar}
             setRuntimeSnackbar={c.setRuntimeSnackbar}
+            openEnvironmentSettings={() => { c.setSettingsTab("environment"); c.setSettingsOpen(true); }}
           />
         </Box>
       )}
