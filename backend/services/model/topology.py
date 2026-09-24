@@ -102,6 +102,11 @@ class Topology:
     templates: list[Template] = field(default_factory=list)
     # Top-level attributes we don't model explicitly (module, addressing, ...).
     attrs: dict[str, Any] = field(default_factory=dict)
+    # The ruamel document this model was parsed from (comments, flow style,
+    # key order). ``serialize.to_yaml`` merges changes into it rather than
+    # emitting a fresh document, so untouched parts of the file stay as the
+    # user wrote them.
+    source: Any = field(default=None, repr=False, compare=False)
 
     # -- convenience lookups -------------------------------------------------
     def node(self, name: str) -> Node | None:

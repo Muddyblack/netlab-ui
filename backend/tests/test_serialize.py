@@ -113,3 +113,42 @@ def test_plugin_is_not_pushed_below_groups():
     )
     out = serialize.to_yaml(topo)
     assert out.index("plugin:") < out.index("groups:")
+
+
+def test_edit_keeps_comments_and_flow_style_elsewhere():
+    src = (
+        "# Lab for testing OSPF\n"
+        "name: t\n"
+        "defaults.device: frr   # all routers\n"
+        "nodes:\n"
+        "  r1:\n"
+        "    module: [ospf]     # enable ospf\n"
+        "  # the host\n"
+        "  h1:\n"
+        "    device: linux\n"
+        "links: [r1-h1]   # single link\n"
+    )
+    topo = serialize.from_yaml(src)
+    topo.node("r1").attrs["module"] = ["ospf", "bgp"]
+    out = serialize.to_yaml(topo)
+    assert out.startswith("# Lab for testing OSPF\n")
+    assert "# all routers" in out
+    assert "# the host" in out
+    assert "links: [r1-h1]   # single link" in out
+    assert "module: [ospf, bgp]" in out
+    assert serialize.to_dict(serialize.from_yaml(out)) == serialize.to_dict(topo)
+
+
+def test_added_and_removed_list_items_keep_the_rest_intact():
+    topo = serialize.from_yaml("name: t\nnodes: [a, b, c]\nlinks:\n  - a-b  # first\n  - b-c\n")
+    topo.links = [link for link in topo.links if link.endpoints != ["b", "c"]]
+    topo.nodes.append(Node(name="d"))
+    out = serialize.to_yaml(topo)
+    assert "nodes: [a, b, c, d]" in out
+    assert "a-b  # first" in out
+    assert "b-c" not in out
+
+
+def test_model_built_topology_still_serializes_fresh():
+    topo = serialize.from_dict({"name": "t", "nodes": {"r1": None}})
+    assert serialize.to_yaml(topo) == "name: t\nnodes:\n  r1:\n"
