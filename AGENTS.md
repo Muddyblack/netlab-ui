@@ -26,6 +26,17 @@ cd frontend && npm run typecheck    # tsc --noEmit only
 cd frontend && npm run gen:api      # regenerate src/api/generated.ts (backend must be running)
 ```
 
+### Container
+
+```bash
+docker compose up -d                          # full image: UI + netlab + containerlab
+docker build --target full -t netlab-ui:full .
+docker build -t netlab-ui .                   # UI only (uses the host's netlab)
+```
+
+The backend checks its own `docker run` setup (`services/container_env.py`,
+`GET /api/environment/container`, Settings → Environment → Container Setup).
+
 ### Nix (full stack)
 
 ```bash
@@ -103,6 +114,12 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 
 - **`ruamel.yaml` `YAML()` instances are stateful — never share one across load calls for unrelated documents.** `services/model/serialize.py` used one module-level `_yaml = YAML()` for every load *and* dump. Loading a single file that carried a `%YAML 1.1` directive (e.g. a cloned netlab-examples topology) set `_yaml.version` as a side effect, and every later `dump()` — for *any* unrelated topology — kept stamping `%YAML 1.1` onto files that never had it. Fixed by resetting `_yaml.version = None` right after every `.load()` in `from_yaml()`. If new round-trip `YAML()` singletons get added, make them per-call (like `_helpers.py`/`images.py` already do) or reset state after load.
 - **Editing a canvas while the lab is deployed can look like edits "revert" after ~2-3s** if the background clab-projection cache warmer is allowed to use `netlab inspect` (the running instance) instead of the just-edited model. `app/contract/snapshot.py::_schedule_transform` now checks for `netlab.lock` and skips the `netlab create`/`inspect` transform entirely while locked, keeping the model-derived (edit-accurate) projection cached instead. Don't let that background warmer silently prefer "deployed" state over "just edited but not yet redeployed" state again.
+
+- **clab-ui's node editor only loads and saves containerlab fields.** Its form is built from a fixed list (`convertToEditorData`) and its save/dirty-check (`convertEditorDataToNodeSaveData`) drops every other key. The netlab tabs (role, provider, box, module, config, custom attrs) therefore go through `components/node-editor/NetlabAttrsTab.tsx` (`withNetlabAttrs`), which overlays the node's `extraData.netlabAttrs` and persists netlab-only keys via the `editNode` command. Any new netlab editor tab must be wrapped the same way (see `app/netlabNodeEditorTabs.ts`).
+- **clab-ui's node `data.role` is the icon, not netlab's `role`.** `snapshot.py` derives it (netlab role → device → device name); netlab's declared role lives in `extraData.netlabAttrs`. Never let the attrs merge overwrite `data.role` again.
+- **Running-lab matching is by topology file, then the file's own directory** (`host/runningMatch.ts`). A directory *prefix* or bare name match marks unrelated labs as running. netlab allows one lab per directory — new labs are created as `<workspace>/<name>/topology.yml`.
+- **`host.createSession` does not make a session active.** Explorer actions on a lab that isn't the open tab get their own background session (`getOrCreateSession` in `useTabManager`); only `activateSession` changes what canvas callbacks target. Resolving an action through "the current session" ran Deploy/Destroy on the wrong lab before.
+- **The YAML serializer merges into the loaded document** (`serialize.to_yaml` + `Topology.source`) so comments and flow style survive UI edits. Rebuilding the document from the model dropped users' comments.
 
 ## Key rules
 
