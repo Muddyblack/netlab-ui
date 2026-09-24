@@ -81,6 +81,7 @@ export default function App() {
             handleOpenLab={c.handleOpenLab}
             navbarPortalContainer={c.navbarPortalContainer}
             toolbarActions={toolbarActions}
+            refreshCanvas={c.refreshCanvas}
           />
 
           <AppSidebarPortals

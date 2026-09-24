@@ -395,6 +395,11 @@ def _flatten_members(topo: Topology, group_name: str) -> list[str]:
     return leaves
 
 
+# netlab node role / device -> clab-ui built-in icon (see the node loop below).
+_ROLE_ICONS = {"host": "client", "bridge": "bridge", "router": "pe", "gateway": "pe"}
+_DEVICE_ICONS = {"linux": "client"}
+
+
 async def build(
     topology_path: str,
     topo: Topology,
@@ -523,15 +528,27 @@ async def build(
                 node["data"].setdefault("extraData", {})["netlabAttrs"] = copy.deepcopy(source_node.attrs)
         if "label" not in node["data"]:
             node["data"]["label"] = node_id
-        if "role" not in node["data"]:
-            # The netlab device name (e.g. "frr") vs. its clab projection's
-            # kind (e.g. "linux" — see test_kind_image_references.py) diverge
-            # for many devices. Deriving the default icon from whichever
-            # projection happens to be active makes it flip when the
-            # background `netlab create` transform swaps the fallback
-            # rendering for the real one. Anchor it to the stable netlab
-            # device name instead so the icon never changes across that swap.
-            node["data"]["role"] = (source_node.device if source_node else None) or node.get("kind") or "router"
+        # clab-ui's node `role` is the *icon*. netlab's own node `role`
+        # (host/router/bridge) arrives through the attrs merge above and used
+        # to overwrite it, so `role: host` rendered as an unknown icon (i.e. a
+        # router) and every Linux host looked like a router. Derive the icon
+        # from netlab's role, then the device; the declared role stays in
+        # extraData.netlabAttrs for the node editor.
+        #
+        # The fallback is the netlab device name (e.g. "frr"), not the clab
+        # projection's kind (e.g. "linux" — see test_kind_image_references.py):
+        # deriving it from whichever projection is active made the icon flip
+        # when the background `netlab create` transform swapped the fallback
+        # rendering for the real one.
+        netlab_role = source_node.attrs.get("role") if source_node else None
+        device = (source_node.device if source_node else None) or topo.defaults.get("device")
+        node["data"]["role"] = (
+            _ROLE_ICONS.get(str(netlab_role or ""))
+            or _DEVICE_ICONS.get(str(device or ""))
+            or device
+            or node.get("kind")
+            or "router"
+        )
         saved_icon = node_view.get(node_id, {}).get("icon")
         if saved_icon:
             node["data"]["topoViewerRole"] = saved_icon
