@@ -37,6 +37,8 @@ services:
       # loopback unless you mean to expose it (set NETLAB_UI_HOST=0.0.0.0).
       UVICORN_HOST: ${NETLAB_UI_HOST:-127.0.0.1}
       UVICORN_PORT: ${NETLAB_UI_PORT:-8000}
+      # Set NETLAB_UI_AUTH=user:password (e.g. in .env) before exposing it.
+      NETLAB_UI_AUTH: ${NETLAB_UI_AUTH:-}
       NETLAB_GUI_CONTAINER: netlab-ui
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

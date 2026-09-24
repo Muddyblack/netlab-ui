@@ -18,6 +18,7 @@ def test_outside_container_reports_nothing(monkeypatch):
 
 
 def test_well_configured_container_passes(monkeypatch, tmp_path):
+    monkeypatch.delenv("UVICORN_HOST", raising=False)
     home = str(container_env.Path("~/.netlab").expanduser())
     info = {
         "HostConfig": {"Privileged": True, "NetworkMode": "host", "PidMode": "host"},
@@ -49,3 +50,14 @@ def test_misconfigured_container_explains_each_problem(monkeypatch):
     # Not mounted at all.
     assert not checks["workspace:/root/labs"]["ok"]
     assert not checks["netlab-state"]["ok"]
+
+
+def test_exposed_without_login_is_flagged(monkeypatch):
+    monkeypatch.setenv("UVICORN_HOST", "0.0.0.0")
+    monkeypatch.delenv("NETLAB_UI_AUTH", raising=False)
+    assert not container_env._exposure_check()["ok"]
+    monkeypatch.setenv("NETLAB_UI_AUTH", "admin:secret")
+    assert container_env._exposure_check()["ok"]
+    monkeypatch.setenv("UVICORN_HOST", "127.0.0.1")
+    monkeypatch.delenv("NETLAB_UI_AUTH")
+    assert container_env._exposure_check()["ok"]

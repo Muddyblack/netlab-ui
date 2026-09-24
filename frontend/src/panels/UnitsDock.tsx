@@ -108,7 +108,15 @@ export function UnitsDock({ sessionId, refreshKey, onRefresh, onToast, onOpenUni
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [open, setOpen] = useState(() => localStorage.getItem(DOCK_OPEN_KEY) !== "0");
+  // null = the user never toggled it: then the dock starts collapsed while the
+  // library is empty, so an empty "No units yet" panel doesn't eat canvas
+  // height (with a shell open the canvas was down to a strip).
+  const [openPref, setOpenPref] = useState<boolean | null>(() => {
+    try {
+      const saved = localStorage.getItem(DOCK_OPEN_KEY);
+      return saved === null ? null : saved !== "0";
+    } catch { return null; }
+  });
   const [pinnedUnits, setPinnedUnits] = useState<Record<string, boolean>>(loadPinnedUnits);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -131,12 +139,12 @@ export function UnitsDock({ sessionId, refreshKey, onRefresh, onToast, onOpenUni
 
   const BASE = getApiBase();
 
+  const open = openPref ?? units.length > 0;
   const toggleOpen = useCallback(() => {
-    setOpen((prev) => {
-      localStorage.setItem(DOCK_OPEN_KEY, prev ? "0" : "1");
-      return !prev;
-    });
-  }, []);
+    const next = !open;
+    try { localStorage.setItem(DOCK_OPEN_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+    setOpenPref(next);
+  }, [open]);
 
   const togglePinned = useCallback((unit: UnitInfo) => {
     setPinnedUnits((current) => {

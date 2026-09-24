@@ -206,6 +206,33 @@ def _host_config_checks(info: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _exposure_check() -> dict[str, Any]:
+    host = os.environ.get("UVICORN_HOST", "").strip()
+    exposed = host not in {"", "127.0.0.1", "localhost", "::1"}
+    protected = bool(os.environ.get("NETLAB_UI_AUTH", "").strip())
+    ok = not exposed or protected
+    return _check(
+        "exposure",
+        ok,
+        "warning",
+        (
+            "UI listens on loopback only"
+            if not exposed
+            else "Login required (NETLAB_UI_AUTH)"
+            if protected
+            else f"UI listens on {host} without a login"
+        ),
+        (
+            "Anyone who can reach this port can deploy labs and open root shells on lab nodes."
+            if not ok
+            else "Remote access needs an SSH tunnel or a login."
+            if not exposed
+            else "Browsers prompt once for the configured user and password."
+        ),
+        None if ok else "-e NETLAB_UI_AUTH=user:password",
+    )
+
+
 def diagnose(*, refresh: bool = False) -> dict[str, Any]:
     """Container deployment checks (cached for a short while)."""
     global _cache
@@ -236,6 +263,7 @@ def diagnose(*, refresh: bool = False) -> dict[str, Any]:
             checks += _host_config_checks(info)
             checks += _workspace_checks(mounts)
             checks.append(_state_check(mounts))
+        checks.append(_exposure_check())
         result = {"inContainer": True, "inspected": info is not None, "checks": checks}
 
     _cache = (time.monotonic(), result)

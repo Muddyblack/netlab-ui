@@ -364,7 +364,7 @@ Why each flag matters — each one fails late and cryptically when missing:
 - **Docker socket** — labs run on the host's Docker daemon, next to the UI container.
 - **Labs directory at the *same path* as on the host** — containerlab asks the host daemon to bind-mount node config files by their in-container path. Mounting `./labs` at `/work` (as older docs suggested) makes every node fail to start.
 - **`~/.netlab`** — netlab's running-lab registry. Shared with `netlab status` on the host and kept across container re-creation; without it labs started from the UI turn into orphans.
-- **`UVICORN_HOST=127.0.0.1`** — the UI can deploy labs and open root shells, so it listens on loopback unless you set `0.0.0.0` on purpose.
+- **`UVICORN_HOST=127.0.0.1`** — the UI can deploy labs and open root shells, so it listens on loopback unless you set `0.0.0.0` on purpose. When you do, also set **`NETLAB_UI_AUTH=user:password`**: every page, API call, live stream and terminal then requires that login (HTTP Basic — the browser asks once).
 
 You don't have to remember any of this: the backend inspects its own container and lists anything missing — with the exact flag to add — under **Settings → Environment → Container Setup**, plus a banner at startup when a deployment would fail.
 
