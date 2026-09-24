@@ -80,9 +80,10 @@ function buildRunningLabNode(
   const directory = labInfo.dir || labInfo.path || "";
   const knownFile = labFiles.find((file) => runningLabMatches(labInfo, file.path, file.labName));
   // Prefer the topology's real lab name over netlab's instance id
-  // ("default"), which says nothing about *which* lab is running.
+  // ("default"), which says nothing about *which* lab is running — and over
+  // netlab's runtime name, which the multilab plugin rewrites to "ml-<id>".
   // The instance id stays visible as a suffix when it differs.
-  const labName = labInfo.name || knownFile?.labName || labKey;
+  const labName = knownFile?.labName || labInfo.name || labKey;
   const label = labName === labKey ? labName : `${labName} (${labKey})`;
   const yamlPath = knownFile?.path || runningLabTopologyPath(labInfo) || (directory ? `${directory}/topology.yml` : `labs/${labName}.yml`);
   const topoRef = {

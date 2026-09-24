@@ -21,10 +21,14 @@ interface LabLifecycleOptions {
   refreshCanvas?: () => void;
   onValidationIssues?: (issues: ValidationIssue[]) => void;
   /** Review gate before `netlab up` of the lab behind `sid`. */
-  beforeDeploy?: (sid: string) => Promise<boolean>;
+  beforeDeploy?: (sid: string) => Promise<DeployDecision>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
 }
+
+/** Outcome of the pre-deploy review. `multilabId` starts the lab as a
+ * parallel netlab instance (multilab plugin) instead of the default one. */
+export type DeployDecision = { proceed: boolean; multilabId?: number };
 
 export type LifecycleCompletion = {
   action: LifecycleAction;
@@ -109,11 +113,12 @@ async function streamLifecycleCommand(
   host: LifecycleHost,
   onProgress?: (progress: DeploymentProgress) => void,
   signal?: AbortSignal,
+  multilabId?: number,
 ): Promise<LifecycleStreamState> {
   const res = await fetch(`${getApiBase()}/api/lab/lifecycle/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId, action }),
+    body: JSON.stringify({ sessionId, action, multilabId }),
     signal,
   });
   if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -137,9 +142,9 @@ async function streamLifecycleCommand(
   return state;
 }
 
-async function shouldAbortForPreflight(action: LifecycleAction, sid: string, beforeDeploy?: (sid: string) => Promise<boolean>): Promise<boolean> {
-  if (action !== "up" || !beforeDeploy) return false;
-  return !(await beforeDeploy(sid));
+async function preflightDecision(action: LifecycleAction, sid: string, beforeDeploy?: (sid: string) => Promise<DeployDecision>): Promise<DeployDecision> {
+  if (action !== "up" || !beforeDeploy) return { proceed: true };
+  return beforeDeploy(sid);
 }
 
 function reportLifecycleSuccess(
@@ -187,13 +192,14 @@ export function useLabLifecycle({ host, fetchFiles, refreshStatus, refreshCanvas
     processingKind: "deploy" | "destroy" = "deploy",
     refreshFiles = true
   ) => {
-    if (await shouldAbortForPreflight(action, sid, beforeDeploy)) return;
+    const decision = await preflightDecision(action, sid, beforeDeploy);
+    if (!decision.proceed) return;
     setProcessing(true, processingKind);
     const controller = new AbortController();
     host.setLifecycleCancel?.(() => controller.abort());
     host.emitTopoViewerEvent({ type: "lifecycleLog", line: `Starting ${label}...`, stream: "stdout" });
     try {
-      const result = await streamLifecycleCommand(action, sid, label, host, onDeploymentProgress, controller.signal);
+      const result = await streamLifecycleCommand(action, sid, label, host, onDeploymentProgress, controller.signal, decision.multilabId);
       reportLifecycleSuccess(action, label, result, onValidationIssues, refreshCanvas, onLifecycleFinished);
       if (refreshFiles) void fetchFiles();
       void refreshStatus?.();

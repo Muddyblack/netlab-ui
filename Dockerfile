@@ -80,6 +80,10 @@ ENV NETLAB_GUI_IN_CONTAINER=1
 # (what docker-compose.yml does with host networking) needs no CMD override.
 ENV UVICORN_HOST=0.0.0.0 UVICORN_PORT=8000
 EXPOSE 8000
+# No curl in the image; the stdlib does the probe. Loopback works for both the
+# default 0.0.0.0 bind and the compose file's 127.0.0.1.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('UVICORN_PORT', '8000'), timeout=4)"
 CMD ["uvicorn", "app.main:app"]
 
 # Populates the GHCR package page (README, repo link, license) instead of the

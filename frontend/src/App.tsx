@@ -145,6 +145,7 @@ export default function App() {
             setDeployDiff={c.setDeployDiff}
             setDeployValidationIssues={c.setDeployValidationIssues}
             deployDecisionRef={c.deployDecisionRef}
+            deployPlan={c.deployPlan}
             quickOpen={c.quickOpen}
             setQuickOpen={c.setQuickOpen}
             sessionId={c.sessionId}

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from services.netlab import location
+from services.netlab import location, multilab
 
 
 class NetlabNotInstalled(RuntimeError):
@@ -780,11 +780,14 @@ LIFECYCLE_ACTIONS: dict[str, list[str]] = {
 _ACCEPTS_TOPOLOGY_ARG = {"up", "create-configs"}
 
 
-def lifecycle_argv(action: str, topology_path: str | Path) -> tuple[list[str], Path]:
+def lifecycle_argv(action: str, topology_path: str | Path, *, multilab_id: int | None = None) -> tuple[list[str], Path]:
     """Return ``(args, cwd)`` for a lifecycle ``action``; raises ``KeyError``
-    for unknown actions."""
+    for unknown actions. ``multilab_id`` starts ``up`` as a parallel instance
+    (see services/netlab/multilab.py)."""
     path = Path(topology_path)
     args = list(LIFECYCLE_ACTIONS[action])
+    if action == "up" and multilab_id is not None:
+        args += multilab.multilab_args(multilab_id)
     if action in _ACCEPTS_TOPOLOGY_ARG:
         args.append(path.name)
     return args, path.parent

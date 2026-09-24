@@ -1,7 +1,7 @@
 import { createApiClabUiHost as officialCreateApiClabUiHost } from "@containerlab/clab-ui/host";
 import type { ClabUiHost, ClabUiTopoViewerHost, ClabUiTopoViewerEvent, HostRuntimeContainer, TopoViewerLifecycleAction, TopoViewerNodeAction, TopoViewerSvgExportPayload } from "@containerlab/clab-ui/host";
 import type { DeploymentProgress } from "../components/CanvasDeploymentProgress";
-import type { LifecycleCompletion } from "../hooks/useLabLifecycle";
+import type { DeployDecision, LifecycleCompletion } from "../hooks/useLabLifecycle";
 import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
 import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
@@ -21,7 +21,7 @@ export interface AppClabUiHost extends ClabUiHost {
   listLabFiles?: () => Promise<LabFileEntry[]>;
   sessionId: string | null;
   onNodeAction?: (action: string, nodeName: string) => void;
-  onBeforeDeploy?: (sessionId: string) => Promise<boolean>;
+  onBeforeDeploy?: (sessionId: string) => Promise<DeployDecision>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
   setLifecycleCancel?(cancel: (() => void) | null): void;
@@ -326,12 +326,14 @@ export function createApiClabUiHost(options?: {
         activeLifecycleCancel?.();
         activeLifecycleCancel = cancel;
         try {
+          let multilabId: number | undefined;
           if (backendAction === "up" && resultHost.onBeforeDeploy) {
-            const proceed = await resultHost.onBeforeDeploy(sessionId);
-            if (!proceed) {
+            const decision = await resultHost.onBeforeDeploy(sessionId);
+            if (!decision.proceed) {
               cancel();
               return;
             }
+            multilabId = decision.multilabId;
           }
           if (settled) return;
           // Emit this after preflight approval because approval temporarily
@@ -340,7 +342,7 @@ export function createApiClabUiHost(options?: {
           const res = await safeFetch(`${BASE}/api/lab/lifecycle/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionId, action: backendAction }),
+            body: JSON.stringify({ sessionId, action: backendAction, multilabId }),
             signal: controller.signal,
           });
           if (!res.ok || !res.body) {

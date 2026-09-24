@@ -977,6 +977,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/deploy-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lab Deploy Plan
+         * @description Would `netlab up` collide with a lab instance running elsewhere?
+         */
+        get: operations["lab_deploy_plan_api_lab_deploy_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/lifecycle/stream": {
         parameters: {
             query?: never;
@@ -2521,6 +2541,19 @@ export interface components {
              */
             diff: string;
         };
+        /**
+         * DeployPlan
+         * @description What `netlab up` would collide with (see services/netlab/multilab.py).
+         */
+        DeployPlan: {
+            /** Instanceid */
+            instanceId: string;
+            /** Configured */
+            configured: boolean;
+            conflict?: components["schemas"]["InstanceConflict"] | null;
+            /** Suggestedmultilabid */
+            suggestedMultilabId?: number | null;
+        };
         /** DeploymentEvent */
         DeploymentEvent: {
             /** Sequence */
@@ -3043,6 +3076,15 @@ export interface components {
             /** Output */
             output?: string | null;
         };
+        /** InstanceConflict */
+        InstanceConflict: {
+            /** Instanceid */
+            instanceId: string;
+            /** Directory */
+            directory: string;
+            /** Name */
+            name?: string | null;
+        };
         /** InstantiateRequest */
         InstantiateRequest: {
             /** Sessionid */
@@ -3458,6 +3500,8 @@ export interface components {
             sessionId: string;
             /** Action */
             action: string;
+            /** Multilabid */
+            multilabId?: number | null;
         };
         /** LinkImpairment */
         LinkImpairment: {
@@ -6813,6 +6857,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_deploy_plan_api_lab_deploy_plan_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployPlan"];
                 };
             };
             /** @description Validation Error */

@@ -127,6 +127,21 @@ class DeployDiffResult(BaseModel):
     diff: str = ""
 
 
+class InstanceConflict(BaseModel):
+    instanceId: str
+    directory: str
+    name: str | None = None
+
+
+class DeployPlan(BaseModel):
+    """What `netlab up` would collide with (see services/netlab/multilab.py)."""
+
+    instanceId: str
+    configured: bool
+    conflict: InstanceConflict | None = None
+    suggestedMultilabId: int | None = None
+
+
 class RuntimeInterfaceStats(BaseModel):
     rxBps: int | None = None
     txBps: int | None = None

@@ -1,7 +1,7 @@
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from "@mui/material";
-import type { DeployDiffResult } from "../api/client";
+import type { DeployDiffResult, DeployPlan } from "../api/client";
 import type { ValidationIssue } from "../hooks/useLabLifecycle";
 import { DiffView } from "./DiffView";
 
@@ -64,12 +64,33 @@ function DeployDiffBody({ diffView, diff }: { diffView: DiffViewKind; diff: Depl
   );
 }
 
-export function DeployDiffDialog({ diff, validationIssues, labName, onCancel, onDeploy }: {
+/** Another lab already runs as this topology's netlab instance: `netlab up`
+ * would refuse. Offer netlab's multilab plugin to run both side by side. */
+function InstanceConflictAlert({ plan }: { plan: DeployPlan | null | undefined }) {
+  const conflict = plan?.conflict;
+  if (!conflict) return null;
+  const other = conflict.name ? `${conflict.name} (${conflict.directory})` : conflict.directory;
+  return (
+    <Alert severity="warning" sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+        Lab instance “{conflict.instanceId}” is already running: {other}
+      </Typography>
+      <Typography variant="body2">
+        {plan?.suggestedMultilabId != null
+          ? <>A plain <code>netlab up</code> would stop with “already running”. Deploy as parallel instance #{plan.suggestedMultilabId} (netlab’s multilab plugin: lab name <code>ml-{plan.suggestedMultilabId}</code>, management network <code>192.168.{plan.suggestedMultilabId}.0/24</code>) to run both at once, or shut the other lab down first.</>
+          : <>This topology sets <code>defaults.multilab.id</code> itself; change it to an unused id or shut the other lab down first.</>}
+      </Typography>
+    </Alert>
+  );
+}
+
+export function DeployDiffDialog({ diff, validationIssues, labName, plan, onCancel, onDeploy }: {
   diff: DeployDiffResult | null;
   validationIssues: ValidationIssue[];
   labName?: string | null;
+  plan?: DeployPlan | null;
   onCancel: () => void;
-  onDeploy: () => void;
+  onDeploy: (multilabId?: number) => void;
 }) {
   const errors = validationIssues.filter((issue) => issue.severity === "error");
   const warnings = validationIssues.filter((issue) => issue.severity === "warning");
@@ -78,12 +99,19 @@ export function DeployDiffDialog({ diff, validationIssues, labName, onCancel, on
     <Dialog open={diff !== null} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>Review changes before deploy{labName ? <> · <strong>{labName}</strong></> : null}</DialogTitle>
       <DialogContent dividers>
+        <InstanceConflictAlert plan={plan} />
         <ValidationSummaryAlert validationIssues={validationIssues} errors={errors} warnings={warnings} />
         <DeployDiffBody diffView={diffView} diff={diff} />
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button variant="contained" color={errors.length ? "error" : "primary"} onClick={onDeploy}>{errors.length ? "Deploy despite errors" : "Deploy with netlab up"}</Button>
+        {plan?.suggestedMultilabId != null ? (
+          <Button variant="contained" color={errors.length ? "error" : "primary"} onClick={() => onDeploy(plan.suggestedMultilabId ?? undefined)}>
+            Deploy as parallel instance #{plan.suggestedMultilabId}
+          </Button>
+        ) : (
+          <Button variant="contained" color={errors.length ? "error" : "primary"} onClick={() => onDeploy()}>{errors.length ? "Deploy despite errors" : "Deploy with netlab up"}</Button>
+        )}
       </DialogActions>
     </Dialog>
   );

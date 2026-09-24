@@ -76,6 +76,7 @@ export type MultiserverVxlan = Schemas["MultiserverVxlan"];
 export type ConfigPreviewResult = Schemas["ConfigPreviewResult"];
 export type NetlabLinkResult = Schemas["NetlabLinkResult"];
 export type DeployDiffResult = Schemas["DeployDiffResult"];
+export type DeployPlan = Schemas["DeployPlan"];
 export type DeploymentOverview = Schemas["DeploymentOverview"];
 export type DeploymentNodeDetail = Schemas["DeploymentNodeDetail"];
 export type DeploymentLog = Schemas["DeploymentLog"];
@@ -263,6 +264,9 @@ export const api = {
       1,
       120000
     ),
+
+  getDeployPlan: (sessionId: string) =>
+    http<DeployPlan>(`/api/lab/deploy-plan?sessionId=${encodeURIComponent(sessionId)}`),
 
   getDeployDiff: (sessionId: string) =>
     http<DeployDiffResult>(`/api/lab/deploy-diff?sessionId=${encodeURIComponent(sessionId)}`),

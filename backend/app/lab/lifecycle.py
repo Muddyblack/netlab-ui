@@ -19,7 +19,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.contract.responses import (
     CommandResult,
@@ -27,6 +27,7 @@ from app.contract.responses import (
     DeploymentLog,
     DeploymentNodeDetail,
     DeploymentOverview,
+    DeployPlan,
     LabInstance,
     LabInstanceAction,
     RuntimeContainer,
@@ -34,7 +35,7 @@ from app.contract.responses import (
     VersionResult,
 )
 from app.lab import common
-from services.netlab import deploy_diff, deployment, runner
+from services.netlab import deploy_diff, deployment, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
@@ -257,6 +258,19 @@ async def lab_link_impairment(body: LinkImpairment):
 class LifecycleStreamAction(BaseModel):
     sessionId: str
     action: str
+    # `up` only: start as parallel instance N via netlab's multilab plugin.
+    multilabId: int | None = Field(default=None, ge=1, le=254)
+
+
+@router.get("/deploy-plan", response_model=DeployPlan)
+async def lab_deploy_plan(sessionId: str):
+    """Would `netlab up` collide with a lab instance running elsewhere?"""
+    path = common.session_path(sessionId)
+    try:
+        status = await runner.status_cached(max_age=2.0) if runner.is_installed() else {}
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        status = {}
+    return multilab.plan(path, status if isinstance(status, dict) else {})
 
 
 @router.post("/lifecycle/stream")
@@ -269,7 +283,7 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
     if body.action not in runner.LIFECYCLE_ACTIONS:
         raise HTTPException(400, f"unknown lifecycle action {body.action!r}")
     path = common.session_path(body.sessionId)
-    args, cwd = runner.lifecycle_argv(body.action, path)
+    args, cwd = runner.lifecycle_argv(body.action, path, multilab_id=body.multilabId)
 
     async def gen():
         # Clean raw netlab output for the plain-text modal: strip ANSI, fold

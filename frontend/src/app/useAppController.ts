@@ -17,7 +17,7 @@ import {
 import { createApiClabUiHost, type AppClabUiHost } from "../host/createHost";
 import { createDemoClabUiHost } from "../host/createDemoHost";
 import { type DeploymentProgress } from "../components/CanvasDeploymentProgress";
-import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type NetlabProjection } from "../api/client";
+import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
 import { persistAssistantOpen, readAssistantOpen } from "../panels/assistant/preferences";
@@ -32,6 +32,7 @@ import {
   useTabManager,
   useLabLifecycle,
   type ValidationIssue,
+  type DeployDecision,
   useExplorerController,
   type ExplorerIncomingMessage,
   useSessionDock,
@@ -179,7 +180,8 @@ export function useAppController() {
   const [deployDiff, setDeployDiff] = useState<DeployDiffResult | null>(null);
   const [deployValidationIssues, setDeployValidationIssues] = useState<ValidationIssue[]>([]);
   const [deployTargetLab, setDeployTargetLab] = useState<string | null>(null);
-  const deployDecisionRef = useRef<((proceed: boolean) => void) | null>(null);
+  const deployDecisionRef = useRef<((decision: DeployDecision) => void) | null>(null);
+  const [deployPlan, setDeployPlan] = useState<DeployPlan | null>(null);
 
   useEffect(() => {
     persistAssistantOpen(assistantOpen);
@@ -522,19 +524,21 @@ export function useAppController() {
     }
   }, [activeTabId, addToast, openTabs, sendSystemNotification]);
 
-  const requestDeployApproval = useCallback(async (targetSid?: string): Promise<boolean> => {
+  const requestDeployApproval = useCallback(async (targetSid?: string): Promise<DeployDecision> => {
     // Review the lab that is being deployed — an explorer "Deploy" on another
     // lab must not be reviewed (and badged) against the canvas's lab.
     const sid = targetSid ?? sessionId;
-    if (!sid) return false;
+    if (!sid) return { proceed: false };
     const onCanvas = sid === sessionId;
     const targetPath = topologyPathForSession(sid);
     const targetLab = labFilesRef.current.find((file) => file.path === targetPath)?.labName
       ?? (targetPath ? targetPath.split("/").slice(-2, -1)[0] ?? targetPath : null);
     try {
-      const [validation, diff] = await Promise.all([
+      const [validation, diff, plan] = await Promise.all([
         api.labPreflight(sid),
-        api.getDeployDiff(sid)
+        api.getDeployDiff(sid),
+        // Best effort: without it the review simply omits the conflict hint.
+        api.getDeployPlan(sid).catch(() => null)
       ]);
       const issues = validation.issues as ValidationIssue[];
       if (onCanvas) {
@@ -543,20 +547,21 @@ export function useAppController() {
       }
       setDeployValidationIssues(issues);
       setDeployTargetLab(targetLab);
+      setDeployPlan(plan);
       setDeployDiff(diff);
       // clab-ui opens its lifecycle progress modal before calling the host.
       // Hide that modal while the preflight review is awaiting a decision;
       // otherwise the review dialog sits behind it and deployment appears to
       // hang forever at "Waiting for command output".
       topoViewerActions.closeLifecycleModal();
-      const proceed = await new Promise<boolean>((resolve) => {
+      const decision = await new Promise<DeployDecision>((resolve) => {
         deployDecisionRef.current = resolve;
       });
-      topoViewerActions.setProcessing(proceed, proceed ? "deploy" : undefined);
-      return proceed;
+      topoViewerActions.setProcessing(decision.proceed, decision.proceed ? "deploy" : undefined);
+      return decision;
     } catch (err) {
       addToast(`Could not prepare deploy review: ${err instanceof Error ? err.message : String(err)}`, "error");
-      return false;
+      return { proceed: false };
     }
   }, [addToast, refreshCanvas, sessionId, topologyPathForSession, topoViewerActions]);
 
@@ -654,7 +659,7 @@ export function useAppController() {
     setValidationIssues([]);
     setDeployDiff(null);
     setDeployValidationIssues([]);
-    deployDecisionRef.current?.(false);
+    deployDecisionRef.current?.({ proceed: false });
     deployDecisionRef.current = null;
   }, [sessionId]);
 
@@ -979,7 +984,7 @@ export function useAppController() {
     notificationsSupported, notificationsEnabled, notificationPermission, toggleNotifications,
     assistantCapabilities, assistantOpen, setAssistantOpen, assistantSettingsProviderId,
     refreshAssistantCapabilities,
-    deployDiff, deployValidationIssues, deployTargetLab, setDeployDiff, setDeployValidationIssues, deployDecisionRef,
+    deployDiff, deployValidationIssues, deployTargetLab, deployPlan, setDeployDiff, setDeployValidationIssues, deployDecisionRef,
     quickOpen, setQuickOpen,
     isTopologyLocked, quickActions,
     imageManagerOpen, setImageManagerOpen,

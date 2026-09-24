@@ -1,12 +1,12 @@
 import type { MutableRefObject } from "react";
-import { api, type AssistantCapabilities, type DeployDiffResult, type LabFileEntry } from "../../api/client";
+import { api, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type LabFileEntry } from "../../api/client";
 import type { RuntimeSnackbarState, StartupState, WorkspaceEntry } from "../../lifecycle/types";
 import type { AppThemeMode } from "../../theme";
 import type { createClabUiRuntime, ClabUiRuntime } from "@containerlab/clab-ui/host";
 import { ContainerlabImageManagerDialog } from "@containerlab/clab-ui/image-manager";
 import type { AppClabUiHost } from "../../host/createHost";
 import type { TopologyRef } from "../../hooks/useTabManager";
-import type { ValidationIssue } from "../../hooks/useLabLifecycle";
+import type { DeployDecision, ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { UnitInfo } from "../../panels/units-dock/types";
 import { SettingsDialog, type SettingsTab } from "../dialogs/SettingsDialog";
 import { DeployDiffDialog } from "../DeployDiffDialog";
@@ -42,7 +42,8 @@ interface AppDialogsProps {
   deployTargetLab?: string | null;
   setDeployDiff: (diff: DeployDiffResult | null) => void;
   setDeployValidationIssues: (issues: ValidationIssue[]) => void;
-  deployDecisionRef: MutableRefObject<((proceed: boolean) => void) | null>;
+  deployDecisionRef: MutableRefObject<((decision: DeployDecision) => void) | null>;
+  deployPlan?: DeployPlan | null;
 
   // Quick open
   quickOpen: boolean;
@@ -90,6 +91,7 @@ export function AppDialogs({
   setDeployDiff,
   setDeployValidationIssues,
   deployDecisionRef,
+  deployPlan,
   quickOpen,
   setQuickOpen,
   sessionId,
@@ -140,16 +142,17 @@ export function AppDialogs({
         diff={deployDiff}
         validationIssues={deployValidationIssues}
         labName={deployTargetLab}
+        plan={deployPlan}
         onCancel={() => {
           setDeployDiff(null);
           setDeployValidationIssues([]);
-          deployDecisionRef.current?.(false);
+          deployDecisionRef.current?.({ proceed: false });
           deployDecisionRef.current = null;
         }}
-        onDeploy={() => {
+        onDeploy={(multilabId) => {
           setDeployDiff(null);
           setDeployValidationIssues([]);
-          deployDecisionRef.current?.(true);
+          deployDecisionRef.current?.({ proceed: true, multilabId });
           deployDecisionRef.current = null;
         }}
       />
