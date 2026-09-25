@@ -516,7 +516,7 @@ async def build(
             # device here instead; otherwise Ctrl+D silently turns an FRR
             # node into an explicit Linux node. Keep the projection's outer
             # ``kind`` untouched for rendering.
-            netlab_device = source_node.device or topo.defaults.get("device")
+            netlab_device = source_node.device or topo.default("device")
             if netlab_device:
                 node["data"]["device"] = netlab_device
                 node["data"]["kind"] = netlab_device
@@ -548,7 +548,7 @@ async def build(
         # when the background `netlab create` transform swapped the fallback
         # rendering for the real one.
         netlab_role = source_node.attrs.get("role") if source_node else None
-        device = (source_node.device if source_node else None) or topo.defaults.get("device")
+        device = (source_node.device if source_node else None) or topo.default("device")
         node["data"]["role"] = (
             _ROLE_ICONS.get(str(netlab_role or ""))
             or _DEVICE_ICONS.get(str(device or ""))

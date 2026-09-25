@@ -117,3 +117,9 @@ class Topology:
 
     def template(self, name: str) -> Template | None:
         return next((t for t in self.templates if t.name == name), None)
+
+    def default(self, key: str) -> Any:
+        """A ``defaults`` setting, also when written as a dotted top-level key
+        (``defaults.device: linux``), which the parser keeps in ``attrs``."""
+        value = self.defaults.get(key)
+        return value if value is not None else self.attrs.get(f"defaults.{key}")

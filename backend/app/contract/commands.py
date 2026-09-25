@@ -126,7 +126,7 @@ def _add_node(path: str, cmd: dict[str, Any]) -> bool:
         # chose. If it merely matches the lab-wide default, drop it so the clone keeps inheriting
         # instead of pinning a redundant explicit value.
         device = cmd.get("device") or (cmd.get("extraData") or {}).get("kind") or None
-        default_device = topo.defaults.get("device")
+        default_device = topo.default("device")
         if device is not None and default_device is not None and device == default_device:
             device = None
         # Duplicating/pasting an existing node carries its full declarative
@@ -427,7 +427,7 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
             if entry.get("id") == old_name:
                 entry["id"] = node_name
 
-    effective_device = node_to_update.device or topo.defaults.get("device")
+    effective_device = node_to_update.device or topo.default("device")
     for key in list(extra_data.keys()):
         val = extra_data.pop(key)
         # clab-ui's form always carries the *resolved* container image; saving

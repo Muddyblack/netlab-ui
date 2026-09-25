@@ -24,7 +24,7 @@ def _builtin_templates(topology_path: str) -> list[dict]:
     served, not saved: the first template the user creates replaces them.
     """
     try:
-        default_device = commands.load_topology(topology_path).defaults.get("device")
+        default_device = commands.load_topology(topology_path).default("device")
     except Exception:  # noqa: BLE001 — unreadable YAML: still offer something
         default_device = None
     router_device = default_device if default_device and default_device != "linux" else "frr"
