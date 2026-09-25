@@ -56,6 +56,13 @@ function editTabIsActive(): boolean {
     .some((tab) => TRANSIENT_TAB_LABELS.has(tabLabel(tab).toLowerCase()));
 }
 
+/** Select a right-hand panel tab by label (e.g. "Lenses"); false if absent. */
+export function openPanelTab(label: string): boolean {
+  const tab = panelTabs().find((element) => tabLabel(element).toLowerCase() === label.toLowerCase());
+  tab?.click();
+  return Boolean(tab);
+}
+
 export function useRightPanelTabMemory(): void {
   useEffect(() => {
     let restoreQueued = false;

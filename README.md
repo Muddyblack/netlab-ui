@@ -237,15 +237,28 @@ at runtime.
 
 ## Working with running labs
 
+### Shortcuts
+
+| Keys | Opens |
+|---|---|
+| **Ctrl+P** | everything: labs, nodes, actions, and search inside the lab. Context actions (run on nodes, live traffic, running configs) come first while a lab runs. |
+| **Ctrl+`** | Run command on nodes (canvas selection preselected) |
+| **Ctrl+I** | AI assistant |
+
 ### Run a command on many nodes
 
 **Run Command on Nodes…** (right-click a deployed lab, or the stacked-cards
 button in the terminal dock) opens a dock tab that sends one command to any
 mix of nodes, groups and `all`, in parallel:
 
-- **Shell** runs a Linux command in the node (`netlab exec`; pipes work).
-  **Show** runs a CLI show command in the device's own shell
-  (`netlab connect --show`: vtysh, Cli, sr_cli…).
+- **Auto** (the default) sends `show …` to each device's CLI (`netlab
+  connect --show`: vtysh, Cli, sr_cli…) and everything else to its shell
+  (`netlab exec`; pipes work); Linux hosts always get the shell. **Shell** /
+  **Show** force one.
+- Nodes selected on the canvas are preselected; `all` means the running nodes.
+- **Quick** chips offer your last commands plus the ones that fit this lab
+  (`show ip ospf neighbor` only if it runs OSPF…). One click runs one;
+  Shift-click puts it in the command box to edit first.
 - Answers appear side by side, and identical answers are merged
   (`r[1-3]`) so the odd node stands out. Non-zero exits and CLI error replies
   (`% Unknown command`) are flagged red.

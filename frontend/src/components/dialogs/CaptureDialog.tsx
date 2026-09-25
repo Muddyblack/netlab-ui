@@ -12,6 +12,16 @@ import { getApiBase } from "../../api/endpoint";
 import { clearCaptureRequest, useCaptureRequest } from "../../host/captureStore";
 
 const DURATIONS = [10, 30, 60, 300];
+const DURATION_KEY = "netlab.capture.seconds";
+
+function savedDuration(): number {
+  try {
+    const value = Number(localStorage.getItem(DURATION_KEY));
+    return DURATIONS.includes(value) ? value : 30;
+  } catch {
+    return 30;
+  }
+}
 
 function captureUrl(lab: { sessionId: string } | { topology: string }, node: string, iface: string, seconds: number): string {
   const base = new URL(getApiBase() || window.location.origin, window.location.origin);
@@ -33,7 +43,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * stream into a local Wireshark, or Wireshark in the browser (Edgeshark). */
 export function CaptureDialog() {
   const request = useCaptureRequest();
-  const [seconds, setSeconds] = useState(30);
+  const [seconds, setSeconds] = useState(savedDuration);
   const [copied, setCopied] = useState(false);
   if (!request) return null;
   const sessionLab = { sessionId: request.sessionId ?? "" };
@@ -60,12 +70,16 @@ export function CaptureDialog() {
         <Stack spacing={2.25} divider={<Divider flexItem />}>
           <Section title="Download a pcap file">
             <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
-              <ToggleButtonGroup size="small" exclusive value={seconds} onChange={(_event, value: number | null) => value && setSeconds(value)}>
+              <ToggleButtonGroup size="small" exclusive value={seconds} onChange={(_event, value: number | null) => {
+                if (!value) return;
+                setSeconds(value);
+                try { localStorage.setItem(DURATION_KEY, String(value)); } catch { /* a convenience */ }
+              }}>
                 {DURATIONS.map((value) => (
                   <ToggleButton key={value} value={value}>{value < 60 ? `${value} s` : `${value / 60} min`}</ToggleButton>
                 ))}
               </ToggleButtonGroup>
-              <Button variant="contained" size="small" startIcon={<DownloadIcon />} onClick={download}>Capture &amp; download</Button>
+              <Button autoFocus variant="contained" size="small" startIcon={<DownloadIcon />} onClick={download}>Capture &amp; download</Button>
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
               Both directions, VLAN tags kept; the file finishes after the chosen time. Open it in Wireshark.

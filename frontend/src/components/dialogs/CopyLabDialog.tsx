@@ -67,6 +67,8 @@ export function CopyLabDialog() {
             ))}
           </TextField>
           <TextField size="small" label="New lab name" value={name} onChange={(event) => setName(event.target.value)}
+            autoFocus onFocus={(event) => event.target.select()}
+            onKeyDown={(event) => { if (event.key === "Enter" && valid && !busy) void copy(); }}
             error={Boolean(name) && !NAME_RE.test(name)} helperText="Letters, digits, - and _. Becomes the folder and the lab's name." />
           <Typography variant="caption" color="text.secondary">
             Copies the topology with its layout, tours, scripts and any files in the lab folder — not netlab&apos;s generated

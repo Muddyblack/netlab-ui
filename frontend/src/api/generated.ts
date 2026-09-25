@@ -3289,10 +3289,10 @@ export interface components {
             command: string;
             /**
              * Mode
-             * @default shell
+             * @default auto
              * @enum {string}
              */
-            mode: "shell" | "show";
+            mode: "auto" | "shell" | "show";
             /**
              * Timeouts
              * @default 30
@@ -4929,10 +4929,10 @@ export interface components {
             command: string;
             /**
              * Mode
-             * @default shell
+             * @default auto
              * @enum {string}
              */
-            mode: "shell" | "show";
+            mode: "auto" | "shell" | "show";
             /** Nodes */
             nodes?: string[];
         };

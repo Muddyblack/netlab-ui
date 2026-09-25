@@ -9,7 +9,10 @@ import PlaylistPlayIcon from "@mui/icons-material/PlaylistPlay";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
+import { useNodes } from "@containerlab/clab-ui";
+
 import { api, type ExecMode, type ExecScript, type ExecTargets } from "../../api/client";
+import { suggestCommands } from "./suggestions";
 import { downloadText, scriptFromRuns, transcriptMarkdown, type ExecRun } from "./model";
 import { RunResults } from "./RunResults";
 
@@ -89,7 +92,11 @@ function ScriptsMenu({ anchorEl, scripts, onClose, onReplay, onDelete }: {
 export function MultiExecPanel({ sessionId }: { sessionId: string }) {
   const [targets, setTargets] = useState<ExecTargets | null>(null);
   const [selection, setSelection] = useState<string[]>(["all"]);
-  const [mode, setMode] = useState<ExecMode>("shell");
+  const [mode, setMode] = useState<ExecMode>("auto");
+  const [modules, setModules] = useState<string[]>([]);
+  const [history, setHistory] = useState<string[]>(loadHistory);
+  const commandRef = useRef<HTMLInputElement | null>(null);
+  const canvasNodes = useNodes();
   const [command, setCommand] = useState("");
   const [runs, setRuns] = useState<ExecRun[]>([]);
   const [busy, setBusy] = useState(false);
@@ -108,6 +115,25 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
     void api.getExecTargets(sessionId).then((value) => { if (!cancelled) setTargets(value); }).catch(() => undefined);
     void api.getExecScripts(sessionId).then((value) => { if (!cancelled) setScripts(value.scripts); }).catch(() => undefined);
     return () => { cancelled = true; abortRef.current?.abort(); };
+  }, [sessionId]);
+
+  // Nodes selected on the canvas are what the user means; otherwise every
+  // running node. Only on open — after that the picker is theirs.
+  const preselected = useRef(false);
+  useEffect(() => {
+    if (preselected.current) return;
+    preselected.current = true;
+    const picked = canvasNodes.filter((node) => node.selected).map((node) => node.id);
+    if (picked.length) setSelection(picked);
+    commandRef.current?.focus();
+  }, [canvasNodes]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.searchLab(sessionId, "module:").then((result) => {
+      if (!cancelled) setModules(result.modules.map((module) => module.title));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
   }, [sessionId]);
 
   useEffect(() => {
@@ -152,12 +178,13 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
     }
   }, [execute]);
 
-  const submit = () => {
-    const text = command.trim();
+  const submit = (override?: string) => {
+    const text = (override ?? command).trim();
     if (!text || busy || selection.length === 0) return;
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify([text, ...loadHistory().filter((item) => item !== text)].slice(0, MAX_HISTORY)));
     } catch { /* history is a convenience */ }
+    setHistory(loadHistory());
     historyIndex.current = -1;
     setCommand("");
     void runSteps([{ command: text, mode, selection }]);
@@ -201,6 +228,14 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
   };
 
   const selected = options.filter((option) => selection.includes(option.value));
+  const quickCommands = useMemo(() => {
+    const nodes = targets?.nodes ?? [];
+    const chosen = selection.includes("all")
+      ? nodes.filter((node) => node.running)
+      : nodes.filter((node) => selection.includes(node.name) || Object.entries(targets?.groups ?? {}).some(([group, members]) => selection.includes(group) && members.includes(node.name)));
+    const devices = [...new Set(chosen.map((node) => node.device ?? ""))];
+    return [...new Set([...history.slice(0, 3), ...suggestCommands(devices, modules)])].slice(0, 8);
+  }, [targets, selection, modules, history]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", bgcolor: "background.default" }}>
@@ -228,6 +263,7 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
           sx={{ minWidth: 170, flex: "1 1 200px", maxWidth: 420 }}
         />
         <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_event, value: ExecMode | null) => value && setMode(value)}>
+          <Tooltip title="“show …” goes to each device's CLI, anything else to its shell"><ToggleButton value="auto">Auto</ToggleButton></Tooltip>
           <Tooltip title="Linux shell command in the node (netlab exec) — pipes work"><ToggleButton value="shell">Shell</ToggleButton></Tooltip>
           <Tooltip title="Device CLI show command (netlab connect --show) — vtysh, Cli, sr_cli…"><ToggleButton value="show">Show</ToggleButton></Tooltip>
         </ToggleButtonGroup>
@@ -236,7 +272,8 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
           value={command}
           onChange={(event) => setCommand(event.target.value)}
           onKeyDown={onCommandKey}
-          placeholder={mode === "show" ? "ip bgp summary" : "ip route | head"}
+          inputRef={commandRef}
+          placeholder={mode === "shell" ? "ip route | head" : "show ip route"}
           title="Enter runs it · ↑/↓ browse history"
           inputProps={{ "aria-label": "Command", style: { fontFamily: "monospace" } }}
           sx={{ flex: "3 1 160px", minWidth: 140 }}
@@ -244,7 +281,7 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
         {busy ? (
           <Button size="small" color="warning" variant="outlined" startIcon={<StopIcon />} onClick={() => abortRef.current?.abort()}>Stop</Button>
         ) : (
-          <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} disabled={!command.trim() || selection.length === 0} onClick={submit}>Run</Button>
+          <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} disabled={!command.trim() || selection.length === 0} onClick={() => submit()}>Run</Button>
         )}
         <Tooltip title="Saved scripts">
           <IconButton size="small" aria-label="Saved scripts" onClick={(event) => setScriptsAnchor(event.currentTarget)} disabled={busy}>
@@ -255,6 +292,27 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      {quickCommands.length > 0 && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.5, borderBottom: 1, borderColor: "divider", overflowX: "auto" }}>
+          <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, mr: 0.5 }}>Quick:</Typography>
+          {quickCommands.map((text) => (
+            <Tooltip key={text} describeChild title={`Run on ${selection.join(", ") || "…"} · Shift-click to edit first`}>
+              <Chip
+                size="small"
+                variant="outlined"
+                label={text}
+                disabled={busy || selection.length === 0}
+                onClick={(event) => {
+                  if (event.shiftKey) { setCommand(text); commandRef.current?.focus(); return; }
+                  submit(text);
+                }}
+                sx={{ fontFamily: "monospace", fontSize: "0.72rem", flexShrink: 0 }}
+              />
+            </Tooltip>
+          ))}
+        </Box>
+      )}
 
       <ScriptsMenu
         anchorEl={scriptsAnchor}

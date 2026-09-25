@@ -63,18 +63,23 @@ class ExecTargets(BaseModel):
     groups: dict[str, list[str]]
 
 
+ExecMode = Literal["auto", "shell", "show"]
+
+
 class ExecRequest(BaseModel):
     sessionId: str
-    # Node names, group names or "all" — expanded against the topology.
+    # Node names, group names or "all" (= the running nodes) — expanded
+    # against the topology.
     nodes: list[str] = Field(min_length=1)
     command: str = Field(min_length=1, max_length=4000)
-    mode: Literal["shell", "show"] = "shell"
+    # auto: "show …" goes to the device CLI, anything else to its shell.
+    mode: ExecMode = "auto"
     timeoutS: float = Field(default=30.0, gt=0, le=300)
 
 
 class ScriptStep(BaseModel):
     command: str
-    mode: Literal["shell", "show"] = "shell"
+    mode: ExecMode = "auto"
     nodes: list[str] = Field(default_factory=list)
 
 
@@ -108,15 +113,19 @@ def _groups(topo: Any) -> dict[str, list[str]]:
     return groups
 
 
-def expand_targets(requested: list[str], node_names: list[str], groups: dict[str, list[str]]) -> list[str]:
+def expand_targets(
+    requested: list[str], node_names: list[str], groups: dict[str, list[str]], running: set[str] | None = None
+) -> list[str]:
     """Resolve node/group names (and "all") to concrete node names, in
-    topology order, without duplicates. Unknown names are an error."""
+    topology order, without duplicates. Unknown names are an error. "all"
+    means the running nodes when any are known to run — nobody wants the
+    stopped ones to answer with errors."""
     known = set(node_names)
     wanted: set[str] = set()
 
     def add(name: str, seen: frozenset[str]) -> None:
         if name == _ALL:
-            wanted.update(node_names)
+            wanted.update(running or node_names)
         elif name in known:
             wanted.add(name)
         elif name in groups:
@@ -129,6 +138,23 @@ def expand_targets(requested: list[str], node_names: list[str], groups: dict[str
     for name in requested:
         add(name.strip(), frozenset())
     return [name for name in node_names if name in wanted]
+
+
+# Devices whose shell is the only interface — "show …" means nothing there.
+HOST_DEVICES = {"linux", "none"}
+
+
+def resolve_mode(mode: str, command: str, device: str | None) -> tuple[str, str]:
+    """(mode, command) actually run on a node. netlab's --show adds "show"
+    itself, so a typed "show ip route" loses its first word there; in auto
+    mode that prefix is what sends a command to the device CLI."""
+    text = command.strip()
+    has_show = text.lower().startswith("show ")
+    if mode == "show":
+        return "show", text[5:].strip() if has_show else text
+    if mode == "auto" and has_show and (device or "") not in HOST_DEVICES:
+        return "show", text[5:].strip()
+    return "shell", text
 
 
 def exec_args(node: str, command: str, mode: str, provider: str | None) -> list[str]:
@@ -209,11 +235,13 @@ def _clip(text: str) -> str:
 
 
 async def _run_one(
-    node: str, body: ExecRequest, provider: str | None, cwd: Path, limiter: asyncio.Semaphore
+    node: str, body: ExecRequest, target: tuple[str | None, str | None], cwd: Path, limiter: asyncio.Semaphore
 ) -> dict[str, Any]:
+    provider, device = target
     started = time.monotonic()
-    result: dict[str, Any] = {"node": node, "command": body.command, "mode": body.mode}
-    args = exec_args(node, body.command, body.mode, provider)
+    mode, command = resolve_mode(body.mode, body.command, device)
+    result: dict[str, Any] = {"node": node, "command": body.command, "mode": mode}
+    args = exec_args(node, command, mode, provider)
     async with limiter:
         proc = await runner.spawn_command(args, cwd=cwd)
         timed_out = False
@@ -226,7 +254,7 @@ async def _run_one(
     output, exit_code = split_exit_marker(out.decode(errors="replace"))
     if exit_code is None and not timed_out and proc.returncode:
         exit_code = proc.returncode  # netlab itself failed (node down, unknown node, …)
-    failed = timed_out or bool(exit_code) or (body.mode == "show" and looks_like_cli_error(output))
+    failed = timed_out or bool(exit_code) or (mode == "show" and looks_like_cli_error(output))
     result.update(
         exitCode=exit_code,
         timedOut=timed_out,
@@ -246,17 +274,22 @@ async def exec_stream(body: ExecRequest):
     path, topo = _topology(body.sessionId)
     if not runner.is_installed():
         raise HTTPException(503, "netlab is not installed")
-    targets = expand_targets(body.nodes, [n.name for n in topo.nodes], _groups(topo))
+    status = await _status_nodes(path)
+    running = {name for name, info in status.items() if _is_running(info)}
+    targets = expand_targets(body.nodes, [n.name for n in topo.nodes], _groups(topo), running)
     if not targets:
         raise HTTPException(400, "no nodes selected")
-    status = await _status_nodes(path)
+    default_device = topo.default("device")
+    devices = {n.name: n.device or default_device for n in topo.nodes}
     cwd = Path(path).parent
     limiter = asyncio.Semaphore(MAX_PARALLEL)
 
     async def gen():
         yield f"data: {json.dumps({'targets': targets})}\n\n"
         tasks = [
-            asyncio.create_task(_run_one(node, body, (status.get(node) or {}).get("provider"), cwd, limiter))
+            asyncio.create_task(
+                _run_one(node, body, ((status.get(node) or {}).get("provider"), devices.get(node)), cwd, limiter)
+            )
             for node in targets
         ]
         try:

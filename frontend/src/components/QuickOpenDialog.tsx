@@ -19,6 +19,10 @@ type QuickItem = {
   detail: string;
   kind: "Lab" | "Unit" | "Node" | "Action" | "Found";
   run: () => void;
+  /** Instead of running: stay open with this query (e.g. "module:"). */
+  nextQuery?: string;
+  /** Higher = listed first while nothing is typed (context actions). */
+  priority?: number;
 };
 
 const SPOTLIGHT_PREFIX: Record<string, string> = { module: "module ", group: "group ", device: "device ", role: "role " };
@@ -84,7 +88,7 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
   onOpenLab: (topologyRef: LabFileEntry["topologyRef"]) => void;
   onOpenUnit: (unit: UnitInfo) => void;
   onInstantiateUnit: (unit: UnitInfo) => void;
-  actions: Array<{ id: string; label: string; detail: string; run: () => void }>;
+  actions: Array<{ id: string; label: string; detail: string; run: () => void; nextQuery?: string; priority?: number }>;
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -116,7 +120,7 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
     // Precise lab facts first — the fuzzy matcher would bury "10.1.0.2".
     ...found.slice(0, 15),
     ...items
-      .map((item) => ({ item, score: fuzzyScore(`${item.label} ${item.detail} ${item.kind}`, query) }))
+      .map((item) => ({ item, score: fuzzyScore(`${item.label} ${item.detail} ${item.kind}`, query) + (query.trim() ? 0 : item.priority ?? 0) }))
       .filter(({ score }) => score >= 0)
       .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
       .slice(0, 40)
@@ -124,7 +128,12 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
   ], [found, items, query]);
 
   useEffect(() => setActiveIndex(0), [query]);
-  const choose = (item: QuickItem | undefined) => { if (!item) return; onClose(); item.run(); };
+  const choose = (item: QuickItem | undefined) => {
+    if (!item) return;
+    if (item.nextQuery !== undefined) { setQuery(item.nextQuery); return; }
+    onClose();
+    item.run();
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { position: "fixed", top: "12vh", m: 0, maxHeight: "70vh" } }}>

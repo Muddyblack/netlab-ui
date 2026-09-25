@@ -49,9 +49,24 @@ import {
   useRenderDeployMenuItems,
   publishRuntimeContainers,
   openConfigsDialog,
+  openPanelTab,
+  requestCopyLab,
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
+
+/** App-wide keyboard shortcuts. Ctrl/Cmd+I stays out of the way while the
+ * user is typing so it never fights a text field's own shortcuts. */
+function globalShortcut(event: KeyboardEvent): "run-on-nodes" | "quick-open" | "assistant" | null {
+  if (!(event.ctrlKey || event.metaKey)) return null;
+  if (event.key === "`") return "run-on-nodes";
+  const key = event.key.toLowerCase();
+  if (key === "p") return "quick-open";
+  if (key !== "i" || event.altKey) return null;
+  const target = event.target as HTMLElement | null;
+  const editable = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+  return editable ? null : "assistant";
+}
 
 async function openLabGraphPopup(sid: string, layout: "interactive" | "horizontal" | "vertical", addToast: Toast) {
   const popup = window.open("", "_blank");
@@ -611,22 +626,13 @@ export function useAppController() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        setQuickOpen(true);
-        return;
-      }
-      // Ctrl/Cmd+I toggles the AI assistant. Skip it while the user is typing
-      // so it never fights a text field's own shortcuts.
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "i") {
-        const target = event.target as HTMLElement | null;
-        const editable =
-          target?.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
-        if (editable) return;
-        event.preventDefault();
-        setAssistantOpen((open) => !open);
-      }
+      const shortcut = globalShortcut(event);
+      if (!shortcut) return;
+      event.preventDefault();
+      // Ctrl+` — the VS Code terminal key — opens "run on nodes".
+      if (shortcut === "run-on-nodes") openMultiExecRef.current();
+      if (shortcut === "quick-open") setQuickOpen(true);
+      if (shortcut === "assistant") setAssistantOpen((open) => !open);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -659,6 +665,21 @@ export function useAppController() {
     else addToast(`Cannot rerun unsupported deployment action: ${action}`, "warning");
   }, [addToast, handleDeployLab, handleDestroyLab, handleNetlabCreateConfigs, handleNetlabInitial, handleNetlabRestart, sessionId]);
 
+  // The active lab is "running" when it matches an instance in the live
+  // `netlab status` snapshot (same matcher the explorer tree uses).
+  const activeLabRunning = useMemo(() => {
+    const activeLab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
+    if (activeLab?.kind !== "topology") return false;
+    const labName = activeLab.topologyRef?.labName;
+    const yamlPath = activeLab.topologyRef?.yamlPath;
+    return Object.values(runningLabsStatus).some((info) => runningLabMatches(info, yamlPath, labName));
+  }, [openTabs, activeTabId, runningLabsStatus]);
+
+  const activeTopologyRef = useMemo(() => {
+    const tab = openTabs.find((candidate) => candidate.id === activeTabId && candidate.kind === "topology");
+    return tab?.kind === "topology" ? tab.topologyRef : undefined;
+  }, [openTabs, activeTabId]);
+
   const quickActions = useMemo(() => [
     { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI assistant" : "Open AI assistant", detail: "Toggle the assistant panel · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
     { id: "action:new-lab", label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
@@ -682,11 +703,25 @@ export function useAppController() {
           });
       }
     }] : []),
+    ...(sessionId && activeLabRunning ? [
+      { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, answers side by side · Ctrl+`", run: () => sessionDock.openTab("multi", "nodes") },
+      { id: "action:traffic", priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
+      { id: "action:running-configs", priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
+      { id: "action:config-snapshot", label: "Take a config snapshot", detail: "Save every node's running config now", run: () => void api.takeConfigSnapshot(sessionId).then((snap) => addToast(`Snapshot of ${snap.nodes?.length ?? 0} nodes saved`, "success"), (err: unknown) => addToast(`Snapshot failed: ${String(err)}`, "error")) },
+    ] : []),
     ...(sessionId ? [
       { id: "action:validate", label: "Validate topology", detail: "Run netlab validate", run: () => void handleNetlabValidate(sessionId) },
-      { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) }
+      { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) },
+      { id: "action:module-filter", label: "Filter canvas by module…", detail: "Spotlight the nodes running OSPF, BGP, VLANs…", nextQuery: "module:", run: () => undefined },
+      { id: "action:tour", label: "Guided tour & exercises", detail: "Open the tour editor in the Lenses panel", run: () => { openPanelTab("Lenses"); netlabLenses.setTeachingOpen(true); } },
+      ...(activeTopologyRef ? [{
+        id: "action:copy-lab",
+        label: "Copy this lab to a workspace…",
+        detail: "Fork, publish to the shared folder, or duplicate",
+        run: () => requestCopyLab({ topologyPath: activeTopologyRef.yamlPath, labName: activeTopologyRef.labName, onCopied: (ref) => void handleOpenLab(ref as TopologyRef) }),
+      }] : []),
     ] : [])
-  ], [assistantOpen, canvasNodes, handleNetlabCreateConfigs, handleNetlabValidate, host, isTopologyLocked, runtime.session, sessionId, topoViewerActions]);
+  ], [activeLabRunning, activeTopologyRef, addToast, assistantOpen, canvasNodes, handleNetlabCreateConfigs, handleNetlabValidate, handleOpenLab, host, isTopologyLocked, netlabLenses, runtime.session, sessionDock, sessionId, topoViewerActions]);
 
   useEffect(() => {
     setValidationIssues([]);
@@ -962,16 +997,6 @@ export function useAppController() {
     setSettingsTab,
     setSettingsOpen,
   });
-
-  // The active lab is "running" when it matches an instance in the live
-  // `netlab status` snapshot (same matcher the explorer tree uses).
-  const activeLabRunning = useMemo(() => {
-    const activeLab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
-    if (activeLab?.kind !== "topology") return false;
-    const labName = activeLab.topologyRef?.labName;
-    const yamlPath = activeLab.topologyRef?.yamlPath;
-    return Object.values(runningLabsStatus).some((info) => runningLabMatches(info, yamlPath, labName));
-  }, [openTabs, activeTabId, runningLabsStatus]);
 
   // null until the lens bundle loads; then reflects whether the topology
   // defines any `validate:` tests.

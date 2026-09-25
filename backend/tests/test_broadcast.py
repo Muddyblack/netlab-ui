@@ -116,3 +116,18 @@ def test_exit_marker_and_cli_error_detection():
     assert broadcast.looks_like_cli_error("\n% Unknown command: show bogus\n")
     assert broadcast.looks_like_cli_error("Error: Path not found")
     assert not broadcast.looks_like_cli_error("Codes: K - kernel route")
+
+
+def test_auto_mode_sends_show_commands_to_the_cli_but_not_on_hosts():
+    assert broadcast.resolve_mode("auto", "show ip route", "frr") == ("show", "ip route")
+    assert broadcast.resolve_mode("auto", "show ip route", "linux") == ("shell", "show ip route")
+    assert broadcast.resolve_mode("auto", "ip route", "frr") == ("shell", "ip route")
+    assert broadcast.resolve_mode("show", "show ip bgp", "eos") == ("show", "ip bgp")
+    assert broadcast.resolve_mode("show", "ip bgp", "eos") == ("show", "ip bgp")
+    assert broadcast.resolve_mode("shell", "show ip route", "frr") == ("shell", "show ip route")
+
+
+def test_all_means_the_running_nodes_when_known():
+    assert broadcast.expand_targets(["all"], ["r1", "r2"], {}, {"r2"}) == ["r2"]
+    assert broadcast.expand_targets(["all"], ["r1", "r2"], {}, set()) == ["r1", "r2"]
+    assert broadcast.expand_targets(["r1"], ["r1", "r2"], {}, {"r2"}) == ["r1"]

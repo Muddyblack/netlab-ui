@@ -1,9 +1,12 @@
+import { lazy, Suspense } from "react";
 import { Box, Stack, Typography } from "@mui/material";
 
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { NetlabLensesState } from "../../hooks/useNetlabLenses";
 import type { AddressFamily, LensId } from "./LensCanvasOverlay";
-import { TrafficLensView } from "./traffic/TrafficLensView";
+
+// Charts (@mui/x-charts) load with the Traffic lens, not with the app.
+const TrafficLensView = lazy(() => import("./traffic/TrafficLensView").then((m) => ({ default: m.TrafficLensView })));
 import {
   AddressingLensView,
   ChangesLensView,
@@ -147,7 +150,9 @@ export function LensBody({ lens, bundle, error, loading, validationIssues, onToa
     );
   }
 
-  if (lens === "traffic") return <TrafficLensView sessionId={sessionId} onToast={onToast} />;
+  if (lens === "traffic") {
+    return <Suspense fallback={null}><TrafficLensView sessionId={sessionId} onToast={onToast} /></Suspense>;
+  }
 
   if (lens === "deployment") {
     return (
