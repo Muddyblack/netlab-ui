@@ -42,6 +42,7 @@ export interface ExplorerActionCallbacks {
    * session — there's no per-tab session id, same as node shells). */
   openDrawioWizard: () => void;
   openMultiExec: (lab: TopologyRef) => void | Promise<void>;
+  openRunningConfigs: (lab: TopologyRef) => void | Promise<void>;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
   /** `lab` is the node's own topology (Running Labs tree items carry it);
@@ -240,6 +241,10 @@ async function handleRunOnNodes({ cb, topoRef }: ActionCtx) {
   await cb.openMultiExec(topoRef);
 }
 
+async function handleRunningConfigs({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openRunningConfigs(topoRef);
+}
+
 async function handleCopyPath({ cb, item }: ActionCtx) {
   const path = item?.topologyRef?.yamlPath || item?.path || item?.resourcePath;
   if (path) {
@@ -385,7 +390,8 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "containerlab.lab.stop": handleDestroyLab,
   "containerlab.lab.restart": handleNetlabRestart,
   "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
-  "netlab.lab.runOnNodes": handleRunOnNodes,
+  "netlab.lab.shell.runOnNodes": handleRunOnNodes,
+  "netlab.lab.inspect.runningConfigs": handleRunningConfigs,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
   "containerlab.file.newFile": handleOpenNewLabDialog,
@@ -565,7 +571,10 @@ export function useExplorerController({
             { commandId: "containerlab.lab.graph.netlabSvg.vertical", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Vertical)" },
             { commandId: "containerlab.lab.graph.netlabSvg.horizontal", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Horizontal)" },
             { commandId: "containerlab.lab.graph.netlabSvg.interactive", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Interactive)" },
-            { commandId: "netlab.lab.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" }
+            // ".shell." / ".inspect." in the ids file these under clab-ui's
+            // Access and Inspect groups (same substring rules as above).
+            { commandId: "netlab.lab.shell.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" },
+            { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -583,7 +592,8 @@ export function useExplorerController({
             ["netlab.lab.restart", "Netlab Restart"],
             ["netlab.lab.validate", "Netlab Validate (Run tests)"],
             ["netlab.lab.collect", "Netlab Collect (Gather configs)"],
-            ["netlab.lab.runOnNodes", "Run Command on Nodes…"],
+            ["netlab.lab.shell.runOnNodes", "Run Command on Nodes…"],
+            ["netlab.lab.inspect.runningConfigs", "Running Configs & Changes…"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

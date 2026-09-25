@@ -524,6 +524,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/configs/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Config Snapshots */
+        get: operations["list_config_snapshots_api_lab_configs_snapshots_get"];
+        put?: never;
+        /** Take Config Snapshot */
+        post: operations["take_config_snapshot_api_lab_configs_snapshots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/configs/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config Drift
+         * @description How each running node's live configuration differs from a snapshot
+         *     (the newest one when none is given).
+         */
+        get: operations["config_drift_api_lab_configs_drift_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/configs/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Running Config Diff
+         * @description One node's configuration from two sources — a snapshot id or ``live``.
+         */
+        get: operations["running_config_diff_api_lab_configs_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/capture/pcap": {
         parameters: {
             query?: never;
@@ -2515,6 +2574,30 @@ export interface components {
              */
             onlyRight: number;
         };
+        /** ConfigDrift */
+        ConfigDrift: {
+            /** Snapshot */
+            snapshot: string;
+            /** Nodes */
+            nodes: components["schemas"]["ConfigDriftRow"][];
+        };
+        /** ConfigDriftRow */
+        ConfigDriftRow: {
+            /** Node */
+            node: string;
+            /** Status */
+            status: string;
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+        };
         /** ConfigPreviewFile */
         ConfigPreviewFile: {
             /** Path */
@@ -2538,6 +2621,50 @@ export interface components {
             generated: boolean;
             /** Message */
             message?: string | null;
+        };
+        /** ConfigSide */
+        ConfigSide: {
+            /** Label */
+            label: string;
+            /** Text */
+            text?: string | null;
+        };
+        /** ConfigSnapshot */
+        ConfigSnapshot: {
+            /** Id */
+            id: string;
+            /** Createdat */
+            createdAt: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: string[];
+        };
+        /** ConfigSnapshotList */
+        ConfigSnapshotList: {
+            /** Snapshots */
+            snapshots: components["schemas"]["ConfigSnapshot"][];
+        };
+        /** ConfigSnapshotRequest */
+        ConfigSnapshotRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /**
+             * Reason
+             * @default manual snapshot
+             */
+            reason: string;
         };
         /** ContainerCheck */
         ContainerCheck: {
@@ -4501,6 +4628,13 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** RunningConfigDiff */
+        RunningConfigDiff: {
+            /** Node */
+            node: string;
+            left: components["schemas"]["ConfigSide"];
+            right: components["schemas"]["ConfigSide"];
+        };
         /** RuntimeContainer */
         RuntimeContainer: {
             /** Name */
@@ -6457,6 +6591,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptureOpResult"];
+                };
+            };
+        };
+    };
+    list_config_snapshots_api_lab_configs_snapshots_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSnapshotList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_config_snapshot_api_lab_configs_snapshots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigSnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    config_drift_api_lab_configs_drift_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                snapshot?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigDrift"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    running_config_diff_api_lab_configs_diff_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                node: string;
+                left: string;
+                right?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunningConfigDiff"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -273,6 +273,23 @@ Picking a hit spotlights its nodes: everything else on the canvas is dimmed.
 The spotlight bar has one chip per module, so you can switch the canvas
 between "who runs OSPF / BGP / VLANs"; press Esc to show everything again.
 
+### Running configs and what changed
+
+**Running Configs & Changes…** (right-click a deployed lab → Inspect, or the
+📜 button in the Lenses panel) shows what the devices actually run.
+
+- A **snapshot** of every node's `show running-config` is taken automatically
+  after each successful deploy, restart or `netlab initial`. You can also
+  take one by hand.
+- The node list shows **drift**: lines added and removed since the chosen
+  snapshot. Volatile header and timestamp lines are ignored.
+- A side-by-side diff compares any snapshot with the live configuration, or
+  two snapshots, e.g. to see what a `netlab initial` or a hand edit changed.
+
+Snapshots live in `<lab>/.netlab-ui/configs/<topology>/`; the newest 20 are
+kept. The generated (not running) configuration per module is still in the
+node editor's Config tab.
+
 ### Live traffic
 
 Click a link on a deployed lab to see its traffic chart (clab-ui's link

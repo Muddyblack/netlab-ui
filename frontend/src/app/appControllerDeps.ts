@@ -17,3 +17,4 @@ export { netlabNodeEditorTabs } from "./netlabNodeEditorTabs";
 export { useCustomPaletteTabs } from "./useCustomPaletteTabs";
 export { useRenderDeployMenuItems } from "./useRenderDeployMenuItems";
 export { publishRuntimeContainers } from "../host/runtimeStore";
+export { openConfigsDialog } from "../host/configsDialogStore";

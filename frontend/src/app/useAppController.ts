@@ -48,6 +48,7 @@ import {
   useCustomPaletteTabs,
   useRenderDeployMenuItems,
   publishRuntimeContainers,
+  openConfigsDialog,
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
@@ -340,6 +341,7 @@ export function useAppController() {
       showLogs: async (n, ref) => openLogsRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       openDrawioWizard: () => openDrawioWizardRef.current(),
       openMultiExec: async (ref) => openMultiExecRef.current(await ensureLabActiveRef.current(ref)),
+      openRunningConfigs: async (ref) => openConfigsDialog(await ensureLabActiveRef.current(ref)),
       nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
       uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),

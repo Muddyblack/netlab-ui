@@ -37,7 +37,7 @@ from app.contract.responses import (
 )
 from app.lab import common
 from services import owners
-from services.netlab import deploy_diff, deployment, multilab, runner
+from services.netlab import config_snapshots, deploy_diff, deployment, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
@@ -289,6 +289,23 @@ async def lab_link_state(body: LinkStateRequest):
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _background(coro: Any) -> None:
+    """Run ``coro`` after the response; failures are logged, never raised."""
+
+    async def guarded():
+        try:
+            await coro
+        except Exception:  # a failed snapshot must not surface anywhere
+            logger.warning("background task failed", exc_info=True)
+
+    task = asyncio.create_task(guarded())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 class LifecycleStreamAction(BaseModel):
     sessionId: str
     action: str
@@ -372,6 +389,9 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                     if body.action in {"up", "restart"} and int(line) == 0:
                         deploy_diff.record(path)
                         owners.record(Path(path).parent, user)
+                    if body.action in {"up", "restart", "initial"} and int(line) == 0:
+                        # Baseline for the Configs dialog's drift view.
+                        _background(config_snapshots.take_snapshot(path, f"after netlab {body.action}"))
                     if body.action == "down" and int(line) == 0:
                         owners.forget(Path(path).parent)
                     if body.action == "validate":

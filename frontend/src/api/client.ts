@@ -30,6 +30,9 @@ export type PluginImportResult = Schemas["PluginImportResult"];
 export type VersionResult = Schemas["VersionResult"];
 export type ExecTargets = Schemas["ExecTargets"];
 export type LabSearchHit = Schemas["LabSearchHit"];
+export type ConfigSnapshot = Schemas["ConfigSnapshot"];
+export type ConfigDrift = Schemas["ConfigDrift"];
+export type RunningConfigDiff = Schemas["RunningConfigDiff"];
 export type LabSearchResult = Schemas["LabSearchResult"];
 export type ExecScript = Schemas["ExecScript"];
 export type ExecMode = Schemas["ExecRequest"]["mode"];
@@ -359,6 +362,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action }),
     }, 1, 120000),
+
+  listConfigSnapshots: (sessionId: string) =>
+    http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  takeConfigSnapshot: (sessionId: string, reason = "manual snapshot") =>
+    http<ConfigSnapshot>("/api/lab/configs/snapshots", { method: "POST", body: JSON.stringify({ sessionId, reason }) }, 1, 120000),
+
+  getConfigDrift: (sessionId: string, snapshot: string) =>
+    http<ConfigDrift>(`/api/lab/configs/drift?sessionId=${encodeURIComponent(sessionId)}&snapshot=${encodeURIComponent(snapshot)}`, { cache: "no-store" }, 1, 120000),
+
+  getRunningConfigDiff: (sessionId: string, node: string, left: string, right = "live") =>
+    http<RunningConfigDiff>(
+      `/api/lab/configs/diff?sessionId=${encodeURIComponent(sessionId)}&node=${encodeURIComponent(node)}&left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
+      { cache: "no-store" }, 1, 60000),
 
   searchLab: (sessionId: string, query: string) =>
     http<LabSearchResult>(`/api/topology/search?sessionId=${encodeURIComponent(sessionId)}&q=${encodeURIComponent(query)}`, undefined, 1, 30000),
