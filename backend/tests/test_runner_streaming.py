@@ -272,3 +272,38 @@ def test_force_cleanup_stream_reports_unknown_instance(monkeypatch):
 
     events = asyncio.run(collect())
     assert events == [("stderr", "Unknown netlab lab instance 'ghost'"), ("exit", "2")]
+
+
+def test_status_reuses_cli_output_and_refreshes_container_states(monkeypatch, tmp_path):
+    import asyncio
+
+    from services.netlab import runner
+
+    calls = {"full": 0}
+    lab = tmp_path / "lab"
+    lab.mkdir()
+
+    async def full_status():
+        calls["full"] += 1
+        return {"default": {"dir": str(lab), "nodes": {"r1": {"provider": "clab", "provider_name": "clab-x-r1"}}}}
+
+    states = {"clab-x-r1": "Up 1 minute"}
+
+    async def container_states():
+        return dict(states)
+
+    monkeypatch.setattr(runner, "_full_status", full_status)
+    monkeypatch.setattr(runner, "_container_states", container_states)
+    runner._clear_status_cache()
+
+    first = asyncio.run(runner.status())
+    states["clab-x-r1"] = "Exited (0) 1 second ago"
+    second = asyncio.run(runner.status())
+    assert calls["full"] == 1
+    assert first["default"]["nodes"]["r1"]["status"] == "Up 1 minute"
+    assert second["default"]["nodes"]["r1"]["status"] == "Exited (0) 1 second ago"
+
+    (lab / "netlab.snapshot.pickle").write_text("changed")  # lab redeployed
+    asyncio.run(runner.status())
+    assert calls["full"] == 2
+    runner._clear_status_cache()
