@@ -18,6 +18,8 @@ export interface LinkTraffic {
   target: LinkEnd;
   /** Both directions, bits/s, from whichever end reports rates. */
   bps: number | null;
+  /** Which end the rates come from (its tx is source→target when "source"). */
+  measured: "source" | "target" | null;
   pps: number | null;
   down: boolean;
   /** Errors + drops added since the last sample, both ends. */
@@ -50,6 +52,12 @@ function endpoint(edge: Edge, side: "source" | "target", index: Map<string, Runt
   return { node, iface, state: runtime?.state, stats: runtime?.stats ?? undefined };
 }
 
+function measuringEnd(source: LinkEnd, target: LinkEnd): "source" | "target" | null {
+  if (typeof source.stats?.rxBps === "number") return "source";
+  if (typeof target.stats?.rxBps === "number") return "target";
+  return null;
+}
+
 /** Join the canvas links with the latest runtime sample, one row per link
  * that has at least one live endpoint. */
 export function linkTraffic(edges: Edge[], containers: RuntimeContainer[]): LinkTraffic[] {
@@ -59,8 +67,10 @@ export function linkTraffic(edges: Edge[], containers: RuntimeContainer[]): Link
     const source = endpoint(edge, "source", index);
     const target = endpoint(edge, "target", index);
     if (!source.stats && !target.stats) continue;
-    const measured = [source.stats, target.stats].find((stats) => typeof stats?.rxBps === "number");
+    const measuredEnd = measuringEnd(source, target);
+    const measured = measuredEnd ? { source, target }[measuredEnd].stats : undefined;
     rows.push({
+      measured: measuredEnd,
       edgeId: edge.id,
       source,
       target,
@@ -87,10 +97,15 @@ export function formatBps(bps: number | null): string {
   return `${value >= 100 ? Math.round(value) : value.toFixed(1)} ${units[unit]}`;
 }
 
+// Validated with the dataviz palette checks: load is one blue ramp (ordinal,
+// steps 250→650), direction is categorical slots 1/2, problems use the
+// reserved status "critical" red and always come with a label.
 export const TRAFFIC_COLORS = {
-  down: "#e53935",
-  errors: "#e53935",
-  load: ["#90caf9", "#42a5f5", "#1e88e5", "#0d47a1"],
+  down: "#d03b3b",
+  errors: "#d03b3b",
+  load: ["#86b6ef", "#3987e5", "#256abf", "#104281"],
+  forward: { light: "#2a78d6", dark: "#3987e5" },
+  reverse: { light: "#eb6834", dark: "#d95926" },
 } as const;
 
 /** Load bucket 0..3 on a log scale: <100 kb/s, <1 Mb/s, <10 Mb/s, above. */
