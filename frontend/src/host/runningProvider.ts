@@ -79,7 +79,10 @@ function ownershipText(
   file: LabFileEntry | undefined,
   label: string
 ): { badges: string; ownerLine: string; label: string } {
-  const badges = [labInfo.owner ? `by ${labInfo.owner}` : "", file?.shared ? "shared" : ""].filter(Boolean).join(" · ");
+  const until = labInfo.expiresAt
+    ? `until ${new Date(labInfo.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  const badges = [labInfo.owner ? `by ${labInfo.owner}` : "", file?.shared ? "shared" : "", until].filter(Boolean).join(" · ");
   const since = labInfo.ownerSince ? ` (${labInfo.ownerSince})` : "";
   return {
     badges,

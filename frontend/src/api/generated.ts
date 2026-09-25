@@ -1138,6 +1138,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lab Limits Info */
+        get: operations["lab_limits_info_api_lab_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Lease
+         * @description When the lab behind the session will be shut down (null: never).
+         */
+        get: operations["get_lease_api_lab_lease_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lease/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend Lease
+         * @description Give a running lab another full lease (NETLAB_UI_LAB_HOURS).
+         */
+        post: operations["extend_lease_api_lab_lease_extend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/deploy-plan": {
         parameters: {
             query?: never;
@@ -3516,6 +3573,20 @@ export interface components {
              */
             action: "cleanup" | "force-cleanup" | "forget";
         };
+        /** LabLimits */
+        LabLimits: {
+            /** Labhours */
+            labHours?: number | null;
+            /** Maxlabsperuser */
+            maxLabsPerUser?: number | null;
+            /** User */
+            user?: string | null;
+            /**
+             * Admin
+             * @default false
+             */
+            admin: boolean;
+        };
         /** LabSearchHit */
         LabSearchHit: {
             /** Kind */
@@ -3539,6 +3610,11 @@ export interface components {
             results: components["schemas"]["LabSearchHit"][];
             /** Modules */
             modules: components["schemas"]["LabSearchHit"][];
+        };
+        /** LeaseResult */
+        LeaseResult: {
+            /** Expiresat */
+            expiresAt?: string | null;
         };
         /** LensAddressAssignment */
         LensAddressAssignment: {
@@ -7599,6 +7675,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_limits_info_api_lab_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabLimits"];
+                };
+            };
+        };
+    };
+    get_lease_api_lab_lease_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extend_lease_api_lab_lease_extend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaseResult"];
                 };
             };
             /** @description Validation Error */

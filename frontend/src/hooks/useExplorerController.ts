@@ -96,6 +96,8 @@ function buildExplorerDataSignature(
       path: labInfo?.path ?? "",
       dir: labInfo?.dir ?? "",
       status: labInfo?.status ?? "",
+      owner: labInfo?.owner ?? "",
+      expiresAt: labInfo?.expiresAt ?? "",
       nodes: Object.entries(labInfo?.nodes ?? {})
         .map(([nodeName, nodeInfo]) => ({
           name: nodeName,

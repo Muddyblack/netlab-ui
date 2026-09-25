@@ -363,6 +363,12 @@ export const api = {
       body: JSON.stringify({ action }),
     }, 1, 120000),
 
+  getLease: (sessionId: string) =>
+    http<{ expiresAt?: string | null }>(`/api/lab/lease?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1),
+
+  extendLease: (sessionId: string) =>
+    http<{ expiresAt?: string | null }>("/api/lab/lease/extend", { method: "POST", body: JSON.stringify({ sessionId }) }, 1),
+
   listConfigSnapshots: (sessionId: string) =>
     http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
 

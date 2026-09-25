@@ -61,7 +61,7 @@ export function SpotlightOverlay({ container, sessionId }: { container: HTMLElem
       <GlobalStyles styles={{ [`.${DIMMED}`]: { opacity: "0.15 !important", filter: "grayscale(1)", transition: "opacity 160ms ease" } }} />
       <Paper
         elevation={4}
-        sx={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 7, pointerEvents: "auto",
+        sx={{ position: "absolute", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 7, pointerEvents: "auto",
           display: "flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.5, maxWidth: "80%", flexWrap: "wrap" }}
       >
         <Typography variant="body2" sx={{ fontWeight: 600 }}>{spotlight.label}</Typography>

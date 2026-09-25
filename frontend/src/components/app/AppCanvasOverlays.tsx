@@ -12,7 +12,7 @@ import { UnitsDock } from "../../panels/UnitsDock";
 import { NetlabLenses } from "../lenses/NetlabLenses";
 import type { UnitInfo } from "../../panels/units-dock/types";
 import { LabToolDialogs } from "../dialogs/LabToolDialogs";
-import { SpotlightOverlay } from "../search/SpotlightOverlay";
+import { CanvasLabOverlays } from "./CanvasLabOverlays";
 
 const FileEditorTabPanel = lazy(() =>
   import("../FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
@@ -95,7 +95,7 @@ export function AppCanvasOverlays({
               )
             }
           />
-          <SpotlightOverlay container={portalContainer as HTMLElement} sessionId={sessionId} />
+          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} />
           <NetlabLenses
             sessionId={sessionId}
             container={portalContainer as HTMLElement}

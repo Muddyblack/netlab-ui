@@ -130,7 +130,11 @@ async function streamLifecycleCommand(
     body: JSON.stringify({ sessionId, action, multilabId }),
     signal,
   });
-  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok || !res.body) {
+    // A refused command (quota, unknown session) explains itself in `detail`.
+    const detail = (await res.json().catch(() => null) as { detail?: unknown } | null)?.detail;
+    throw new Error(typeof detail === "string" ? detail : `HTTP ${res.status}`);
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

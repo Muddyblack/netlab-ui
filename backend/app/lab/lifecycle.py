@@ -36,7 +36,7 @@ from app.contract.responses import (
     VersionResult,
 )
 from app.lab import common
-from services import owners
+from services import lab_limits, owners
 from services.netlab import config_snapshots, deploy_diff, deployment, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
@@ -124,13 +124,14 @@ async def lab_instance_force_cleanup_stream(instance_id: str):
 @router.post("/up", response_model=CommandResult)
 async def lab_up(body: LabAction, request: Request):
     path = common.session_path(body.sessionId)
+    await _enforce_quota(request_user(request), path)
     try:
         res = await runner.up(path)
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
     if res.code == 0:
         deploy_diff.record(path)
-        owners.record(Path(path).parent, request_user(request))
+        owners.record(Path(path).parent, request_user(request), lab_limits.lease_expiry())
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
 
 
@@ -289,6 +290,59 @@ async def lab_link_state(body: LinkStateRequest):
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 
+async def _enforce_quota(user: str | None, path: str) -> None:
+    if lab_limits.max_labs_per_user() is None:
+        return
+    try:
+        status = await runner.status_cached(max_age=2.0)
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return
+    try:
+        lab_limits.check_quota(user, status if isinstance(status, dict) else {}, Path(path).parent)
+    except lab_limits.QuotaExceeded as exc:
+        raise HTTPException(429, str(exc)) from exc
+
+
+class LabLimits(BaseModel):
+    labHours: float | None = None
+    maxLabsPerUser: int | None = None
+    user: str | None = None
+    admin: bool = False
+
+
+class LeaseResult(BaseModel):
+    expiresAt: str | None = None
+
+
+@router.get("/limits", response_model=LabLimits)
+def lab_limits_info(request: Request):
+    user = request_user(request)
+    return {
+        "labHours": lab_limits.lab_hours(),
+        "maxLabsPerUser": lab_limits.max_labs_per_user(),
+        "user": user,
+        "admin": bool(user and user in lab_limits.admins()),
+    }
+
+
+@router.get("/lease", response_model=LeaseResult)
+def get_lease(sessionId: str):
+    """When the lab behind the session will be shut down (null: never)."""
+    entry = owners.entries().get(str(Path(common.session_path(sessionId)).parent.resolve()))
+    return {"expiresAt": entry.get("expiresAt") if isinstance(entry, dict) else None}
+
+
+@router.post("/lease/extend", response_model=LeaseResult)
+def extend_lease(body: LabAction):
+    """Give a running lab another full lease (NETLAB_UI_LAB_HOURS)."""
+    if lab_limits.lab_hours() is None:
+        raise HTTPException(400, "labs have no time limit on this server")
+    lab_dir = Path(common.session_path(body.sessionId)).parent
+    if not owners.update(lab_dir):
+        raise HTTPException(404, "this lab was not deployed through netlab-ui, so it has no lease")
+    return {"expiresAt": lab_limits.extend(lab_dir)}
+
+
 _background_tasks: set[asyncio.Task[Any]] = set()
 
 
@@ -347,6 +401,8 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                 runner.lifecycle_argv("up", path, multilab_id=instance),
             ]
     args = steps[0][0]
+    if body.action == "up":
+        await _enforce_quota(user, path)
 
     async def gen():
         # Clean raw netlab output for the plain-text modal: strip ANSI, fold
@@ -388,7 +444,7 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                         done_payload["progress"] = tracker.payload(delta=True)
                     if body.action in {"up", "restart"} and int(line) == 0:
                         deploy_diff.record(path)
-                        owners.record(Path(path).parent, user)
+                        owners.record(Path(path).parent, user, lab_limits.lease_expiry())
                     if body.action in {"up", "restart", "initial"} and int(line) == 0:
                         # Baseline for the Configs dialog's drift view.
                         _background(config_snapshots.take_snapshot(path, f"after netlab {body.action}"))
