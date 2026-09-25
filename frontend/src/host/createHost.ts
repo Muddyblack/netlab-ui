@@ -31,6 +31,18 @@ export interface AppClabUiHost extends ClabUiHost {
 
 type OfficialHostOptions = NonNullable<Parameters<typeof officialCreateApiClabUiHost>[0]>;
 
+function downloadText(filename: string, content: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoke after the browser has picked the download up.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 function buildPacketflixUri(configuredHost: string, configuredPortRaw: string | undefined, containerName: string, interfaceName: string): string {
   const authorityHost = configuredHost.includes(":") && !configuredHost.startsWith("[")
     ? `[${configuredHost}]`
@@ -515,7 +527,22 @@ export function createApiClabUiHost(options?: {
         }
       })().catch((err) => console.error("Failed to reconcile custom icons:", err));
     },
-    exportGrafanaBundle(_payload: TopoViewerSvgExportPayload) {},
+    // clab-ui's SVG export dialog builds the Grafana Flow Panel bundle and
+    // waits for this reply; the old no-op made it time out after 30 s.
+    exportGrafanaBundle(payload: TopoViewerSvgExportPayload) {
+      const base = (payload.baseName || "topology").replace(/[\\/:*?"<>|]+/g, "_");
+      const files: Array<[string, string, string]> = [
+        [`${base}.svg`, payload.svgContent, "image/svg+xml"],
+        [`${base}.grafana.json`, payload.dashboardJson, "application/json"],
+        [`${base}.flow_panel.yaml`, payload.panelYaml, "application/yaml"],
+      ];
+      try {
+        for (const [name, content, type] of files) downloadText(name, content, type);
+        subscribers.forEach((s) => s({ type: "svgExportResult", requestId: payload.requestId, success: true, files: files.map(([name]) => name) }));
+      } catch (err) {
+        subscribers.forEach((s) => s({ type: "svgExportResult", requestId: payload.requestId, success: false, error: err instanceof Error ? err.message : String(err) }));
+      }
+    },
     dumpCssVars(_vars: Record<string, string>) {},
 
     subscribe(handler: (event: ClabUiTopoViewerEvent) => void) {
