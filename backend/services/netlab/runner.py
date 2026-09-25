@@ -850,6 +850,67 @@ async def container_interfaces(container_name: str, preferred_runtime: str = "")
         return []
 
 
+_TC_MARKER = "__netlab_ui_tc__"
+
+
+async def container_link_snapshot(container_name: str, preferred_runtime: str = "") -> tuple[list[dict[str, Any]], str]:
+    """Interfaces (as :func:`container_interfaces`) plus the ``tc qdisc show``
+    text, read with one exec. Falls back to interfaces only when the image has
+    no ``sh``; the qdisc text is empty when it has no ``tc``."""
+    runtime_bin = container_runtime_binary(preferred_runtime)
+    if not runtime_bin:
+        return [], ""
+    script = f"ip -j -s link show && echo {_TC_MARKER} && (tc qdisc show 2>/dev/null || true)"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            runtime_bin,
+            "exec",
+            container_name,
+            "sh",
+            "-c",
+            script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+    except FileNotFoundError:
+        return [], ""
+    links_text, marker, qdisc_text = stdout.decode(errors="replace").partition(_TC_MARKER)
+    if proc.returncode != 0 or not marker:
+        return await container_interfaces(container_name, preferred_runtime), ""
+    try:
+        value = json.loads(links_text)
+    except json.JSONDecodeError:
+        return [], ""
+    return (value if isinstance(value, list) else []), qdisc_text
+
+
+async def set_interface_state(
+    container_name: str, interface: str, up: bool, preferred_runtime: str = ""
+) -> CommandResult:
+    """`ip link set <interface> up|down` inside a running container."""
+    runtime_bin = container_runtime_binary(preferred_runtime)
+    if not runtime_bin:
+        return CommandResult(code=127, stdout="", stderr="no container runtime (docker/podman) found")
+    proc = await asyncio.create_subprocess_exec(
+        runtime_bin,
+        "exec",
+        container_name,
+        "ip",
+        "link",
+        "set",
+        "dev",
+        interface,
+        "up" if up else "down",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate()
+    return CommandResult(
+        code=proc.returncode or 0, stdout=out.decode(errors="replace"), stderr=err.decode(errors="replace")
+    )
+
+
 async def docker_interfaces(container_name: str) -> list[dict[str, Any]]:
     """Backward-compatible wrapper for callers that explicitly require Docker."""
     return await container_interfaces(container_name, "docker")

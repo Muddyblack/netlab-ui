@@ -1,0 +1,83 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index 9453f6f..e234a9c 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -7932,6 +7932,7 @@ import InfoIcon from "@mui/icons-material/Info";
+ import LanIcon from "@mui/icons-material/Lan";
+ import LayersIcon from "@mui/icons-material/Layers";
+ import LinkIcon from "@mui/icons-material/Link";
++import LinkOffIcon from "@mui/icons-material/LinkOff";
+ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+ import RemoveIcon from "@mui/icons-material/Remove";
+ import ReplayIcon from "@mui/icons-material/Replay";
+@@ -8338,9 +8339,25 @@ function buildEdgeContextMenu(ctx) {
+     editEdge,
+     handleDeleteEdge,
+     showLinkInfo,
+-    showLinkImpairment
++    showLinkImpairment,
++    onLinkAction,
++    sourceNode,
++    targetNode,
++    sourceEndpoint,
++    targetEndpoint,
++    extraData
+   } = ctx;
+   const captureItems = buildEdgeCaptureItems(ctx);
++  const linkIsDown = [getExtraDataString(extraData, "clabSourceInterfaceState"), getExtraDataString(extraData, "clabTargetInterfaceState")].some((state) => typeof state === "string" && state.toLowerCase() === "down");
++  const linkStateItem = onLinkAction ? {
++    id: linkIsDown ? "link-up" : "link-down",
++    label: linkIsDown ? "Bring Link Up" : "Take Link Down",
++    icon: React12.createElement(linkIsDown ? LinkIcon : LinkOffIcon, { fontSize: "small" }),
++    onClick: () => {
++      onLinkAction(linkIsDown ? "up" : "down", { sourceNode, sourceEndpoint, targetNode, targetEndpoint });
++      closeContextMenu();
++    }
++  } : void 0;
+   const impairmentItem = {
+     id: "impair-edge",
+     label: "Link Impairments",
+@@ -8367,6 +8384,7 @@ function buildEdgeContextMenu(ctx) {
+       items.push({ id: "divider-capture", label: "", divider: true });
+     }
+     items.push(impairmentItem);
++    if (linkStateItem) items.push(linkStateItem);
+   }
+   if (isEditMode) {
+     if (items.length > 0) {
+@@ -8755,7 +8773,8 @@ function buildEdgeItems(params) {
+     editEdge: params.editEdge,
+     handleDeleteEdge: params.handleDeleteEdge,
+     showLinkInfo: params.showLinkInfo,
+-    showLinkImpairment: params.showLinkImpairment
++    showLinkImpairment: params.showLinkImpairment,
++    onLinkAction: params.onLinkAction
+   });
+ }
+ function buildPaneItems(params) {
+@@ -8822,6 +8841,7 @@ function useContextMenuItems(params) {
+       ...params,
+       onInterfaceCapture: (nodeName, interfaceName) => topoViewer.captureInterface(nodeName, interfaceName),
+       onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
++      onLinkAction: typeof topoViewer.runLinkAction === "function" ? (action, endpoints) => topoViewer.runLinkAction(action, endpoints) : void 0,
+       type,
+       targetId,
+       menuPosition,
+diff --git a/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts b/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
+index 1075595..6d57434 100644
+--- a/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
++++ b/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
+@@ -115,6 +115,13 @@ export interface ClabUiTopoViewerHost {
+     cancelLifecycle(): void;
+     toggleSplitView(): void;
+     runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
++    /** Optional: take a deployed link down or bring it back up (adds the link context-menu item). */
++    runLinkAction?(action: "down" | "up", endpoints: {
++        sourceNode?: string;
++        sourceEndpoint?: string;
++        targetNode?: string;
++        targetEndpoint?: string;
++    }): void;
+     captureInterface(nodeName: string, interfaceName: string): void;
+     setLinkImpairment(nodeName: string, interfaceName: string, data: unknown): void;
+     saveCustomNode(data: Record<string, unknown>): void;

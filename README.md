@@ -264,6 +264,20 @@ that is down turns red and dashed; one that is dropping or erroring *right
 now* turns red. The panel lists all links, busiest and broken ones first.
 Counters are read from the containers every 3 seconds.
 
+### Fault injection
+
+- Right-click a link → **Take Link Down** / **Bring Link Up**. This pulls the
+  cable (`ip link set … down` in the container), so the peer loses carrier and
+  routing protocols react as they would to a real failure.
+- Right-click a link → **Link Impairments** sets netem delay, jitter, loss,
+  rate and corruption per endpoint. The form now shows what is actually
+  applied, read back from `tc`.
+- In the Traffic lens, each link row has a ⚡ menu: down/up, 100 ms delay,
+  5 % loss, 1 Mb/s cap, or clear (applied to both ends).
+
+Impairments need the lab host's `sch_netem` kernel module (`sudo modprobe
+sch_netem` if the UI reports that netem is missing).
+
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
 

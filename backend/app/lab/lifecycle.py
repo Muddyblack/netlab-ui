@@ -255,6 +255,37 @@ async def lab_link_impairment(body: LinkImpairment):
         rate=body.rate,
         corruption=body.corruption,
     )
+    stderr = result.stderr
+    if result.code and "qdisc kind is unknown" in stderr:
+        stderr = (
+            "the host kernel has no netem support — load it on the lab host with "
+            "`sudo modprobe sch_netem` and try again"
+        )
+    return {"code": result.code, "stdout": result.stdout, "stderr": stderr}
+
+
+class LinkStateRequest(BaseModel):
+    sessionId: str
+    node: str
+    interface: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$", max_length=64)
+    up: bool
+
+
+@router.post("/link-state", response_model=CommandResult)
+async def lab_link_state(body: LinkStateRequest):
+    """Take one node interface down or bring it back up — the "cable pulled"
+    fault. The peer sees carrier loss, so routing protocols react as they
+    would to a real link failure."""
+    path, info = await _running_node_info(body.sessionId, body.node)
+    container = _require_clab_node(body.node, info)
+    from app.contract import commands
+
+    result = await runner.set_interface_state(
+        container,
+        body.interface,
+        body.up,
+        preferred_runtime=runtime_state.clab_runtime(commands.load_topology(path)),
+    )
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 

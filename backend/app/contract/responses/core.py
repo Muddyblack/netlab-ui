@@ -161,6 +161,14 @@ class RuntimeInterfaceStats(BaseModel):
     newErrors: int | None = None
 
 
+class RuntimeNetemState(BaseModel):
+    delay: str | None = None
+    jitter: str | None = None
+    loss: str | None = None
+    rate: str | None = None
+    corruption: str | None = None
+
+
 class RuntimeInterface(BaseModel):
     name: str
     alias: str
@@ -171,6 +179,7 @@ class RuntimeInterface(BaseModel):
     type: str = ""
     ifIndex: int | None = None
     stats: RuntimeInterfaceStats | None = None
+    netemState: RuntimeNetemState | None = None
 
 
 class RuntimeContainer(BaseModel):

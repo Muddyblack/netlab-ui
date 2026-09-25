@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,44 @@ def _stats(container: str, iface: str, raw: dict[str, Any], now: float) -> dict[
     return result
 
 
+_NETEM_LINE = re.compile(r"^qdisc netem \S+ dev (?P<dev>\S+)(?P<rest>.*)$")
+_TIME = r"[\d.]+(?:us|ms|s)"
+_RATE_UNITS = {"bit": 0.001, "kbit": 1, "mbit": 1000, "gbit": 1_000_000}
+
+
+def _kbit(rate: str) -> str:
+    match = re.fullmatch(r"([\d.]+)([KMG]?bit)", rate, re.IGNORECASE)
+    if not match:
+        return rate
+    value = float(match.group(1)) * _RATE_UNITS[match.group(2).lower()]
+    return str(round(value))
+
+
+def parse_netem(qdisc_text: str) -> dict[str, dict[str, str]]:
+    """Per interface, the netem impairments in `tc qdisc show` output, in the
+    units `containerlab tools netem set` takes (delay/jitter with a time
+    unit, loss/corruption in percent, rate in kbit/s)."""
+    result: dict[str, dict[str, str]] = {}
+    for line in qdisc_text.splitlines():
+        match = _NETEM_LINE.match(line.strip())
+        if not match:
+            continue
+        rest = match.group("rest")
+        state: dict[str, str] = {}
+        if delay := re.search(rf"\bdelay ({_TIME})(?:\s+({_TIME}))?", rest):
+            state["delay"] = delay.group(1)
+            if delay.group(2):
+                state["jitter"] = delay.group(2)
+        if loss := re.search(r"\bloss (?:random )?([\d.]+)%", rest):
+            state["loss"] = loss.group(1)
+        if rate := re.search(r"\brate (\S+)", rest):
+            state["rate"] = _kbit(rate.group(1))
+        if corrupt := re.search(r"\bcorrupt ([\d.]+)%", rest):
+            state["corruption"] = corrupt.group(1)
+        result[match.group("dev")] = state
+    return result
+
+
 def _interface(container: str, raw: dict[str, Any], now: float) -> dict[str, Any]:
     name = str(raw.get("ifname") or "")
     operstate = str(raw.get("operstate") or "unknown").lower()
@@ -88,8 +127,10 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
         # the interface probe below both compare against "running".
         state = runner.normalize_node_state(info.get("status"))
         raw_interfaces: list[dict[str, Any]] = []
+        netem: dict[str, dict[str, str]] = {}
         if info.get("provider") == "clab" and state == "running":
-            raw_interfaces = await runner.container_interfaces(provider_name, preferred_runtime)
+            raw_interfaces, qdisc_text = await runner.container_link_snapshot(provider_name, preferred_runtime)
+            netem = parse_netem(qdisc_text)
         now = time.monotonic()
         source_node = topo.node(node_name)
         return {
@@ -101,7 +142,10 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
             "image": str(info.get("image") or ""),
             "ipv4Address": str(info.get("mgmt") or ""),
             "ipv6Address": "",
-            "interfaces": [_interface(provider_name, item, now) for item in raw_interfaces],
+            "interfaces": [
+                {**_interface(provider_name, item, now), "netemState": netem.get(str(item.get("ifname") or ""))}
+                for item in raw_interfaces
+            ],
         }
 
     return await asyncio.gather(

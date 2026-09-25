@@ -722,8 +722,9 @@ export function useAppController() {
         handleNodeLifecycle(nodeName, action);
       }
     };
-    return () => { host.onNodeAction = undefined; };
-  }, [host, sessionDock, handleNodeLifecycle]);
+    host.onLinkResult = (message, severity) => addToast(message, severity);
+    return () => { host.onNodeAction = undefined; host.onLinkResult = undefined; };
+  }, [host, sessionDock, handleNodeLifecycle, addToast]);
 
   useEffect(() => {
     host.onBeforeDeploy = requestDeployApproval;

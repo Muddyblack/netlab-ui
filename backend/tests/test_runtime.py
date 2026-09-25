@@ -37,3 +37,16 @@ def test_preferred_podman_runtime_is_selected_before_docker(monkeypatch):
     monkeypatch.setattr(runner.shutil, "which", binaries.get)
 
     assert runner.container_runtime_binary("podman") == "/usr/bin/podman"
+
+
+def test_netem_state_is_read_from_tc_qdisc_output():
+    text = (
+        "qdisc noqueue 0: dev lo root refcnt 2\n"
+        "qdisc netem 8001: dev eth1 root refcnt 13 limit 1000 delay 50ms  10ms loss 5% rate 1Mbit corrupt 0.5%\n"
+        "qdisc netem 8002: dev eth2 root refcnt 13 limit 1000 delay 100ms\n"
+    )
+    assert runtime.parse_netem(text) == {
+        "eth1": {"delay": "50ms", "jitter": "10ms", "loss": "5", "rate": "1000", "corruption": "0.5"},
+        "eth2": {"delay": "100ms"},
+    }
+    assert runtime.parse_netem("qdisc fq_codel 0: dev eth0 root") == {}

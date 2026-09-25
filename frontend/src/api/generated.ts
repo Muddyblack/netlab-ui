@@ -1037,6 +1037,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/link-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lab Link State
+         * @description Take one node interface down or bring it back up — the "cable pulled"
+         *     fault. The peer sees carrier loss, so routing protocols react as they
+         *     would to a real link failure.
+         */
+        post: operations["lab_link_state_api_lab_link_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/deploy-plan": {
         parameters: {
             query?: never;
@@ -3664,6 +3686,17 @@ export interface components {
              */
             corruption: string;
         };
+        /** LinkStateRequest */
+        LinkStateRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Node */
+            node: string;
+            /** Interface */
+            interface: string;
+            /** Up */
+            up: boolean;
+        };
         /** ModelPut */
         ModelPut: {
             /** Sessionid */
@@ -4470,6 +4503,7 @@ export interface components {
             /** Ifindex */
             ifIndex?: number | null;
             stats?: components["schemas"]["RuntimeInterfaceStats"] | null;
+            netemState?: components["schemas"]["RuntimeNetemState"] | null;
         };
         /** RuntimeInterfaceStats */
         RuntimeInterfaceStats: {
@@ -4525,6 +4559,19 @@ export interface components {
             txDropped: number;
             /** Newerrors */
             newErrors?: number | null;
+        };
+        /** RuntimeNetemState */
+        RuntimeNetemState: {
+            /** Delay */
+            delay?: string | null;
+            /** Jitter */
+            jitter?: string | null;
+            /** Loss */
+            loss?: string | null;
+            /** Rate */
+            rate?: string | null;
+            /** Corruption */
+            corruption?: string | null;
         };
         /** ScriptStep */
         ScriptStep: {
@@ -7142,6 +7189,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LinkImpairment"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_link_state_api_lab_link_state_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkStateRequest"];
             };
         };
         responses: {

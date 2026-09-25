@@ -3,6 +3,7 @@ import { Box, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, 
 import { useEdges } from "@containerlab/clab-ui";
 
 import { useRuntimeContainers } from "../../../host/runtimeStore";
+import { LinkFaultMenu } from "./LinkFaultMenu";
 import { TRAFFIC_COLORS, formatBps, linkTraffic, loadLevel, type LinkTraffic } from "./linkTraffic";
 
 function Swatch({ color, label, dashed = false }: { color: string; label: string; dashed?: boolean }) {
@@ -22,7 +23,10 @@ function statusText(link: LinkTraffic): { text: string; color?: string } {
 }
 
 /** Lens panel for live traffic: legend plus every link, busiest first. */
-export function TrafficLensView() {
+export function TrafficLensView({ sessionId, onToast }: {
+  sessionId: string;
+  onToast: (message: string, severity?: "success" | "info" | "warning" | "error") => void;
+}) {
   const edges = useEdges();
   const containers = useRuntimeContainers();
   const links = useMemo(
@@ -55,6 +59,7 @@ export function TrafficLensView() {
             <TableCell align="right">Rate</TableCell>
             <TableCell align="right">pps</TableCell>
             <TableCell>Health</TableCell>
+            <TableCell padding="none" />
           </TableRow>
         </TableHead>
         <TableBody>
@@ -74,6 +79,7 @@ export function TrafficLensView() {
                     <span>{status.text}</span>
                   </Tooltip>
                 </TableCell>
+                <TableCell padding="none"><LinkFaultMenu sessionId={sessionId} link={link} onResult={onToast} /></TableCell>
               </TableRow>
             );
           })}

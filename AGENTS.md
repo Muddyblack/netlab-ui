@@ -129,7 +129,7 @@ Never put netlab text, branding, or logic into clab-ui — it's a third-party de
 
 ### Installing / upgrading clab-ui
 
-`@containerlab/clab-ui` is published on the public npm registry (source: the [srl-labs/containerlab-app](https://github.com/srl-labs/containerlab-app) monorepo), pinned in `frontend/package.json`. No auth is needed to install. To upgrade, bump the version, port the sequenced patches in `frontend/patches/` (`@containerlab+clab-ui+<version>+NNN+<name>.patch`: 001 initial fixes, 002 lifecycle-modal lab name + actions, 003 node-editor `hostFields`), and run `npm install` — there's no build step on our side. Keep each patch generic (no netlab text) and small; add new ones with `npx patch-package @containerlab/clab-ui --append <name>`. After changing a patch, restart Vite with `--force` (its dependency pre-bundle cache keeps the old code).
+`@containerlab/clab-ui` is published on the public npm registry (source: the [srl-labs/containerlab-app](https://github.com/srl-labs/containerlab-app) monorepo), pinned in `frontend/package.json`. No auth is needed to install. To upgrade, bump the version, port the sequenced patches in `frontend/patches/` (`@containerlab+clab-ui+<version>+NNN+<name>.patch`: 001 initial fixes, 002 lifecycle-modal lab name + actions, 003 node-editor `hostFields`, 004 link down/up menu item), and run `npm install` — there's no build step on our side. Keep each patch generic (no netlab text) and small; add new ones with `npx patch-package @containerlab/clab-ui --append <name>`. After changing a patch, restart Vite with `--force` (its dependency pre-bundle cache keeps the old code).
 
 ### Public API only
 

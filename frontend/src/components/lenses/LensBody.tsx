@@ -147,7 +147,7 @@ export function LensBody({ lens, bundle, error, loading, validationIssues, onToa
     );
   }
 
-  if (lens === "traffic") return <TrafficLensView />;
+  if (lens === "traffic") return <TrafficLensView sessionId={sessionId} onToast={onToast} />;
 
   if (lens === "deployment") {
     return (
