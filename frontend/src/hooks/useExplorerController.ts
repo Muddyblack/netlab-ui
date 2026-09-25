@@ -41,6 +41,7 @@ export interface ExplorerActionCallbacks {
    * tab (like openShell, it always targets the *currently active* lab
    * session — there's no per-tab session id, same as node shells). */
   openDrawioWizard: () => void;
+  openMultiExec: (lab: TopologyRef) => void | Promise<void>;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
   /** `lab` is the node's own topology (Running Labs tree items carry it);
@@ -234,6 +235,11 @@ async function handleSshToAllNodes({ cb, topoRef, runningLabsStatusRef }: Action
   }
 }
 
+async function handleRunOnNodes({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  await cb.openMultiExec(topoRef);
+}
+
 async function handleCopyPath({ cb, item }: ActionCtx) {
   const path = item?.topologyRef?.yamlPath || item?.path || item?.resourcePath;
   if (path) {
@@ -379,6 +385,7 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "containerlab.lab.stop": handleDestroyLab,
   "containerlab.lab.restart": handleNetlabRestart,
   "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
+  "netlab.lab.runOnNodes": handleRunOnNodes,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
   "containerlab.file.newFile": handleOpenNewLabDialog,
@@ -557,7 +564,8 @@ export function useExplorerController({
           contributedLabActions: [
             { commandId: "containerlab.lab.graph.netlabSvg.vertical", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Vertical)" },
             { commandId: "containerlab.lab.graph.netlabSvg.horizontal", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Horizontal)" },
-            { commandId: "containerlab.lab.graph.netlabSvg.interactive", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Interactive)" }
+            { commandId: "containerlab.lab.graph.netlabSvg.interactive", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Interactive)" },
+            { commandId: "netlab.lab.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -575,6 +583,7 @@ export function useExplorerController({
             ["netlab.lab.restart", "Netlab Restart"],
             ["netlab.lab.validate", "Netlab Validate (Run tests)"],
             ["netlab.lab.collect", "Netlab Collect (Gather configs)"],
+            ["netlab.lab.runOnNodes", "Run Command on Nodes…"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

@@ -379,6 +379,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/exec/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exec Targets
+         * @description Nodes (with running state) and groups a command can be sent to.
+         */
+        get: operations["exec_targets_api_lab_exec_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/exec/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exec Stream
+         * @description Run ``command`` on every selected node in parallel (at most
+         *     ``MAX_PARALLEL`` at a time). SSE frames: ``{targets: [...]}`` first, one
+         *     ``{result: {...}}`` per node as it finishes, then ``{done: true}``.
+         */
+        post: operations["exec_stream_api_lab_exec_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/exec/scripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scripts */
+        get: operations["get_scripts_api_lab_exec_scripts_get"];
+        /** Put Scripts */
+        put: operations["put_scripts_api_lab_exec_scripts_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/capture/edgeshark": {
         parameters: {
             query?: never;
@@ -2897,6 +2957,68 @@ export interface components {
             /** Labs */
             labs: components["schemas"]["ExampleLab"][];
         };
+        /** ExecRequest */
+        ExecRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Nodes */
+            nodes: string[];
+            /** Command */
+            command: string;
+            /**
+             * Mode
+             * @default shell
+             * @enum {string}
+             */
+            mode: "shell" | "show";
+            /**
+             * Timeouts
+             * @default 30
+             */
+            timeoutS: number;
+        };
+        /** ExecScript */
+        ExecScript: {
+            /** Name */
+            name: string;
+            /** Steps */
+            steps?: components["schemas"]["ScriptStep"][];
+        };
+        /** ExecScripts */
+        ExecScripts: {
+            /** Scripts */
+            scripts: components["schemas"]["ExecScript"][];
+        };
+        /** ExecScriptsSave */
+        ExecScriptsSave: {
+            /** Sessionid */
+            sessionId: string;
+            /** Scripts */
+            scripts: components["schemas"]["ExecScript"][];
+        };
+        /** ExecTarget */
+        ExecTarget: {
+            /** Name */
+            name: string;
+            /** Device */
+            device?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+        };
+        /** ExecTargets */
+        ExecTargets: {
+            /** Nodes */
+            nodes: components["schemas"]["ExecTarget"][];
+            /** Groups */
+            groups: {
+                [key: string]: string[];
+            };
+        };
         /** FcliAction */
         FcliAction: {
             /** Sessionid */
@@ -4381,6 +4503,19 @@ export interface components {
             txPackets: number;
             /** Statsintervalseconds */
             statsIntervalSeconds?: number | null;
+        };
+        /** ScriptStep */
+        ScriptStep: {
+            /** Command */
+            command: string;
+            /**
+             * Mode
+             * @default shell
+             * @enum {string}
+             */
+            mode: "shell" | "show";
+            /** Nodes */
+            nodes?: string[];
         };
         /** Selection */
         Selection: {
@@ -5938,6 +6073,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnitExportBundle"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exec_targets_api_lab_exec_targets_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecTargets"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exec_stream_api_lab_exec_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scripts_api_lab_exec_scripts_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecScripts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_scripts_api_lab_exec_scripts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecScriptsSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecScripts"];
                 };
             };
             /** @description Validation Error */

@@ -10,6 +10,7 @@ import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 
 const Shell = lazy(() => import("./Shell").then((m) => ({ default: m.Shell })));
+const MultiExecPanel = lazy(() => import("./multi-exec/MultiExecPanel").then((m) => ({ default: m.MultiExecPanel })));
 const NodeLogsPanel = lazy(() => import("./NodeLogsPanel").then((m) => ({ default: m.NodeLogsPanel })));
 
 /** Standalone page for a single shell or log stream, rendered when the app is
@@ -18,7 +19,7 @@ const NodeLogsPanel = lazy(() => import("./NodeLogsPanel").then((m) => ({ defaul
  * localStorage applies here too. */
 export function SessionPopout({ kind, node, sessionId }: { kind: SessionKind; node: string; sessionId: string }) {
   useEffect(() => {
-    document.title = `${kind === "shell" ? "Shell" : "Logs"} — ${node}`;
+    document.title = kind === "multi" ? "Run on nodes" : `${kind === "shell" ? "Shell" : "Logs"} — ${node}`;
   }, [kind, node]);
 
   return (
@@ -34,9 +35,9 @@ export function SessionPopout({ kind, node, sessionId }: { kind: SessionKind; no
         }}
       >
         <Suspense fallback={null}>
-          {kind === "shell"
-            ? <Shell node={node} sessionId={sessionId} onClose={() => window.close()} />
-            : <NodeLogsPanel node={node} sessionId={sessionId} />}
+          {kind === "shell" && <Shell node={node} sessionId={sessionId} onClose={() => window.close()} />}
+          {kind === "multi" && <MultiExecPanel sessionId={sessionId} />}
+          {kind !== "shell" && kind !== "multi" && <NodeLogsPanel node={node} sessionId={sessionId} />}
         </Suspense>
       </Box>
     </MuiThemeProvider>

@@ -117,6 +117,7 @@ export function AppCanvasOverlays({
             onClose={sessionDock.closeTab}
             onToggleOpen={() => sessionDock.setOpen((value) => !value)}
             onOpenShell={openShell}
+            onOpenMulti={() => sessionDock.openTab("multi", "nodes")}
             onPopOut={handleSessionPopOut}
           />
         </Suspense>,

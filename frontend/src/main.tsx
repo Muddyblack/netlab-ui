@@ -56,14 +56,14 @@ if (typeof window !== "undefined") {
   }
 }
 
-// ?popout=shell|logs renders a single session in its own window instead of the
+// ?popout=shell|logs|multi renders a single session in its own window instead of the
 // full app — the session dock's "move to its own window" target.
-function resolvePopout(): { kind: "shell" | "logs"; node: string; sessionId: string } | null {
+function resolvePopout(): { kind: "shell" | "logs" | "multi"; node: string; sessionId: string } | null {
   const params = new URLSearchParams(window.location.search);
   const kind = params.get("popout");
   const node = params.get("node");
   const sessionId = params.get("sessionId");
-  if ((kind !== "shell" && kind !== "logs") || !node || !sessionId) return null;
+  if ((kind !== "shell" && kind !== "logs" && kind !== "multi") || !node || !sessionId) return null;
   return { kind, node, sessionId };
 }
 

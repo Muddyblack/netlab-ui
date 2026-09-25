@@ -28,6 +28,24 @@ export type PluginTemplate = Schemas["PluginTemplate"];
 export type PluginImportRequest = Schemas["PluginImportRequest"];
 export type PluginImportResult = Schemas["PluginImportResult"];
 export type VersionResult = Schemas["VersionResult"];
+export type ExecTargets = Schemas["ExecTargets"];
+export type ExecScript = Schemas["ExecScript"];
+export type ExecMode = Schemas["ExecRequest"]["mode"];
+
+/** One node's result from `POST /api/lab/exec/stream`. */
+export interface ExecResult {
+  node: string;
+  command: string;
+  mode: ExecMode;
+  /** Real exit status when the node could report one (shell on containers). */
+  exitCode: number | null;
+  timedOut?: boolean;
+  /** Non-zero exit, timeout, or a CLI error reply ("% Unknown command"). */
+  failed?: boolean;
+  output: string;
+  stderr: string;
+  durationMs?: number;
+}
 // Mirrors the generated backend response. Keep this local until API generation
 // is run in the full optional-assistant environment (otherwise generation
 // incorrectly removes the assistant schemas from this shared client).
@@ -165,6 +183,40 @@ async function http<T>(path: string, init?: RequestInit, retries = 3, timeoutMs 
     }
   }
   throw lastErr;
+}
+
+/** POST `body` as JSON and hand each SSE `data:` frame to `onFrame`. */
+async function postEventStream(
+  path: string,
+  body: unknown,
+  onFrame: (frame: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${getApiBase()}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    let detail = `HTTP ${res.status}`;
+    try { detail = ((await res.json()) as { detail?: string }).detail ?? detail; } catch { /* not JSON */ }
+    throw new HttpError(res.status, detail);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (line) onFrame(JSON.parse(line.slice(6)) as Record<string, unknown>);
+    }
+  }
 }
 
 export const api = {
@@ -305,6 +357,30 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action }),
     }, 1, 120000),
+
+  getExecTargets: (sessionId: string) =>
+    http<ExecTargets>(`/api/lab/exec/targets?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 15000),
+
+  getExecScripts: (sessionId: string) =>
+    http<{ scripts: ExecScript[] }>(`/api/lab/exec/scripts?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  saveExecScripts: (sessionId: string, scripts: ExecScript[]) =>
+    http<{ scripts: ExecScript[] }>("/api/lab/exec/scripts", {
+      method: "PUT",
+      body: JSON.stringify({ sessionId, scripts }),
+    }),
+
+  /** Run one command on several nodes; `onResult` fires per node as it finishes. */
+  async execOnNodes(
+    request: { sessionId: string; nodes: string[]; command: string; mode: ExecMode; timeoutS?: number },
+    handlers: { onTargets?: (nodes: string[]) => void; onResult: (result: ExecResult) => void },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await postEventStream("/api/lab/exec/stream", request, (frame) => {
+      if (Array.isArray(frame.targets)) handlers.onTargets?.(frame.targets as string[]);
+      if (frame.result) handlers.onResult(frame.result as ExecResult);
+    }, signal);
+  },
 
   getEdgesharkStatus: () =>
     http<{ installed: boolean; running: boolean }>("/api/lab/capture/edgeshark", { cache: "no-store" }, 1, 15000),

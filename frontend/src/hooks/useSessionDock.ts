@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-export type SessionKind = "shell" | "logs" | "drawio";
+export type SessionKind = "shell" | "logs" | "drawio" | "multi";
 export type SessionTab = { key: string; kind: SessionKind; node: string; sessionId?: string | null };
 
 export const sessionTabKey = (kind: SessionKind, node: string) => `${kind}:${node}`;

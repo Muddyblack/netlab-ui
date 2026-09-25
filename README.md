@@ -235,6 +235,29 @@ at runtime.
 
 ---
 
+## Working with running labs
+
+### Run a command on many nodes
+
+**Run Command on Nodes…** (right-click a deployed lab, or the stacked-cards
+button in the terminal dock) opens a dock tab that sends one command to any
+mix of nodes, groups and `all`, in parallel:
+
+- **Shell** runs a Linux command in the node (`netlab exec`; pipes work).
+  **Show** runs a CLI show command in the device's own shell
+  (`netlab connect --show`: vtysh, Cli, sr_cli…).
+- Answers appear side by side, and identical answers are merged
+  (`r[1-3]`) so the odd node stands out. Non-zero exits and CLI error replies
+  (`% Unknown command`) are flagged red.
+- ↑/↓ browse the command history, and ↻ re-runs a command.
+- **Save session as script** stores the commands next to the topology in
+  `<topology>.netlab-ui-scripts.json`, so the script is part of the lab. The
+  ⏵ scripts menu replays one; **Export transcript** downloads the session as
+  Markdown.
+
+In a regular node shell, **⇄ Sync input** mirrors your typing into every other
+shell that has sync switched on (like tmux's synchronize-panes).
+
 ## 🤖 AI Assistant (experimental, optional)
 
 > [!WARNING]

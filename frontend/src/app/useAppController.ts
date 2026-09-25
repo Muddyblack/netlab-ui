@@ -338,6 +338,7 @@ export function useAppController() {
       openShell: async (n, ref) => openShellRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       showLogs: async (n, ref) => openLogsRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       openDrawioWizard: () => openDrawioWizardRef.current(),
+      openMultiExec: async (ref) => openMultiExecRef.current(await ensureLabActiveRef.current(ref)),
       nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
       uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),
@@ -828,6 +829,8 @@ export function useAppController() {
     return getOrCreateSession(ref);
   }, [getOrCreateSession, handleOpenLab]);
   const ensureLabActiveRef = useRef(ensureLabActive); ensureLabActiveRef.current = ensureLabActive;
+  const openMultiExec = useCallback((sid?: string | null) => sessionDock.openTab("multi", "nodes", sid ?? undefined), [sessionDock]);
+  const openMultiExecRef = useRef(openMultiExec); openMultiExecRef.current = openMultiExec;
   const openDrawioWizard = useCallback(() => sessionDock.openTab("drawio", "diagram"), [sessionDock]);
   const openShellRef = useRef(openShell); openShellRef.current = openShell;
   const openLogsRef = useRef(openLogs); openLogsRef.current = openLogs;
