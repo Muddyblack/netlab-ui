@@ -14,6 +14,9 @@ class ReportDescriptor(BaseModel):
     format: Literal["table", "markdown", "html", "text"]
     source: Literal["builtin", "workspace", "user", "system"]
     structuredAdapter: Literal["addressing", "bgp-neighbor"] | None = None
+    # The same report in every format netlab offers (addressing.md,
+    # addressing.html, addressing) — for download or opening in a tab.
+    exports: list[str] = []
 
 
 class ReportCatalogResult(BaseModel):

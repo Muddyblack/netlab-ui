@@ -72,7 +72,7 @@ class CommandResult:
     stderr: str
 
 
-def _child_env() -> dict[str, str]:
+def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     """Environment for netlab child processes.
 
     ``PYTHONUNBUFFERED=1`` is essential for live output: netlab (and the
@@ -85,6 +85,12 @@ def _child_env() -> dict[str, str]:
     # Prepend the resolved netlab's bin/ so a netlab living in its own venv finds
     # that venv's ansible-playbook / containerlab rather than a host copy.
     env["PATH"] = location.child_path()
+    # netlab's Ansible playbooks locate the lab through $PWD
+    # (lookup('env','PWD'): collected configs, node_files). A shell sets PWD
+    # on cd; a subprocess cwd doesn't, so it would still name the backend's
+    # own directory.
+    if cwd is not None:
+        env["PWD"] = str(Path(cwd).resolve())
     return env
 
 
@@ -109,7 +115,7 @@ async def _spawn(
             netlab_bin,
             *args,
             cwd=str(cwd) if cwd else None,
-            env=_child_env() | (env_extra or {}),
+            env=_child_env(cwd) | (env_extra or {}),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE if pipe_stdin else asyncio.subprocess.DEVNULL,
@@ -145,17 +151,25 @@ async def spawn_command(args: list[str], cwd: Path | None = None) -> asyncio.sub
     return await _spawn(args, cwd)
 
 
-async def run_streaming(args: list[str], cwd: Path | None = None) -> AsyncIterator[tuple[str, str]]:
+async def run_streaming(
+    args: list[str], cwd: Path | None = None, *, stdin_text: str | None = None
+) -> AsyncIterator[tuple[str, str]]:
     """Yield ``(stream, line)`` tuples in real time where stream is ``stdout``
     or ``stderr``, followed by a final ``("exit", <code>)`` tuple with the
-    process exit code as a string.
+    process exit code as a string. ``stdin_text`` answers prompts the command
+    may show (stdin is closed after it).
 
     Raises :class:`NetlabNotInstalled` if the binary can't be found.
     """
     # Lifecycle commands launch provider/Ansible children; _spawn puts every
     # command in its own session, so stream cancellation can stop the whole
     # command tree via killpg instead of orphaning those children.
-    proc = await _spawn(args, cwd)
+    proc = await _spawn(args, cwd, pipe_stdin=stdin_text is not None)
+    if stdin_text is not None and proc.stdin is not None:
+        proc.stdin.write(stdin_text.encode())
+        with contextlib.suppress(OSError):
+            await proc.stdin.drain()
+        proc.stdin.close()
 
     _SENTINEL = object()
     queue: asyncio.Queue = asyncio.Queue()

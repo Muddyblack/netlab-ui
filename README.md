@@ -377,19 +377,47 @@ Environment has the same table as below; hover a mark there for the reason.
 | Link down / up | ✅ | ✅ `domif-setlink` | — |
 | Live traffic and errors | ✅ | ◐ ² | — |
 | Packet capture | ✅ | ◐ ² | — |
-| Link impairment (delay, loss, rate) | ✅ | — ³ | — |
+| Link impairment (delay, loss, rate) | ✅ | ◐ ² via `netlab tc` | — |
 | Node logs | ✅ | — | — |
 | Image manager | ✅ | — (Vagrant boxes) | — |
 
 ¹ Needs KVM, libvirt and Vagrant on the backend host. The container image has
 none of them; run the backend natively, or use the UI-only image with a host
 netlab install.
-² Link state works on every VM link. Counters and capture work on LAN links
-only: netlab builds point-to-point VM links as UDP tunnels with no host
+² Link state works on every VM link. Counters, capture and impairment work on
+LAN links only: netlab builds point-to-point VM links as UDP tunnels with no host
 interface (the same limit `netlab capture` has).
-³ `netlab tc` on the host covers LAN links.
 
 Where something isn't possible for a node, the UI says why instead of failing.
+
+### More of netlab: tools, reports, setup
+
+- **External tools** (Ctrl+P → *External tools*, or a lab's context menu):
+  Graphite, SuzieQ, NUTS, Cisco NSO and Edgeshark from netlab's `tools:`.
+  Switch one on and netlab starts it with every deploy. For a deployed lab,
+  see whether it runs, open its web UI, connect to its CLI (`netlab connect
+  suzieq`) or start and stop it. The commands are netlab's own.
+- **Reports** (Ctrl+P → *Reports*): every netlab report as a table, rendered
+  HTML or text, with download in each format netlab offers (`.md`, `.html`,
+  text) and *Open* for the HTML version. The HTML is sandboxed: scripts don't
+  run and it doesn't get the UI's origin.
+- **Custom configs**: the node editor's *Configuration* tab lists the
+  templates netlab would find for `config: [name]` (lab directory,
+  `~/.netlab`, `/etc/netlab`) and warns when one has no variant for the
+  node's device. *New template* creates `<name>/<device>.j2` with a commented
+  starter and opens it.
+- **Containerlab tarball** (a deployed lab's context menu, or Ctrl+P): `netlab
+  clab tarball` downloads `clab.config.yml` plus the devices' current configs,
+  to run with plain containerlab elsewhere.
+- **Setup helpers** (Settings → Environment):
+  - *Check my setup* runs `netlab test clab|libvirt|podman|grpc`: a real
+    deploy of a tiny lab, checked and removed again. Stopping it halfway
+    still tears everything down.
+  - *Install software* runs `netlab install` (Ansible, containerlab, libvirt,
+    GraphViz…) on the backend host. It needs root or password-less sudo.
+  - *Build routing-daemon containers* runs `netlab clab build` (BIRD,
+    dnsmasq…).
+  - *Vagrant box recipes* show `netlab libvirt config <device>`.
 
 ## 🤖 AI Assistant (experimental, optional)
 

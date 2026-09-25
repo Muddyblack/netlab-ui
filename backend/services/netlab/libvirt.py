@@ -21,6 +21,7 @@ Everything here follows netlab's own libvirt provider
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -161,14 +162,72 @@ async def set_link(domain: str, node: dict[str, Any], ifname: str, up: bool) -> 
     return await virsh("domif-setlink", domain, match.mac, "up" if up else "down")
 
 
-async def capture_interface(domain: str, node: dict[str, Any], ifname: str) -> str:
-    """The host tap to capture a VM interface on; ValueError explains why not."""
+async def lan_tap(domain: str, node: dict[str, Any], ifname: str, purpose: str, instead: str) -> str:
+    """The host tap of a VM interface; ValueError explains why there is none."""
     match = next((iface for iface in await interfaces(domain, node) if iface.ifname == ifname), None)
     if match is None:
         raise ValueError(f"{domain} has no interface {ifname} (is the VM running?)")
     if match.target is None:
         raise ValueError(
             f"{ifname} is a point-to-point link — netlab builds those as UDP tunnels with no host "
-            "interface to capture on. Capture on a LAN link, or inside the VM."
+            f"interface for {purpose}. {instead}"
         )
     return match.target
+
+
+async def capture_interface(domain: str, node: dict[str, Any], ifname: str) -> str:
+    """The host tap to capture a VM interface on; ValueError explains why not."""
+    return await lan_tap(domain, node, ifname, "capture", "Capture on a LAN link, or inside the VM.")
+
+
+_NETLAB_ERROR_RE = re.compile(r"(?m)^\s*(\[ERROR\]|\w*Error\b)")
+_NUMBER_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z%]*)\s*$")
+_TIME_MS = {"": 1.0, "ms": 1.0, "s": 1000.0, "us": 0.001}
+_RATE_KBPS = {"": 1.0, "k": 1.0, "kbit": 1.0, "kbps": 1.0, "m": 1000.0, "mbit": 1000.0, "mbps": 1000.0}
+_RATE_KBPS |= {"g": 1e6, "gbit": 1e6, "gbps": 1e6}
+
+
+def _tc_value(value: str, units: dict[str, float], what: str) -> str:
+    """A UI value ("10", "10ms", "1.5s", "5%", "10mbit") in netlab tc's unit."""
+    match = _NUMBER_RE.match(value)
+    unit = match.group(2).lower() if match else ""
+    if not match or unit not in units:
+        raise ValueError(f"can't read {value!r} as a {what}")
+    return f"{float(match.group(1)) * units[unit]:g}"
+
+
+def tc_args(node: str, ifname: str, **fields: str) -> list[str]:
+    """``netlab tc`` arguments for the UI's impairment fields; all empty clears."""
+    percent = {"": 1.0, "%": 1.0}
+    spec = {
+        "delay": (_TIME_MS, "time"),
+        "jitter": (_TIME_MS, "time"),
+        "loss": (percent, "percentage"),
+        "corruption": (percent, "percentage"),
+        "rate": (_RATE_KBPS, "rate"),
+    }
+    flags = {"corruption": "--corrupt"}
+    args: list[str] = []
+    for name, (units, what) in spec.items():
+        value = (fields.get(name) or "").strip()
+        if value:
+            args += [flags.get(name, f"--{name}"), _tc_value(value, units, what)]
+    if not args:
+        return ["tc", "disable", "-n", node, "-i", ifname]
+    return ["tc", "set", "-n", node, "-i", ifname, *args]
+
+
+async def set_impairment(
+    topology_path: str | Path, domain: str, name: str, node: dict[str, Any], ifname: str, **fields: str
+) -> runner.CommandResult:
+    """Link impairment on a VM interface through ``netlab tc`` — which, like
+    capture, needs the host tap of a LAN link."""
+    try:
+        await lan_tap(domain, node, ifname, "traffic control", "Impair a LAN link instead.")
+        args = tc_args(name, ifname, **fields)
+    except ValueError as exc:
+        return runner.CommandResult(1, "", str(exc))
+    result = await runner.run_command(args, cwd=Path(topology_path).parent)
+    # netlab reports a failed tc as an error line but may still exit 0.
+    failed = result.code or _NETLAB_ERROR_RE.search(result.stdout + result.stderr)
+    return runner.CommandResult(1 if failed else 0, result.stdout, result.stderr)

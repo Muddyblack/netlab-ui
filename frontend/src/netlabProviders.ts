@@ -72,8 +72,8 @@ export const PROVIDER_CAPABILITIES: Capability[] = [
   },
   {
     feature: "Link impairment (delay, loss, rate)",
-    support: { clab: "yes", libvirt: "no", external: "no" },
-    note: { libvirt: "Use netlab tc on the host for LAN links." }
+    support: { clab: "yes", libvirt: "partial", external: "no" },
+    note: { libvirt: "LAN links, through netlab tc (p2p VM links are UDP tunnels without a host interface)." }
   },
   {
     feature: "Node logs",

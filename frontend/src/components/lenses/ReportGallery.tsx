@@ -1,8 +1,11 @@
 import CloseIcon from "@mui/icons-material/Close";
+import DownloadIcon from "@mui/icons-material/Download";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import {
   Box,
+  Button,
   Chip,
   CircularProgress,
   Dialog,
@@ -29,6 +32,14 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { api, type ReportCatalogResult, type ReportRunResult } from "../../api/client";
+
+const isHtml = (name: string) => name.endsWith(".html");
+
+function formatLabel(name: string): string {
+  if (name.endsWith(".html")) return "HTML";
+  if (name.endsWith(".md")) return "MD";
+  return "Text";
+}
 
 interface ReportGalleryProps {
   open: boolean;
@@ -132,9 +143,24 @@ export function ReportGallery({ open, sessionId, onClose, onSelectObjects, onToa
                   <Typography variant="h6">{result.report.name}</Typography>
                   <Typography variant="body2" color="text.secondary">{result.report.description}</Typography>
                 </Box>
-                <Tooltip title="Refresh report">
-                  <IconButton onClick={() => void loadReport(result.report.id)}><RefreshIcon /></IconButton>
-                </Tooltip>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  {result.report.exports.filter(isHtml).slice(0, 1).map((name) => (
+                    <Button key={name} size="small" startIcon={<OpenInNewIcon />}
+                      href={api.reportExportUrl(sessionId, name, false)} target="_blank" rel="noopener noreferrer">
+                      Open
+                    </Button>
+                  ))}
+                  {result.report.exports.map((name) => (
+                    <Tooltip key={name} title={`Download ${name}${name.includes(".") ? "" : " (text)"}`}>
+                      <Button size="small" variant="text" startIcon={<DownloadIcon />} href={api.reportExportUrl(sessionId, name)}>
+                        {formatLabel(name)}
+                      </Button>
+                    </Tooltip>
+                  ))}
+                  <Tooltip title="Refresh report">
+                    <IconButton onClick={() => void loadReport(result.report.id)}><RefreshIcon /></IconButton>
+                  </Tooltip>
+                </Stack>
               </Stack>
               {result.tables.map((table, tableIndex) => {
                 const matchingRows = table.rows
@@ -166,7 +192,12 @@ export function ReportGallery({ open, sessionId, onClose, onSelectObjects, onToa
                   </Box>
                 );
               })}
-              {!result.tables.length && (
+              {!result.tables.length && result.report.format === "html" && result.raw && (
+                // Lab-generated HTML: no scripts, no same-origin access.
+                <Box component="iframe" title={result.report.name} sandbox="" srcDoc={result.raw}
+                  sx={{ width: "100%", minHeight: "60vh", border: 1, borderColor: "divider", borderRadius: 1, bgcolor: "#fff" }} />
+              )}
+              {!result.tables.length && (result.report.format !== "html" || !result.raw) && (
                 <Paper variant="outlined" sx={{ p: 2, overflow: "auto" }}>
                   <Typography component="pre" variant="body2" sx={{ m: 0, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
                     {result.raw || "This report returned no content."}

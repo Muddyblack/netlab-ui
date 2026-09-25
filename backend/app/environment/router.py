@@ -8,20 +8,28 @@ Settings UI (set the path) and the Info tab (show the resolved environment).
 * ``PUT  /api/environment/netlab`` — set/clear the configured path (validated)
 * ``GET  /api/environment/container`` — self-checks of the containerized UI's
   ``docker run`` setup (empty outside a container)
+* ``GET  /api/environment/setup`` (+ ``/setup/stream``, ``/setup/box-recipe``) —
+  netlab's own setup helpers: ``netlab test``, ``install``, ``clab build``,
+  ``libvirt config``
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.contract.responses import ContainerDiagnostics, NetlabEnvironment, SetNetlabPathRequest
+from app.lab.common import SSE_HEADERS
 from services import container_env
-from services.netlab import location, runner
+from services.netlab import location, runner, setup
+from services.netlab.logfmt import LineFilter
 
 router = APIRouter(prefix="/api/environment", tags=["environment"])
 
@@ -111,3 +119,68 @@ def get_container_diagnostics(refresh: bool = False) -> dict:
     # Plain `def`: the self-inspection shells out to `docker inspect`, so it
     # runs in FastAPI's threadpool instead of blocking the event loop.
     return container_env.diagnose(refresh=refresh)
+
+
+class SetupItem(BaseModel):
+    id: str
+    description: str = ""
+
+
+class SetupCatalog(BaseModel):
+    install: list[SetupItem]
+    builds: list[SetupItem]
+    boxes: list[str]
+    tests: list[str]
+
+
+class SetupRun(BaseModel):
+    action: setup.SetupAction
+    target: str
+
+
+class BoxRecipe(BaseModel):
+    device: str
+    text: str
+
+
+@router.get("/setup", response_model=SetupCatalog)
+async def get_setup_catalog() -> dict:
+    """What netlab's setup commands offer: install scripts, buildable
+    routing daemons, Vagrant box recipes and self-tests."""
+    return await setup.catalog()
+
+
+@router.post("/setup/stream")
+async def run_setup(body: SetupRun):
+    """Run ``netlab test|install|clab build`` and stream its output. Frames:
+    ``{stream, line}`` then ``{done, code}`` (or ``{error}``), like the
+    lifecycle streams. Closing the stream stops the command."""
+    try:
+        setup.command(body.action, body.target, await setup.catalog())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    async def gen():
+        fmt = LineFilter()
+        try:
+            async for stream, line in setup.stream(body.action, body.target):
+                if stream == "exit":
+                    for out_stream, out_line in fmt.flush():
+                        yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
+                    yield f"data: {json.dumps({'done': True, 'code': int(line)})}\n\n"
+                else:
+                    for out_stream, out_line in fmt.feed(stream, line):
+                        yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
+        except runner.NetlabNotInstalled as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@router.get("/setup/box-recipe", response_model=BoxRecipe)
+async def get_box_recipe(device: str) -> dict:
+    """How to build a Vagrant box for ``device`` (``netlab libvirt config``)."""
+    try:
+        return {"device": device, "text": await setup.box_recipe(device)}
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc

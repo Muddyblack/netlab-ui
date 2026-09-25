@@ -18,5 +18,7 @@ export { useCustomPaletteTabs } from "./useCustomPaletteTabs";
 export { useRenderDeployMenuItems } from "./useRenderDeployMenuItems";
 export { publishRuntimeContainers } from "../host/runtimeStore";
 export { openConfigsDialog } from "../host/configsDialogStore";
+export { openToolsDialog } from "../host/toolsDialogStore";
+export { registerFileOpener } from "../host/fileOpenStore";
 export { openPanelTab } from "../hooks/useRightPanelTabMemory";
 export { requestCopyLab } from "../host/copyLabStore";

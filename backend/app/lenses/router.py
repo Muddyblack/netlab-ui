@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from app.contract.responses import (
     ConfigDiffResult,
@@ -153,6 +156,35 @@ async def run_report(body: ReportRunRequest):
     except (runner.NetlabError, RuntimeError) as exc:
         detail = exc.stderr.strip() if isinstance(exc, runner.NetlabError) else str(exc)
         raise HTTPException(422, detail or str(exc)) from exc
+
+
+@router.get("/reports/export", response_class=Response)
+async def export_report(session_id: str = Query(alias="sessionId"), name: str = Query(), download: bool = True):
+    """A report in one of netlab's formats (``.md``, ``.html`` or text)."""
+    try:
+        session = store.require(session_id)
+    except KeyError as exc:
+        raise HTTPException(404, "unknown session") from exc
+    try:
+        content = await reports.export(session.topology_path, name)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown report: {name}") from exc
+    except runner.NetlabNotInstalled as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except (runner.NetlabError, RuntimeError, ValueError) as exc:
+        detail = exc.stderr.strip() if isinstance(exc, runner.NetlabError) else str(exc)
+        raise HTTPException(422, detail or str(exc)) from exc
+    media = {"html": "text/html", "md": "text/markdown"}.get(name.rpartition(".")[2], "text/plain")
+    filename = name if "." in name else f"{name}.txt"
+    lab = Path(session.topology_path).parent.name
+    headers = {
+        "Content-Disposition": f'{"attachment" if download else "inline"}; filename="{lab}-{filename}"',
+        # Report HTML is rendered from lab content: opened in a tab, it runs
+        # in an opaque origin with scripts off, never as the UI's origin.
+        "Content-Security-Policy": "sandbox",
+        "X-Content-Type-Options": "nosniff",
+    }
+    return Response(content, media_type=f"{media}; charset=utf-8", headers=headers)
 
 
 @router.get("/teaching", response_model=TeachingDocument)

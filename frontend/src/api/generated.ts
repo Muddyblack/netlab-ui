@@ -583,6 +583,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/custom-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Configs
+         * @description Templates a node's ``config:`` can name, and the lab's devices.
+         */
+        get: operations["list_custom_configs_api_lab_custom_configs_get"];
+        put?: never;
+        /**
+         * Create Custom Config
+         * @description Create ``<lab>/<name>/<device>.j2`` (kept when it exists); ``device``
+         *     defaults to the lab's default device.
+         */
+        post: operations["create_custom_config_api_lab_custom_configs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/capture/pcap": {
         parameters: {
             query?: never;
@@ -1124,7 +1149,8 @@ export interface paths {
         /**
          * Lab Link Impairment
          * @description Apply (or clear, when every field is empty) netem impairments on one
-         *     node interface via `containerlab tools netem set`.
+         *     node interface: `containerlab tools netem set` on containers, `netlab tc`
+         *     on libvirt VMs (LAN links only — p2p VM links have no host interface).
          */
         post: operations["lab_link_impairment_api_lab_link_impairment_post"];
         delete?: never;
@@ -1499,6 +1525,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tools */
+        get: operations["get_tools_api_lab_tools_get"];
+        /**
+         * Toggle Tool
+         * @description Add the tool to the lab's ``tools:`` or remove it. Takes effect when the
+         *     lab is next deployed.
+         */
+        put: operations["toggle_tool_api_lab_tools_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/tools/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tool Action
+         * @description Start or stop one tool of the deployed lab, as ``netlab up``/``down`` do.
+         */
+        post: operations["tool_action_api_lab_tools_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/clab-tarball": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Clab Tarball
+         * @description The deployed lab as a containerlab-only ``.tar.gz`` (``netlab clab
+         *     tarball``): clab.yml plus the devices' current configs, to run with plain
+         *     containerlab elsewhere.
+         */
+        get: operations["clab_tarball_api_lab_clab_tarball_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/lenses": {
         parameters: {
             query?: never;
@@ -1616,6 +1706,26 @@ export interface paths {
         put?: never;
         /** Run Report */
         post: operations["run_report_api_topology_reports_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/topology/reports/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Report
+         * @description A report in one of netlab's formats (``.md``, ``.html`` or text).
+         */
+        get: operations["export_report_api_topology_reports_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1953,6 +2063,69 @@ export interface paths {
         };
         /** Get Container Diagnostics */
         get: operations["get_container_diagnostics_api_environment_container_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Setup Catalog
+         * @description What netlab's setup commands offer: install scripts, buildable
+         *     routing daemons, Vagrant box recipes and self-tests.
+         */
+        get: operations["get_setup_catalog_api_environment_setup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/setup/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Setup
+         * @description Run ``netlab test|install|clab build`` and stream its output. Frames:
+         *     ``{stream, line}`` then ``{done, code}`` (or ``{error}``), like the
+         *     lifecycle streams. Closing the stream stops the command.
+         */
+        post: operations["run_setup_api_environment_setup_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/setup/box-recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Box Recipe
+         * @description How to build a Vagrant box for ``device`` (``netlab libvirt config``).
+         */
+        get: operations["get_box_recipe_api_environment_setup_box_recipe_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2508,6 +2681,13 @@ export interface components {
              */
             envLocked: string[];
         };
+        /** BoxRecipe */
+        BoxRecipe: {
+            /** Device */
+            device: string;
+            /** Text */
+            text: string;
+        };
         /** CaptureOpResult */
         CaptureOpResult: {
             /** Ok */
@@ -2894,6 +3074,48 @@ export interface components {
             topologyRef: string;
             /** Mode */
             mode: string;
+        };
+        /** CustomConfig */
+        CustomConfig: {
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Path */
+            path: string;
+            /** Variants */
+            variants: string[];
+            /** Editable */
+            editable: boolean;
+        };
+        /** CustomConfigCreate */
+        CustomConfigCreate: {
+            /** Sessionid */
+            sessionId: string;
+            /** Name */
+            name: string;
+            /**
+             * Device
+             * @default
+             */
+            device: string;
+        };
+        /** CustomConfigCreated */
+        CustomConfigCreated: {
+            /** Path */
+            path: string;
+        };
+        /** CustomConfigs */
+        CustomConfigs: {
+            /** Templates */
+            templates: components["schemas"]["CustomConfig"][];
+            /** Devices */
+            devices: string[];
+            /**
+             * Defaultdevice
+             * @default
+             */
+            defaultDevice: string;
         };
         /** CustomNodesResult */
         CustomNodesResult: {
@@ -3685,6 +3907,65 @@ export interface components {
             results: components["schemas"]["LabSearchHit"][];
             /** Modules */
             modules: components["schemas"]["LabSearchHit"][];
+        };
+        /** LabTool */
+        LabTool: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Runtime
+             * @default
+             */
+            runtime: string;
+            /**
+             * Docsurl
+             * @default
+             */
+            docsUrl: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Deployed
+             * @default false
+             */
+            deployed: boolean;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /**
+             * Canconnect
+             * @default false
+             */
+            canConnect: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Urls
+             * @default []
+             */
+            urls: string[];
+        };
+        /** LabTools */
+        LabTools: {
+            /** Deployed */
+            deployed: boolean;
+            /** Tools */
+            tools: components["schemas"]["LabTool"][];
         };
         /** LeaseResult */
         LeaseResult: {
@@ -4722,6 +5003,11 @@ export interface components {
             source: "builtin" | "workspace" | "user" | "system";
             /** Structuredadapter */
             structuredAdapter?: ("addressing" | "bgp-neighbor") | null;
+            /**
+             * Exports
+             * @default []
+             */
+            exports: string[];
         };
         /** ReportRunRequest */
         ReportRunRequest: {
@@ -5179,6 +5465,37 @@ export interface components {
             /** Path */
             path?: string | null;
         };
+        /** SetupCatalog */
+        SetupCatalog: {
+            /** Install */
+            install: components["schemas"]["SetupItem"][];
+            /** Builds */
+            builds: components["schemas"]["SetupItem"][];
+            /** Boxes */
+            boxes: string[];
+            /** Tests */
+            tests: string[];
+        };
+        /** SetupItem */
+        SetupItem: {
+            /** Id */
+            id: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /** SetupRun */
+        SetupRun: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "test" | "install" | "build";
+            /** Target */
+            target: string;
+        };
         /** SnapshotRequest */
         SnapshotRequest: {
             /** Sessionid */
@@ -5322,6 +5639,36 @@ export interface components {
             templates: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ToolAction */
+        ToolAction: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tool */
+            tool: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "up" | "down";
+        };
+        /** ToolActionResult */
+        ToolActionResult: {
+            /** Code */
+            code: number;
+            /** Stdout */
+            stdout: string;
+            /** Stderr */
+            stderr: string;
+        };
+        /** ToolToggle */
+        ToolToggle: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tool */
+            tool: string;
+            /** Enabled */
+            enabled: boolean;
         };
         /** TopologyRef */
         TopologyRef: {
@@ -6947,6 +7294,70 @@ export interface operations {
             };
         };
     };
+    list_custom_configs_api_lab_custom_configs_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomConfigs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_custom_config_api_lab_custom_configs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomConfigCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomConfigCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     capture_pcap_api_lab_capture_pcap_get: {
         parameters: {
             query: {
@@ -8455,6 +8866,132 @@ export interface operations {
             };
         };
     };
+    get_tools_api_lab_tools_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTools"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_tool_api_lab_tools_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolToggle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTools"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_action_api_lab_tools_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clab_tarball_api_lab_clab_tarball_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_lenses_api_topology_lenses_get: {
         parameters: {
             query: {
@@ -8669,6 +9206,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReportRunResult"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_report_api_topology_reports_export_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                name: string;
+                download?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9271,6 +9839,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContainerDiagnostics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setup_catalog_api_environment_setup_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupCatalog"];
+                };
+            };
+        };
+    };
+    run_setup_api_environment_setup_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRun"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_box_recipe_api_environment_setup_box_recipe_get: {
+        parameters: {
+            query: {
+                device: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxRecipe"];
                 };
             };
             /** @description Validation Error */

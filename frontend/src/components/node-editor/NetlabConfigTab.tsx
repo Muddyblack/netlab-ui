@@ -24,6 +24,7 @@ import {
 } from "@containerlab/clab-ui";
 import { api, type ConfigPreviewResult } from "../../api/client";
 import { useNodeEditorSession } from "./NodeEditorSessionContext";
+import { CustomConfigPicker } from "./CustomConfigPicker";
 import type { NetlabNodeEditorData, NetlabOnChange } from "./types";
 import { resolveThemeMode } from "../../theme";
 
@@ -226,8 +227,14 @@ export const NetlabConfigTab: React.FC<NodeEditorTabProps> = ({ data: rawData, o
         <DynamicList
           items={configList}
           onChange={handleConfigsChange}
-          placeholder="Path to netlab config template (e.g. templates/bgp-policy.j2)"
+          placeholder="Custom config name (e.g. ospf-tweaks)"
           hideAddButton
+        />
+        <CustomConfigPicker
+          sessionId={sessionId}
+          device={String(data.device ?? "")}
+          selected={configList}
+          onAdd={(name) => handleConfigsChange([...configList.filter(Boolean), name])}
         />
       </PanelAddSection>
 

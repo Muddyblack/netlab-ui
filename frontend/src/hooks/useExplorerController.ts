@@ -44,6 +44,8 @@ export interface ExplorerActionCallbacks {
   openDrawioWizard: () => void;
   openMultiExec: (lab: TopologyRef) => void | Promise<void>;
   openRunningConfigs: (lab: TopologyRef) => void | Promise<void>;
+  openTools: (lab: TopologyRef) => void | Promise<void>;
+  exportClabTarball: (lab: TopologyRef) => void | Promise<void>;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
   /** `lab` is the node's own topology (Running Labs tree items carry it);
@@ -248,6 +250,14 @@ async function handleRunningConfigs({ cb, topoRef }: ActionCtx) {
   if (topoRef) await cb.openRunningConfigs(topoRef);
 }
 
+async function handleTools({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openTools(topoRef);
+}
+
+async function handleClabTarball({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.exportClabTarball(topoRef);
+}
+
 async function handleCopyLab({ cb, item, topoRef }: ActionCtx) {
   const path = topoRef?.yamlPath || item?.path;
   if (!path) return;
@@ -405,6 +415,8 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
   "netlab.lab.shell.runOnNodes": handleRunOnNodes,
   "netlab.lab.inspect.runningConfigs": handleRunningConfigs,
+  "netlab.lab.shell.tools": handleTools,
+  "netlab.lab.addtoworkspace.clabTarball": handleClabTarball,
   "netlab.lab.addtoworkspace.copyLab": handleCopyLab,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
@@ -589,8 +601,10 @@ export function useExplorerController({
             // Access and Inspect groups (same substring rules as above).
             { commandId: "netlab.lab.shell.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" },
             { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" },
+            { commandId: "netlab.lab.shell.tools", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "External Tools (Graphite, SuzieQ…)…" },
             // ".addtoworkspace." files it under clab-ui's Topology group.
-            { commandId: "netlab.lab.addtoworkspace.copyLab", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Copy Lab to Workspace…" }
+            { commandId: "netlab.lab.addtoworkspace.copyLab", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Copy Lab to Workspace…" },
+            { commandId: "netlab.lab.addtoworkspace.clabTarball", contextValues: ["containerlabLabDeployed"], label: "Export as Containerlab Tarball" }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -610,7 +624,9 @@ export function useExplorerController({
             ["netlab.lab.collect", "Netlab Collect (Gather configs)"],
             ["netlab.lab.shell.runOnNodes", "Run Command on Nodes…"],
             ["netlab.lab.inspect.runningConfigs", "Running Configs & Changes…"],
+            ["netlab.lab.shell.tools", "External Tools (Graphite, SuzieQ…)…"],
             ["netlab.lab.addtoworkspace.copyLab", "Copy Lab to Workspace…"],
+            ["netlab.lab.addtoworkspace.clabTarball", "Export as Containerlab Tarball"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

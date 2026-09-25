@@ -31,6 +31,12 @@ export type VersionResult = Schemas["VersionResult"];
 export type ExecTargets = Schemas["ExecTargets"];
 export type LabSearchHit = Schemas["LabSearchHit"];
 export type ConfigSnapshot = Schemas["ConfigSnapshot"];
+export type LabTools = Schemas["LabTools"];
+export type LabTool = Schemas["LabTool"];
+export type ToolActionResult = Schemas["ToolActionResult"];
+export type SetupCatalog = Schemas["SetupCatalog"];
+export type BoxRecipe = Schemas["BoxRecipe"];
+export type CustomConfigs = Schemas["CustomConfigs"];
 export type ConfigDrift = Schemas["ConfigDrift"];
 export type RunningConfigDiff = Schemas["RunningConfigDiff"];
 export type LabSearchResult = Schemas["LabSearchResult"];
@@ -276,6 +282,10 @@ export const api = {
       30000
     ),
 
+  /** A report in one of its netlab formats (report.exports), to download or open. */
+  reportExportUrl: (sessionId: string, name: string, download = true) =>
+    `${getApiBase()}/api/topology/reports/export?${new URLSearchParams({ sessionId, name, download: String(download) }).toString()}`,
+
   runReport: (sessionId: string, reportId: string) =>
     http<ReportRunResult>("/api/topology/reports/run", {
       method: "POST",
@@ -382,6 +392,37 @@ export const api = {
 
   listConfigSnapshots: (sessionId: string) =>
     http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  getSetupCatalog: () => http<SetupCatalog>("/api/environment/setup", { cache: "no-store" }, 1, 30000),
+
+  getBoxRecipe: (device: string) =>
+    http<BoxRecipe>(`/api/environment/setup/box-recipe?device=${encodeURIComponent(device)}`, undefined, 1, 30000),
+
+  /** The deployed lab as a containerlab tarball (runs Ansible to collect configs). */
+  downloadClabTarball: async (sessionId: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`${getApiBase()}/api/lab/clab-tarball?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!res.ok) {
+      const detail = await res.json().then((data: { detail?: string }) => data.detail, () => undefined);
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "lab.tar.gz";
+    return { blob: await res.blob(), filename: name };
+  },
+
+  getCustomConfigs: (sessionId: string) =>
+    http<CustomConfigs>(`/api/lab/custom-configs?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  createCustomConfig: (sessionId: string, name: string, device: string) =>
+    http<{ path: string }>("/api/lab/custom-configs", { method: "POST", body: JSON.stringify({ sessionId, name, device }) }, 1),
+
+  getLabTools: (sessionId: string) =>
+    http<LabTools>(`/api/lab/tools?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  setLabTool: (sessionId: string, tool: string, enabled: boolean) =>
+    http<LabTools>("/api/lab/tools", { method: "PUT", body: JSON.stringify({ sessionId, tool, enabled }) }, 1, 30000),
+
+  labToolAction: (sessionId: string, tool: string, action: "up" | "down") =>
+    http<ToolActionResult>("/api/lab/tools/action", { method: "POST", body: JSON.stringify({ sessionId, tool, action }) }, 1, 330000),
 
   takeConfigSnapshot: (sessionId: string, reason = "manual snapshot") =>
     http<ConfigSnapshot>("/api/lab/configs/snapshots", { method: "POST", body: JSON.stringify({ sessionId, reason }) }, 1, 120000),

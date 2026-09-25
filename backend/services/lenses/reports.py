@@ -19,20 +19,29 @@ _MAX_REPORT_BYTES = 2 * 1024 * 1024
 _REPORT_TIMEOUT_SECONDS = 45
 
 
-def _descriptor(name: str, description: str, source: str = "system") -> dict[str, Any]:
+_FORMATS = {".html": "html", ".md": "markdown"}
+_ACRONYMS = {"bgp": "BGP", "isis": "IS-IS", "ospf": "OSPF", "ospfv3": "OSPFv3", "asn": "ASN", "mgmt": "Management"}
+
+
+def _descriptor(
+    name: str, description: str, source: str = "system", exports: list[str] | None = None
+) -> dict[str, Any]:
     if name == "addressing.md":
         adapter = "addressing"
     elif name in {"bgp-neighbor.md", "bgp-neighbor-short.md"}:
         adapter = "bgp-neighbor"
     else:
         adapter = None
+    stem, dot, ext = name.rpartition(".")
+    title = stem if dot and f".{ext}" in _FORMATS else name
     return {
         "id": name,
-        "name": name.removesuffix(".md").replace("-", " ").title(),
+        "name": " ".join(_ACRONYMS.get(word, word.title()) for word in title.split("-")),
         "description": description,
-        "format": "table" if adapter else "markdown",
+        "format": "table" if adapter else _FORMATS.get(f".{ext}" if dot else "", "text"),
         "source": "builtin" if adapter else source,
         "structuredAdapter": adapter,
+        "exports": exports or [name],
     }
 
 
@@ -42,17 +51,33 @@ async def catalog(topology_path: str) -> list[dict[str, Any]]:
     if result.code != 0:
         raise runner.NetlabError(["netlab", "show", "reports"], result.code, result.stderr or result.stdout)
     parsed = YAML(typ="safe").load(result.stdout) or {}
-    markdown = parsed.get("md") if isinstance(parsed, dict) else {}
+    # netlab groups reports by output format (md, html, text); one report
+    # (key) usually exists in several. The gallery shows the Markdown one when
+    # there is one (it renders as tables) and offers the rest as exports.
+    by_key: dict[str, dict[str, dict[str, str]]] = {}
+    for fmt in ("md", "html", "text"):
+        section = parsed.get(fmt) if isinstance(parsed, dict) else None
+        for key, raw in section.items() if isinstance(section, dict) else []:
+            item = raw if isinstance(raw, dict) else {}
+            name = str(item.get("name") or "")
+            if _REPORT_ID.fullmatch(name):
+                by_key.setdefault(str(key), {})[fmt] = {"name": name, "desc": str(item.get("desc") or "")}
     descriptors: list[dict[str, Any]] = []
-    for _key, raw in markdown.items() if isinstance(markdown, dict) else []:
-        item = raw if isinstance(raw, dict) else {}
-        name = str(item.get("name") or "")
-        if not _REPORT_ID.fullmatch(name):
-            continue
-        workspace_template = path.parent / "reports" / f"{name}.j2"
+    for variants in by_key.values():
+        main = next(variants[fmt] for fmt in ("md", "html", "text") if fmt in variants)
+        exports = [variants[fmt]["name"] for fmt in ("md", "html", "text") if fmt in variants]
+        workspace_template = path.parent / "reports" / f"{main['name']}.j2"
         source = "workspace" if workspace_template.exists() else "system"
-        descriptors.append(_descriptor(name, str(item.get("desc") or ""), source))
+        descriptors.append(_descriptor(main["name"], main["desc"], source, exports))
     return sorted(descriptors, key=lambda item: (0 if item["structuredAdapter"] else 1, item["name"]))
+
+
+async def export(topology_path: str, name: str) -> str:
+    """One report in one of its formats, as netlab renders it."""
+    offered = {export for item in await catalog(topology_path) for export in item["exports"]}
+    if name not in offered:
+        raise KeyError(name)
+    return await _run_raw(topology_path, name)
 
 
 def _clean_cell(value: str) -> str:
@@ -203,7 +228,19 @@ async def _run_raw(topology_path: str, report_id: str) -> str:
         raise runner.NetlabError(["netlab", "report", report_id], proc.returncode, stderr.decode(errors="replace"))
     if len(stdout) > _MAX_REPORT_BYTES:
         raise RuntimeError("report output exceeded 2 MiB limit")
-    return stdout.decode(errors="replace")
+    return _strip_log_lines(stdout.decode(errors="replace"))
+
+
+_LOG_LINE = re.compile(r"^\s*\[(INFO|WARNING)\]\s")
+
+
+def _strip_log_lines(text: str) -> str:
+    """netlab logs "[INFO] Using lab topology file …" to stdout ahead of the
+    report; a downloaded .html must start with the report itself."""
+    lines = text.splitlines(keepends=True)
+    while lines and _LOG_LINE.match(lines[0]):
+        lines.pop(0)
+    return "".join(lines)
 
 
 async def run(topology_path: str, revision: int, report_id: str) -> dict[str, Any]:

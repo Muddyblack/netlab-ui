@@ -270,8 +270,14 @@ class LinkImpairment(BaseModel):
 @router.post("/link-impairment", response_model=CommandResult)
 async def lab_link_impairment(body: LinkImpairment):
     """Apply (or clear, when every field is empty) netem impairments on one
-    node interface via `containerlab tools netem set`."""
-    _, info = await _running_node_info(body.sessionId, body.node)
+    node interface: `containerlab tools netem set` on containers, `netlab tc`
+    on libvirt VMs (LAN links only — p2p VM links have no host interface)."""
+    path, info = await _running_node_info(body.sessionId, body.node)
+    if info.get("provider") == "libvirt":
+        domain, vm_node = await _vm_target(path, body.node, info)
+        fields = body.model_dump(include={"delay", "jitter", "loss", "rate", "corruption"})
+        result = await libvirt.set_impairment(path, domain, body.node, vm_node, body.interface, **fields)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
     container = _require_clab_node(body.node, info, "link impairment")
     result = await runner.netem_set(
         container,

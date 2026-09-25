@@ -160,8 +160,8 @@ def test_endpoints_drive_vms_and_explain_external_devices(vm_lab, fake_virsh):
     calls = fake_virsh.read_text()
     assert "shutdown lab_r1" in calls and "domif-setlink lab_r1 52:54:00:00:00:03 down" in calls
 
-    impair = client.post("/api/lab/link-impairment", json={"sessionId": sid, "node": "r1", "interface": "Ethernet2"})
-    assert impair.status_code == 409 and "libvirt VM" in impair.json()["detail"]
+    impair = client.post("/api/lab/link-impairment", json={"sessionId": sid, "node": "r1", "interface": "Ethernet1"})
+    assert impair.json()["code"] == 1 and "UDP tunnels" in impair.json()["stderr"]
     ext = client.post("/api/lab/node-action", json={"sessionId": sid, "node": "ext", "action": "stop"})
     assert ext.status_code == 409 and "external device" in ext.json()["detail"]
 
@@ -174,3 +174,41 @@ def test_capture_endpoint_explains_vm_tunnels(vm_lab):
     assert res.status_code == 409 and "UDP tunnels" in res.json()["detail"]
     target = asyncio.run(pcap._capture_target(str(path), "r1", "Ethernet2"))
     assert target == (0, "vnet7")
+
+
+def test_tc_args_convert_the_ui_units_to_netlab_tc():
+    assert libvirt.tc_args("r1", "Ethernet2", delay="10ms", jitter="1.5", loss="2%", rate="10mbit") == [
+        "tc", "set", "-n", "r1", "-i", "Ethernet2",
+        "--delay", "10", "--jitter", "1.5", "--loss", "2", "--rate", "10000",
+    ]  # fmt: skip
+    assert libvirt.tc_args("r1", "Ethernet2", delay="0.5s", corruption="1") == [
+        "tc", "set", "-n", "r1", "-i", "Ethernet2", "--delay", "500", "--corrupt", "1",
+    ]  # fmt: skip
+    assert libvirt.tc_args("r1", "Ethernet2") == ["tc", "disable", "-n", "r1", "-i", "Ethernet2"]
+    with pytest.raises(ValueError, match="rate"):
+        libvirt.tc_args("r1", "Ethernet2", rate="fast")
+
+
+def test_vm_lan_link_impairment_runs_netlab_tc(vm_lab, monkeypatch):
+    path, sid = vm_lab
+    calls = []
+
+    async def run_command(args, cwd=None):
+        calls.append((args, cwd))
+        return runner.CommandResult(0, "Traffic control on r1 Ethernet2: delay 20ms", "")
+
+    monkeypatch.setattr(runner, "run_command", run_command)
+    res = TestClient(app).post(
+        "/api/lab/link-impairment", json={"sessionId": sid, "node": "r1", "interface": "Ethernet2", "delay": "20"}
+    )
+    assert res.json()["code"] == 0
+    assert calls == [(["tc", "set", "-n", "r1", "-i", "Ethernet2", "--delay", "20"], path.parent)]
+
+    async def failing(args, cwd=None):
+        return runner.CommandResult(0, "", "[ERROR]   Failed to deploy tc policy on r1 interface Ethernet2")
+
+    monkeypatch.setattr(runner, "run_command", failing)
+    res = TestClient(app).post(
+        "/api/lab/link-impairment", json={"sessionId": sid, "node": "r1", "interface": "Ethernet2", "loss": "5"}
+    )
+    assert res.json()["code"] == 1

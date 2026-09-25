@@ -54,7 +54,7 @@ async def node_shell(websocket: WebSocket, node: str, sessionId: str):
     proc = ptyprocess.PtyProcess.spawn(
         argv,
         cwd=str(topology_path.parent),
-        env={**os.environ, "TERM": "xterm-256color"},
+        env={**os.environ, "TERM": "xterm-256color", "PWD": str(topology_path.parent)},
     )
     loop = asyncio.get_event_loop()
 
@@ -104,7 +104,7 @@ async def drawio_interactive(websocket: WebSocket, sessionId: str):
     proc = ptyprocess.PtyProcess.spawn(
         argv,
         cwd=str(topology_path.parent),
-        env={**os.environ, "TERM": "xterm-256color"},
+        env={**os.environ, "TERM": "xterm-256color", "PWD": str(topology_path.parent)},
     )
     loop = asyncio.get_event_loop()
 

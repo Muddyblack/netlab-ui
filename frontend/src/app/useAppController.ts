@@ -49,6 +49,8 @@ import {
   useRenderDeployMenuItems,
   publishRuntimeContainers,
   openConfigsDialog,
+  openToolsDialog,
+  registerFileOpener,
   openPanelTab,
   requestCopyLab,
 } from "./appControllerDeps";
@@ -357,6 +359,14 @@ export function useAppController() {
       openDrawioWizard: () => openDrawioWizardRef.current(),
       openMultiExec: async (ref) => openMultiExecRef.current(await ensureLabActiveRef.current(ref)),
       openRunningConfigs: async (ref) => openConfigsDialog(await ensureLabActiveRef.current(ref)),
+      exportClabTarball: async (ref) => {
+        const sid = await ensureLabActiveRef.current(ref);
+        if (sid) await exportClabTarballRef.current(sid);
+      },
+      openTools: async (ref) => {
+        const sid = await ensureLabActiveRef.current(ref);
+        if (sid) openToolsDialog({ sessionId: sid, openShell: (name) => openShellRef.current(name, sid) });
+      },
       nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
       uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),
@@ -707,9 +717,12 @@ export function useAppController() {
       { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, answers side by side · Ctrl+`", run: () => sessionDock.openTab("multi", "nodes") },
       { id: "action:traffic", priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
       { id: "action:running-configs", priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
+      { id: "action:clab-tarball", label: "Export as containerlab tarball", detail: "clab.yml + the devices' current configs (netlab clab tarball)", run: () => void exportClabTarballRef.current(sessionId) },
       { id: "action:config-snapshot", label: "Take a config snapshot", detail: "Save every node's running config now", run: () => void api.takeConfigSnapshot(sessionId).then((snap) => addToast(`Snapshot of ${snap.nodes?.length ?? 0} nodes saved`, "success"), (err: unknown) => addToast(`Snapshot failed: ${String(err)}`, "error")) },
     ] : []),
     ...(sessionId ? [
+      { id: "action:reports", label: "Reports…", detail: "netlab reports: addressing, BGP, OSPF, wiring — as tables, HTML or text", run: () => { openPanelTab("Lenses"); netlabLenses.setReportOpen(true); } },
+      { id: "action:tools", label: "External tools…", detail: "Graphite, SuzieQ, NUTS, NSO, Edgeshark next to the lab", run: () => openToolsDialog({ sessionId, openShell: (name) => openShellRef.current(name, sessionId) }) },
       { id: "action:validate", label: "Validate topology", detail: "Run netlab validate", run: () => void handleNetlabValidate(sessionId) },
       { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) },
       { id: "action:module-filter", label: "Filter canvas by module…", detail: "Spotlight the nodes running OSPF, BGP, VLANs…", nextQuery: "module:", run: () => undefined },
@@ -875,11 +888,31 @@ export function useAppController() {
   const openMultiExecRef = useRef(openMultiExec); openMultiExecRef.current = openMultiExec;
   const openDrawioWizard = useCallback(() => sessionDock.openTab("drawio", "diagram"), [sessionDock]);
   const openShellRef = useRef(openShell); openShellRef.current = openShell;
+  const exportClabTarball = useCallback(async (sid: string) => {
+    addToast("Collecting the devices' configs for the tarball…", "info");
+    try {
+      const { blob, filename } = await api.downloadClabTarball(sid);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      addToast(`${filename} downloaded — run it with containerlab deploy -t clab.config.yml`, "success");
+    } catch (err) {
+      addToast(`Tarball export failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, [addToast]);
+  const exportClabTarballRef = useRef(exportClabTarball); exportClabTarballRef.current = exportClabTarball;
   const openLogsRef = useRef(openLogs); openLogsRef.current = openLogs;
   const openDrawioWizardRef = useRef(openDrawioWizard); openDrawioWizardRef.current = openDrawioWizard;
   const handleNodeLifecycleRef = useRef(handleNodeLifecycle); handleNodeLifecycleRef.current = handleNodeLifecycle;
   const handleOpenLabRef = useRef(handleOpenLab); handleOpenLabRef.current = handleOpenLab;
   const handleOpenFileTabRef = useRef(handleOpenFileTab); handleOpenFileTabRef.current = handleOpenFileTab;
+  useEffect(() => {
+    registerFileOpener((path) => void handleOpenFileTabRef.current({ endpointId: "local", path }));
+    return () => registerFileOpener(null);
+  }, []);
   const getOrCreateSessionRef = useRef(getOrCreateSession); getOrCreateSessionRef.current = getOrCreateSession;
   const handleDeployLabRef = useRef(handleDeployLab); handleDeployLabRef.current = handleDeployLab;
   const handleDestroyLabRef = useRef(handleDestroyLab); handleDestroyLabRef.current = handleDestroyLab;
