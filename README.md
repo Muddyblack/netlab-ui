@@ -278,6 +278,20 @@ Counters are read from the containers every 3 seconds.
 Impairments need the lab host's `sch_netem` kernel module (`sudo modprobe
 sch_netem` if the UI reports that netem is missing).
 
+### Packet capture
+
+The Wireshark items on a link's (or node's) context menu open a capture
+dialog with three ways to capture:
+
+- **Download a pcap** of 10 s to 5 min. It captures both directions and
+  keeps VLAN tags. No Edgeshark or tcpdump is needed: the backend enters the
+  node's network namespace itself.
+- **Live in your own Wireshark**: copy the
+  `curl -sN '…/api/lab/capture/pcap?…&seconds=0' | wireshark -k -i -` command.
+- **Wireshark in the browser** via Edgeshark (as before). Its web port is now
+  published on the UI's own bind address (`127.0.0.1` by default), no longer
+  on every interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
+
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
 

@@ -11,6 +11,7 @@ import { CanvasDeploymentProgress, type DeploymentProgress } from "../CanvasDepl
 import { UnitsDock } from "../../panels/UnitsDock";
 import { NetlabLenses } from "../lenses/NetlabLenses";
 import type { UnitInfo } from "../../panels/units-dock/types";
+import { CaptureDialog } from "../dialogs/CaptureDialog";
 
 const FileEditorTabPanel = lazy(() =>
   import("../FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
@@ -62,6 +63,7 @@ export function AppCanvasOverlays({
 }: AppCanvasOverlaysProps) {
   return (
     <>
+      {!DEMO_MODE && <CaptureDialog />}
       {portalContainer && activeFileTab && createPortal(
         <Suspense fallback={null}>
           <FileEditorTabPanel tab={activeFileTab} themeMode={themeMode} onChange={handleFileTabChange} onClose={(id) => void handleCloseLab(id)} onSave={(id) => void handleFileTabSave(id)} onReload={handleFileTabReload} />

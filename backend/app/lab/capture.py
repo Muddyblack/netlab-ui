@@ -39,6 +39,10 @@ PACKETFLIX_PORT = 5001
 WIRESHARK_VNC_IMAGE = os.environ.get("NETLAB_APP_WIRESHARK_VNC_IMAGE", "ghcr.io/srl-labs/wireshark-vnc-docker:latest")
 WIRESHARK_VNC_HTTP_PORT = 5800
 VNC_CONTAINER_PREFIX = "netlab-ws-"
+# Host address the Wireshark web UI is published on. The noVNC page has no
+# login, so it follows the UI's own bind address (loopback unless the UI was
+# deliberately exposed) instead of docker's default of every interface.
+CAPTURE_BIND = os.environ.get("NETLAB_APP_CAPTURE_BIND") or os.environ.get("UVICORN_HOST") or "127.0.0.1"
 
 _NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _IFACE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
@@ -185,7 +189,8 @@ async def _wait_for_http(port: int, container_name: str, attempts: int = 60) -> 
         if code != 0 or out.strip() != "true":
             raise HTTPException(status_code=502, detail="The Wireshark container exited before becoming ready")
         try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), 2)
+            probe_host = "127.0.0.1" if CAPTURE_BIND in {"0.0.0.0", "::", ""} else CAPTURE_BIND
+            reader, writer = await asyncio.wait_for(asyncio.open_connection(probe_host, port), 2)
             writer.write(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n")
             await writer.drain()
             head = await asyncio.wait_for(reader.read(12), 2)
@@ -222,7 +227,7 @@ async def start_vnc_capture(body: VncCaptureRequest):
         f"PACKETFLIX_LINK={link}",
         *(["-e", "DARK_MODE=1"] if body.darkMode else []),
         "-p",
-        str(WIRESHARK_VNC_HTTP_PORT),
+        f"{CAPTURE_BIND}::{WIRESHARK_VNC_HTTP_PORT}",
         WIRESHARK_VNC_IMAGE,
     ]
     # First run pulls the wireshark image — allow for that.

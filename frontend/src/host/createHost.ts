@@ -5,6 +5,7 @@ import { setLifecycleContext, type DeployDecision, type LifecycleCompletion } fr
 import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
 import { postLinkCommand } from "../api/linkCommands";
+import { requestCapture } from "./captureStore";
 import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
 import { runningLabMatches } from "./runningMatch";
@@ -227,16 +228,29 @@ export function createApiClabUiHost(options?: {
       return;
     }
 
-    // Default flow: the backend starts a Wireshark-in-the-browser (noVNC)
-    // container wired to edgeshark's packetflix service. Open the tab
-    // synchronously (popup blockers only allow window.open inside the click)
-    // and point it at the capture UI once the backend reports it ready.
-    const view = window.open("", "_blank");
-    if (view) {
-      view.document.title = "Wireshark";
-      view.document.body.textContent = `Starting Wireshark capture on ${nodeName}:${interfaceName}…`;
-    }
-    void startVncCapture({ safeFetch, BASE, containerName: container.name, interfaceName, view, onError: options?.onError });
+    // Wireshark in the browser: the backend starts a noVNC container wired to
+    // edgeshark's packetflix service. Open the tab synchronously (popup
+    // blockers only allow window.open inside the click) and point it at the
+    // capture UI once the backend reports it ready.
+    const openInBrowserWireshark = () => {
+      const view = window.open("", "_blank");
+      if (view) {
+        view.document.title = "Wireshark";
+        view.document.body.textContent = `Starting Wireshark capture on ${nodeName}:${interfaceName}…`;
+      }
+      void startVncCapture({ safeFetch, BASE, containerName: container.name, interfaceName, view, onError: options?.onError });
+    };
+    // The capture chooser (pcap download, live stream, browser Wireshark)
+    // when the app mounted one; straight to browser Wireshark otherwise.
+    const handled = requestCapture({
+      node: container.nodeName,
+      container: container.name,
+      interface: interfaceName,
+      sessionId: currentSessionId,
+      topologyPath: currentSessionId ? sessionPaths.get(currentSessionId) : undefined,
+      openInBrowserWireshark,
+    });
+    if (!handled) openInBrowserWireshark();
   };
 
   const emitIconList = (icons: CustomIconListItem[]) => {
