@@ -47,6 +47,7 @@ import {
   netlabNodeEditorTabs,
   useCustomPaletteTabs,
   useRenderDeployMenuItems,
+  publishRuntimeContainers,
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
@@ -750,9 +751,11 @@ export function useAppController() {
       if (running) return;
       running = true;
       try {
-        const containers = await api.getRuntime(sessionId) as HostRuntimeContainer[];
+        const sample = await api.getRuntime(sessionId);
+        const containers = sample as HostRuntimeContainer[];
         if (cancelled) return;
         host.setRuntimeContainers(containers);
+        publishRuntimeContainers(sample);
         runtime.session.setContext({ runtimeContainers: containers });
         // clab-ui only assigns the link-up/link-down edge classes when it can
         // consult the topology node map (to special-case bridges/host/mgmt-net
@@ -796,6 +799,7 @@ export function useAppController() {
     return () => {
       cancelled = true;
       host.setRuntimeContainers([]);
+      publishRuntimeContainers([]);
       window.clearInterval(timer);
     };
   }, [activateLabTab, activeTabId, host, openTabs, runtime, sessionId]);

@@ -6,6 +6,7 @@ import { DeploymentCanvasOverlay } from "./DeploymentCanvasOverlay";
 import { LensCanvasOverlay } from "./LensCanvasOverlay";
 import { ReportGallery } from "./ReportGallery";
 import { TourPresenter } from "./TourPresenter";
+import { TrafficCanvasOverlay } from "./traffic/TrafficCanvasOverlay";
 
 interface NetlabLensesProps {
   sessionId: string;
@@ -25,7 +26,7 @@ export function NetlabLenses({ sessionId, container, state, themeMode, onToast }
 
   return (
     <Box sx={{ position: "absolute", inset: 0, zIndex: 6, pointerEvents: "none", overflow: "hidden" }}>
-      {bundle && lens !== "deployment" && overlayVisible && (
+      {bundle && lens !== "deployment" && lens !== "traffic" && overlayVisible && (
         <LensCanvasOverlay
           container={container}
           bundle={bundle}
@@ -40,6 +41,8 @@ export function NetlabLenses({ sessionId, container, state, themeMode, onToast }
           pathResult={pathResult}
         />
       )}
+
+      {lens === "traffic" && overlayVisible && <TrafficCanvasOverlay container={container} />}
 
       {lens === "deployment" && deployment?.available && overlayVisible && (
         <DeploymentCanvasOverlay container={container} nodeStates={deployment.nodes} />

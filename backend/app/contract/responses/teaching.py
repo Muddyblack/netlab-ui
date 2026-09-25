@@ -14,7 +14,16 @@ from typing import Literal
 from pydantic import BaseModel
 
 LensId = Literal[
-    "physical", "addressing", "routing", "services", "paths", "deployment", "validation", "readiness", "changes"
+    "physical",
+    "addressing",
+    "routing",
+    "services",
+    "paths",
+    "deployment",
+    "validation",
+    "readiness",
+    "changes",
+    "traffic",
 ]
 RoutingLayer = Literal["bgp", "ospf", "isis", "bfd", "evpn"]
 AddressFamily = Literal["ipv4", "ipv6"]

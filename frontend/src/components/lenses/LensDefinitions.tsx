@@ -7,6 +7,7 @@ import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import NumbersOutlinedIcon from "@mui/icons-material/NumbersOutlined";
 import RocketLaunchOutlinedIcon from "@mui/icons-material/RocketLaunchOutlined";
 import RouteOutlinedIcon from "@mui/icons-material/RouteOutlined";
+import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 import type { ReactNode } from "react";
 
 import type { LensId } from "./LensCanvasOverlay";
@@ -18,6 +19,7 @@ export const LENSES: Array<{ id: LensId; label: string; icon: ReactNode }> = [
   { id: "services", label: "Services", icon: <LayersOutlinedIcon /> },
   { id: "paths", label: "Paths", icon: <AltRouteOutlinedIcon /> },
   { id: "deployment", label: "Deployment", icon: <CloudUploadOutlinedIcon /> },
+  { id: "traffic", label: "Traffic", icon: <SpeedOutlinedIcon /> },
   { id: "validation", label: "Validation", icon: <FactCheckOutlinedIcon /> },
   { id: "readiness", label: "Readiness", icon: <RocketLaunchOutlinedIcon /> },
   { id: "changes", label: "Changes", icon: <DifferenceOutlinedIcon /> },

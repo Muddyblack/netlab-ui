@@ -152,6 +152,13 @@ class RuntimeInterfaceStats(BaseModel):
     rxPackets: int = 0
     txPackets: int = 0
     statsIntervalSeconds: float | None = None
+    # Error/drop counters — beyond clab-ui's contract, read by the Traffic lens.
+    rxErrors: int = 0
+    txErrors: int = 0
+    rxDropped: int = 0
+    txDropped: int = 0
+    # Errors + drops added since the previous sample (None on the first one).
+    newErrors: int | None = None
 
 
 class RuntimeInterface(BaseModel):

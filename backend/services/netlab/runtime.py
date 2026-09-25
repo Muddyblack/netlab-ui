@@ -10,7 +10,7 @@ from typing import Any
 from services.model.topology import Topology
 from services.netlab import runner
 
-_counter_cache: dict[tuple[str, str], tuple[float, int, int, int, int]] = {}
+_counter_cache: dict[tuple[str, str], tuple[float, int, int, int, int, int]] = {}
 
 
 def clab_runtime(topo: Topology) -> str:
@@ -25,11 +25,19 @@ def _stats(container: str, iface: str, raw: dict[str, Any], now: float) -> dict[
     tx = counters.get("tx") or {}
     rx_bytes, tx_bytes = int(rx.get("bytes") or 0), int(tx.get("bytes") or 0)
     rx_packets, tx_packets = int(rx.get("packets") or 0), int(tx.get("packets") or 0)
+    problems = {
+        "rxErrors": int(rx.get("errors") or 0),
+        "txErrors": int(tx.get("errors") or 0),
+        "rxDropped": int(rx.get("dropped") or 0),
+        "txDropped": int(tx.get("dropped") or 0),
+    }
+    problem_total = sum(problems.values())
     result: dict[str, Any] = {
         "rxBytes": rx_bytes,
         "txBytes": tx_bytes,
         "rxPackets": rx_packets,
         "txPackets": tx_packets,
+        **problems,
     }
     previous = _counter_cache.get((container, iface))
     if previous and now > previous[0]:
@@ -41,9 +49,10 @@ def _stats(container: str, iface: str, raw: dict[str, Any], now: float) -> dict[
                 "rxPps": max(0, round((rx_packets - previous[3]) / interval)),
                 "txPps": max(0, round((tx_packets - previous[4]) / interval)),
                 "statsIntervalSeconds": interval,
+                "newErrors": max(0, problem_total - previous[5]),
             }
         )
-    _counter_cache[(container, iface)] = (now, rx_bytes, tx_bytes, rx_packets, tx_packets)
+    _counter_cache[(container, iface)] = (now, rx_bytes, tx_bytes, rx_packets, tx_packets, problem_total)
     return result
 
 

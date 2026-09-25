@@ -3,6 +3,7 @@ import { Box, Stack, Typography } from "@mui/material";
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { NetlabLensesState } from "../../hooks/useNetlabLenses";
 import type { AddressFamily, LensId } from "./LensCanvasOverlay";
+import { TrafficLensView } from "./traffic/TrafficLensView";
 import {
   AddressingLensView,
   ChangesLensView,
@@ -145,6 +146,8 @@ export function LensBody({ lens, bundle, error, loading, validationIssues, onToa
       />
     );
   }
+
+  if (lens === "traffic") return <TrafficLensView />;
 
   if (lens === "deployment") {
     return (

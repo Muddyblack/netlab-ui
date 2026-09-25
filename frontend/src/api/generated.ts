@@ -4503,6 +4503,28 @@ export interface components {
             txPackets: number;
             /** Statsintervalseconds */
             statsIntervalSeconds?: number | null;
+            /**
+             * Rxerrors
+             * @default 0
+             */
+            rxErrors: number;
+            /**
+             * Txerrors
+             * @default 0
+             */
+            txErrors: number;
+            /**
+             * Rxdropped
+             * @default 0
+             */
+            rxDropped: number;
+            /**
+             * Txdropped
+             * @default 0
+             */
+            txDropped: number;
+            /** Newerrors */
+            newErrors?: number | null;
         };
         /** ScriptStep */
         ScriptStep: {
@@ -4874,7 +4896,7 @@ export interface components {
              * @default physical
              * @enum {string}
              */
-            lens: "physical" | "addressing" | "routing" | "services" | "paths" | "deployment" | "validation" | "readiness" | "changes";
+            lens: "physical" | "addressing" | "routing" | "services" | "paths" | "deployment" | "validation" | "readiness" | "changes" | "traffic";
             /**
              * Family
              * @default ipv4

@@ -16,3 +16,4 @@ export { useAutoOpenComposerTab } from "../hooks/useAutoOpenComposerTab";
 export { netlabNodeEditorTabs } from "./netlabNodeEditorTabs";
 export { useCustomPaletteTabs } from "./useCustomPaletteTabs";
 export { useRenderDeployMenuItems } from "./useRenderDeployMenuItems";
+export { publishRuntimeContainers } from "../host/runtimeStore";

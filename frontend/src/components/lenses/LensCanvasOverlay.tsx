@@ -5,7 +5,8 @@ import type { LensBundleResult, PathResult } from "../../api/client";
 import { useCanvasGeometry } from "./useCanvasGeometry";
 import { resolvePresentationObjects } from "./lens-canvas-overlay/helpers";
 import { AddressingLayer, buildAddressingTints } from "./lens-canvas-overlay/AddressingLayer";
-import { useEdgeTints, TINTED_EDGE_CLASS } from "./lens-canvas-overlay/useEdgeTints";
+import { useEdgeTints } from "./lens-canvas-overlay/useEdgeTints";
+import { EdgeTintStyles } from "./lens-canvas-overlay/EdgeTintStyles";
 import type { EdgeTintMap } from "./lens-canvas-overlay/edgeBinding";
 import { ControlPlaneLayer } from "./lens-canvas-overlay/ControlPlaneLayer";
 import { ServicesLayer } from "./lens-canvas-overlay/ServicesLayer";
@@ -113,17 +114,8 @@ export function LensCanvasOverlay({
         ".netlab-path-flow": {
           animation: "netlab-path-flow 700ms linear infinite",
         },
-        // The lens colour rides on the edge React Flow already drew. `!important`
-        // is required, not lazy: React Flow sets the stroke inline on the path,
-        // so a plain rule of ours would always lose.
-        [`.${TINTED_EDGE_CLASS} .react-flow__edge-path`]: {
-          stroke: "var(--netlab-lens-color) !important",
-          strokeWidth: "var(--netlab-lens-width) !important",
-          strokeOpacity: "var(--netlab-lens-opacity) !important",
-          strokeDasharray: "var(--netlab-lens-dash) !important",
-          transition: "stroke 180ms ease, stroke-width 180ms ease",
-        },
       }} />
+      <EdgeTintStyles />
       <svg
         width={geometry.width}
         height={geometry.height}

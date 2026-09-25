@@ -255,6 +255,15 @@ mix of nodes, groups and `all`, in parallel:
   ⏵ scripts menu replays one; **Export transcript** downloads the session as
   Markdown.
 
+### Live traffic
+
+Click a link on a deployed lab to see its traffic chart (clab-ui's link
+panel). The **Traffic** lens (Lenses tab) shows every link at once: links
+are coloured and thickened by load and labelled with their rate. A link
+that is down turns red and dashed; one that is dropping or erroring *right
+now* turns red. The panel lists all links, busiest and broken ones first.
+Counters are read from the containers every 3 seconds.
+
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
 

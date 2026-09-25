@@ -15,6 +15,17 @@ def test_interface_rates_are_derived_from_counter_delta(monkeypatch):
     assert result["txPps"] == 10
 
 
+def test_error_and_drop_counters_report_what_is_new():
+    runtime._counter_cache.clear()
+    first = {"stats64": {"rx": {"bytes": 0, "errors": 1, "dropped": 2}, "tx": {"bytes": 0, "dropped": 0}}}
+    second = {"stats64": {"rx": {"bytes": 0, "errors": 4, "dropped": 2}, "tx": {"bytes": 0, "dropped": 3}}}
+
+    assert runtime._stats("c1", "eth1", first, 10.0)["rxDropped"] == 2
+    result = runtime._stats("c1", "eth1", second, 12.0)
+    assert (result["rxErrors"], result["txDropped"]) == (4, 3)
+    assert result["newErrors"] == 6
+
+
 def test_container_runtime_comes_from_clab_provider_defaults():
     topology = Topology(name="podman", defaults={"providers": {"clab": {"runtime": "podman"}}})
 
