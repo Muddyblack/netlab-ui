@@ -66,6 +66,7 @@ export function NetlabLenses({ sessionId, container, state, themeMode, onToast }
 
       {presenting && teachingDoc && (
         <TourPresenter
+          sessionId={sessionId}
           document={teachingDoc}
           index={teachingIndex}
           setIndex={setTeachingIndex}

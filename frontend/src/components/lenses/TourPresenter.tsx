@@ -1,13 +1,17 @@
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CloseIcon from "@mui/icons-material/Close";
-import { Box, IconButton, Paper, Stack, Typography } from "@mui/material";
+import { Box, IconButton, LinearProgress, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { createPortal } from "react-dom";
 
 import type { TeachingDocument } from "../../api/client";
+import { ExerciseCheck } from "./teaching/ExerciseCheck";
+import { useExerciseProgress } from "./teaching/exerciseProgress";
 
 interface TourPresenterProps {
+  sessionId: string;
   document: TeachingDocument;
   index: number;
   setIndex: Dispatch<SetStateAction<number>>;
@@ -18,7 +22,8 @@ interface TourPresenterProps {
 // pointer-events transparent over the canvas, so the presenter can still click
 // live nodes while narrating — the whole point of presenting a real lab rather
 // than slides. Only the caption bar and nav buttons capture clicks.
-export function TourPresenter({ document: doc, index, setIndex, onExit }: TourPresenterProps) {
+export function TourPresenter({ sessionId, document: doc, index, setIndex, onExit }: TourPresenterProps) {
+  const progress = useExerciseProgress(doc);
   const total = doc.steps.length;
   const step = doc.steps[index] ?? null;
   const atStart = index <= 0;
@@ -61,6 +66,14 @@ export function TourPresenter({ document: doc, index, setIndex, onExit }: TourPr
           <Typography variant="caption" color="text.secondary" sx={{ pl: 0.5 }}>
             {doc.title}
           </Typography>
+          {progress.graded > 0 && (
+            <Tooltip title="Exercise steps passed — kept in this browser. Click to start over.">
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ pl: 1, cursor: "pointer" }} onClick={progress.reset}>
+                <LinearProgress variant="determinate" value={(100 * progress.done) / progress.graded} sx={{ width: 90, height: 6, borderRadius: 3 }} />
+                <Typography variant="caption">{progress.done}/{progress.graded}</Typography>
+              </Stack>
+            </Tooltip>
+          )}
           <IconButton size="small" onClick={onExit} aria-label="Exit tour"><CloseIcon fontSize="small" /></IconButton>
         </Stack>
       </Paper>
@@ -95,12 +108,19 @@ export function TourPresenter({ document: doc, index, setIndex, onExit }: TourPr
               {step ? (
                 <>
                   <Typography variant="subtitle1" fontWeight={700} noWrap>
+                    {step.checks.length > 0 && progress.passed.has(step.id) && (
+                      <CheckCircleIcon fontSize="small" color="success" sx={{ mr: 0.5, verticalAlign: "text-bottom" }} />
+                    )}
                     {step.caption || `Step ${index + 1}`}
                   </Typography>
                   {step.note && (
                     <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
                       {step.note}
                     </Typography>
+                  )}
+                  {(step.task || step.checks.length > 0) && (
+                    <ExerciseCheck sessionId={sessionId} step={step} alreadyPassed={progress.passed.has(step.id)}
+                      onPassed={() => progress.markPassed(step.id)} />
                   )}
                 </>
               ) : (

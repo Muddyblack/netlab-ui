@@ -11,9 +11,12 @@ from app.contract.responses import (
     ReportCatalogResult,
     ReportRunRequest,
     ReportRunResult,
+    TeachingCheckRequest,
+    TeachingCheckResult,
     TeachingDocument,
     TeachingSaveRequest,
     TeachingSaveResult,
+    ValidationTestList,
 )
 from app.sessions.store import store
 from services.lenses import config_diff, path_explorer, readiness, reports, search, service, teaching
@@ -169,3 +172,34 @@ def put_teaching(body: TeachingSaveRequest):
         raise HTTPException(404, "unknown session") from exc
     document = teaching.save(session.topology_path, body.document.model_dump())
     return {"ok": True, "document": document}
+
+
+@router.get("/teaching/tests", response_model=ValidationTestList)
+async def get_teaching_tests(session_id: str = Query(alias="sessionId")):
+    """The lab's netlab validate tests — what an exercise step can check."""
+    try:
+        session = store.require(session_id)
+    except KeyError as exc:
+        raise HTTPException(404, "unknown session") from exc
+    try:
+        transformed = (await runner.create(session.topology_path))["snapshot"]
+    except runner.NetlabNotInstalled as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except runner.NetlabError as exc:
+        raise HTTPException(422, exc.stderr.strip() or str(exc)) from exc
+    return {"tests": teaching.validation_tests(transformed)}
+
+
+@router.post("/teaching/check", response_model=TeachingCheckResult)
+async def check_teaching_step(body: TeachingCheckRequest):
+    """Run an exercise step's checks against the running lab."""
+    try:
+        session = store.require(body.sessionId)
+    except KeyError as exc:
+        raise HTTPException(404, "unknown session") from exc
+    try:
+        return await teaching.check(session.topology_path, body.tests)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except runner.NetlabNotInstalled as exc:
+        raise HTTPException(503, str(exc)) from exc

@@ -17,9 +17,10 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
-import { api, type TeachingDocument, type TeachingStep, type TourView } from "../../api/client";
+import { api, type TeachingDocument, type TeachingStep, type TourView, type ValidationTestInfo } from "../../api/client";
+import { ExerciseFields } from "./teaching/ExerciseFields";
 
 interface TourPanelProps {
   sessionId: string;
@@ -42,6 +43,9 @@ function makeStep(view: TourView, index: number): TeachingStep {
     caption: "",
     note: "",
     view,
+    task: "",
+    hint: "",
+    checks: [],
   };
 }
 
@@ -64,7 +68,14 @@ export function TourPanel({
   onToast,
 }: TourPanelProps) {
   const [saving, setSaving] = useState(false);
+  const [tests, setTests] = useState<ValidationTestInfo[]>([]);
   const steps = document?.steps ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.getTeachingTests(sessionId).then((result) => { if (!cancelled) setTests(result.tests); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   const update = (fn: (value: TeachingDocument) => TeachingDocument) =>
     setDocument((value) => (value ? fn(value) : value));
@@ -196,7 +207,7 @@ export function TourPanel({
                           {step.caption || "Untitled step"}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap>
-                          {step.view.lens} · {revealSummary(step.view)}
+                          {step.view.lens} · {revealSummary(step.view)}{step.checks.length ? ` · ${step.checks.length} check${step.checks.length > 1 ? "s" : ""}` : ""}
                         </Typography>
                       </Box>
                     </Stack>
@@ -222,6 +233,7 @@ export function TourPanel({
                           onChange={(event) => updateCurrentStep((s) => ({ ...s, note: event.target.value }))}
                           sx={{ mt: 1 }}
                         />
+                        <ExerciseFields step={step} tests={tests} onChange={(patch) => updateCurrentStep((s) => ({ ...s, ...patch }))} />
                         <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
                           <Tooltip title="Re-snapshot this step from the current canvas">
                             <Button size="small" startIcon={<ReplayIcon fontSize="small" />} onClick={(event) => { event.stopPropagation(); recaptureStep(); }}>

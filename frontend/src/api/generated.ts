@@ -1640,6 +1640,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/topology/teaching/tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Teaching Tests
+         * @description The lab's netlab validate tests — what an exercise step can check.
+         */
+        get: operations["get_teaching_tests_api_topology_teaching_tests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/topology/teaching/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Teaching Step
+         * @description Run an exercise step's checks against the running lab.
+         */
+        post: operations["check_teaching_step_api_topology_teaching_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runtime/file-explorer/file": {
         parameters: {
             query?: never;
@@ -5160,6 +5200,37 @@ export interface components {
              */
             model: string;
         };
+        /** TeachingCheckRequest */
+        TeachingCheckRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tests */
+            tests: string[];
+        };
+        /** TeachingCheckResult */
+        TeachingCheckResult: {
+            /** Passed */
+            passed: boolean;
+            /** Tests */
+            tests: components["schemas"]["TeachingCheckTest"][];
+            /**
+             * Output
+             * @default
+             */
+            output: string;
+        };
+        /** TeachingCheckTest */
+        TeachingCheckTest: {
+            /** Name */
+            name: string;
+            /** State */
+            state: string;
+            /**
+             * Evidence
+             * @default
+             */
+            evidence: string;
+        };
         /** TeachingDocument */
         TeachingDocument: {
             /**
@@ -5224,6 +5295,21 @@ export interface components {
              *     }
              */
             view: components["schemas"]["TourView"];
+            /**
+             * Task
+             * @default
+             */
+            task: string;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
+            /**
+             * Checks
+             * @default []
+             */
+            checks: string[];
         };
         /** TemplatesResult */
         TemplatesResult: {
@@ -5530,6 +5616,26 @@ export interface components {
             objectRefs: string[];
             /** Order */
             order: number;
+        };
+        /** ValidationTestInfo */
+        ValidationTestInfo: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+        };
+        /** ValidationTestList */
+        ValidationTestList: {
+            /** Tests */
+            tests: components["schemas"]["ValidationTestInfo"][];
         };
         /** VersionResult */
         VersionResult: {
@@ -8621,6 +8727,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeachingSaveResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_teaching_tests_api_topology_teaching_tests_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationTestList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_teaching_step_api_topology_teaching_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeachingCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeachingCheckResult"];
                 };
             };
             /** @description Validation Error */

@@ -130,11 +130,16 @@ from app.contract.responses.reports import (
     ReportTable,
 )
 from app.contract.responses.teaching import (
+    TeachingCheckRequest,
+    TeachingCheckResult,
+    TeachingCheckTest,
     TeachingDocument,
     TeachingSaveRequest,
     TeachingSaveResult,
     TeachingStep,
     TourView,
+    ValidationTestInfo,
+    ValidationTestList,
 )
 from app.contract.responses.topology import (
     CommandAck,
@@ -256,6 +261,9 @@ __all__ = [
     "ServiceVtep",
     "SetNetlabPathRequest",
     "SnapshotResponse",
+    "TeachingCheckRequest",
+    "TeachingCheckResult",
+    "TeachingCheckTest",
     "TeachingDocument",
     "TeachingSaveRequest",
     "TeachingSaveResult",
@@ -273,6 +281,8 @@ __all__ = [
     "ValidationResult",
     "ValidationSummary",
     "ValidationTest",
+    "ValidationTestInfo",
+    "ValidationTestList",
     "VersionResult",
     "WorkerInfo",
     "WorkspaceEntry",

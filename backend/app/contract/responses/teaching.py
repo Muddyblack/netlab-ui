@@ -45,6 +45,38 @@ class TeachingStep(BaseModel):
     caption: str = ""
     note: str = ""
     view: TourView = TourView()
+    # Exercise steps: what the student should do, and the `netlab validate`
+    # tests that prove it ("Check my work" in presentation mode).
+    task: str = ""
+    hint: str = ""
+    checks: list[str] = []
+
+
+class ValidationTestInfo(BaseModel):
+    name: str
+    description: str = ""
+    nodes: list[str] = []
+
+
+class ValidationTestList(BaseModel):
+    tests: list[ValidationTestInfo]
+
+
+class TeachingCheckRequest(BaseModel):
+    sessionId: str
+    tests: list[str]
+
+
+class TeachingCheckTest(BaseModel):
+    name: str
+    state: str  # passed | failed | warning | unknown
+    evidence: str = ""
+
+
+class TeachingCheckResult(BaseModel):
+    passed: bool
+    tests: list[TeachingCheckTest]
+    output: str = ""
 
 
 class TeachingDocument(BaseModel):

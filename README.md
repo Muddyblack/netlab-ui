@@ -290,6 +290,23 @@ Snapshots live in `<lab>/.netlab-ui/configs/<topology>/`; the newest 20 are
 kept. The generated (not running) configuration per module is still in the
 node editor's Config tab.
 
+### Guided exercises
+
+Guided tours (Lenses → ▶ tour button) are now also exercises. A step can
+have:
+
+- a **task** for the student,
+- **checks**: `netlab validate` tests from the lab's `validate:` block, picked
+  from a list with their descriptions,
+- a **hint** that is shown after a failed check.
+
+In presentation mode the student presses **Check my work**. Only that step's
+tests run, and the step passes when all of them pass; failures show netlab's
+own message and the hint. A progress bar counts passed steps; it is kept per
+browser, and clicking it starts over. Everything is stored in the lab's
+`<topology>.netlab-teaching.json`, so a lab and its exercise travel together
+(e.g. via **Copy Lab to Workspace…**).
+
 ### Live traffic
 
 Click a link on a deployed lab to see its traffic chart (clab-ui's link

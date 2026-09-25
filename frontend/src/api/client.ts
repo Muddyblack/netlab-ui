@@ -136,6 +136,8 @@ export type AssistantProposalResult = Schemas["AssistantProposalResult"];
 export type TeachingDocument = Schemas["TeachingDocument"];
 export type TeachingDocumentInput = Schemas["TeachingDocument"];
 export type TeachingStep = Schemas["TeachingStep"];
+export type ValidationTestInfo = Schemas["ValidationTestInfo"];
+export type TeachingCheckResult = Schemas["TeachingCheckResult"];
 export type TourView = Schemas["TourView"];
 export type DocsDocument = {
   title: string;
@@ -285,6 +287,12 @@ export const api = {
       `/api/topology/teaching?sessionId=${encodeURIComponent(sessionId)}`,
       { cache: "no-store" }
     ),
+
+  getTeachingTests: (sessionId: string) =>
+    http<{ tests: ValidationTestInfo[] }>(`/api/topology/teaching/tests?sessionId=${encodeURIComponent(sessionId)}`, undefined, 1, 60000),
+
+  checkTeachingStep: (sessionId: string, tests: string[]) =>
+    http<TeachingCheckResult>("/api/topology/teaching/check", { method: "POST", body: JSON.stringify({ sessionId, tests }) }, 1, 330000),
 
   saveTeaching: (sessionId: string, document: TeachingDocumentInput) =>
     http<Schemas["TeachingSaveResult"]>("/api/topology/teaching", {
