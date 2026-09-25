@@ -120,6 +120,12 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 - **Running-lab matching is by topology file, then the file's own directory** (`host/runningMatch.ts`). A directory *prefix* or bare name match marks unrelated labs as running. netlab allows one lab per directory — new labs are created as `<workspace>/<name>/topology.yml`.
 - **`host.createSession` does not make a session active.** Explorer actions on a lab that isn't the open tab get their own background session (`getOrCreateSession` in `useTabManager`); only `activateSession` changes what canvas callbacks target. Resolving an action through "the current session" ran Deploy/Destroy on the wrong lab before.
 - **The YAML serializer merges into the loaded document** (`serialize.to_yaml` + `Topology.source`) so comments and flow style survive UI edits. Rebuilding the document from the model dropped users' comments.
+- **`netlab exec` and `netlab connect --show` always exit 0.** `app/lab/broadcast.py` gets a real status for shell commands on containers from an exit-code trailer, and flags CLI error replies (`% Unknown command`) as failures. netlab joins the words after the node name and hands them to `bash -c`, so pass commands as whitespace-split words: `shlex` would strip the quotes, and an extra `sh -c` gets its `$?` expanded by the outer shell.
+- **clab-ui keeps only the traffic-rate keys of interface stats** (`EDGE_STATS_KEYS`). Anything else the runtime sample carries (error/drop counters, netem state) reaches our own UI through `host/runtimeStore.ts`, which the controller's runtime poll publishes to. Don't add a second poll.
+- **Dialogs and overlays opened from the canvas or explorer use small module stores** (`host/captureStore.ts`, `configsDialogStore.ts`, `copyLabStore.ts`, `canvasSpotlight.ts`), mounted once in `components/dialogs/LabToolDialogs.tsx` / `components/app/CanvasLabOverlays.tsx`. This avoids threading props through `App.tsx`; follow the same pattern for new ones.
+- **Explorer action ids choose their clab-ui menu group by substring** (`ACTION_GROUP_RULES`: `.graph.`, `copy`, `inspect`, `shell`, `addtoworkspace`, …). An id matching nothing lands in "Other".
+- **netlab's transformed topology stores `validate:` as a list** of tests with a `name` key, not the YAML's mapping. The same goes for other normalized blocks: read both forms.
+- **netlab's short group form (`core: [r1, r2]`) is a member list**, and `Group.short_form` keeps it that way on save.
 
 ## Key rules
 
