@@ -283,7 +283,18 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
     if body.action not in runner.LIFECYCLE_ACTIONS:
         raise HTTPException(400, f"unknown lifecycle action {body.action!r}")
     path = common.session_path(body.sessionId)
-    args, cwd = runner.lifecycle_argv(body.action, path, multilab_id=body.multilabId)
+    steps = [runner.lifecycle_argv(body.action, path, multilab_id=body.multilabId)]
+    if body.action == "restart":
+        # `netlab restart` is down + a fresh `up` that re-reads the topology, so
+        # a lab started as a parallel instance (-s defaults.multilab.id=N)
+        # would come back as instance "default" and collide. Keep its id.
+        instance = await _registered_multilab_id(path)
+        if instance is not None:
+            steps = [
+                runner.lifecycle_argv("down", path),
+                runner.lifecycle_argv("up", path, multilab_id=instance),
+            ]
+    args = steps[0][0]
 
     async def gen():
         # Clean raw netlab output for the plain-text modal: strip ANSI, fold
@@ -303,7 +314,7 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
             yield f"data: {json.dumps({'progress': tracker.payload(delta=True)})}\n\n"
         try:
             yield f"data: {json.dumps({'stream': 'stdout', 'line': f'Running netlab {args[0]}…'})}\n\n"
-            async for stream, line in runner.run_streaming(args, cwd=cwd):
+            async for stream, line in _run_sequence(steps):
                 if stream == "exit":
                     for out_stream, out_line in fmt.flush():
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
@@ -314,6 +325,10 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
                             "Another netlab instance owns this instance ID. "
                             "Open Explorer → Running Labs → Manage running labs."
                         )
+                        with contextlib.suppress(runner.NetlabError, runner.NetlabNotInstalled, ValueError):
+                            plan = multilab.plan(path, await runner.status_cached(max_age=0))
+                            if plan["suggestedMultilabId"] is not None:
+                                done_payload["suggestedMultilabId"] = plan["suggestedMultilabId"]
                     if tracker:
                         tracker.finish(int(line))
                         done_payload["progress"] = tracker.payload(delta=True)
@@ -350,6 +365,37 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
             yield f"data: {json.dumps({'error': 'Lab deployment failed.'})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=common.SSE_HEADERS)
+
+
+async def _run_sequence(steps: list[tuple[list[str], Path]]) -> Any:
+    """Stream several netlab commands as one: lines of each, then a single
+    ("exit", code) — stopping at the first command that fails."""
+    for index, (args, cwd) in enumerate(steps):
+        if index:
+            yield "stdout", f"Running netlab {' '.join(args[:1])}…"
+        async for stream, line in runner.run_streaming(args, cwd=cwd):
+            if stream != "exit":
+                yield stream, line
+            elif line != "0" or index == len(steps) - 1:
+                yield stream, line
+                return
+
+
+async def _registered_multilab_id(path: str) -> int | None:
+    """The numeric multilab id this lab directory is running under, unless the
+    topology sets its own (then netlab picks it up by itself)."""
+    if multilab.configured_instance_id(path) is not None:
+        return None
+    try:
+        status = await runner.status_cached(max_age=2.0)
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return None
+    lab_dir = Path(path).resolve().parent
+    for key, info in (status if isinstance(status, dict) else {}).items():
+        registered_here = isinstance(info, dict) and info.get("dir") and Path(str(info["dir"])).resolve() == lab_dir
+        if registered_here and str(key).isdigit():
+            return int(key)
+    return None
 
 
 @router.post("/down", response_model=CommandResult)

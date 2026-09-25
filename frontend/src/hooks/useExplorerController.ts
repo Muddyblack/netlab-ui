@@ -363,14 +363,15 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   ...Object.fromEntries(Object.entries(FCLI_COMMAND_BY_ID).map(([id, command]) => [id, makeFcliHandler(command)])),
   "containerlab.lab.openFile": handleOpenFile,
   "containerlab.file.open": handleOpenFile,
-  // "Redeploy"/"Start Nodes" and their cleanup variants all resolve to the
-  // same `netlab up` streamed run as canvas Deploy — mirrors how
-  // topoViewerHost.runLifecycle collapses these in createHost.ts.
+  // Deploy variants run `netlab up`. "Redeploy"/"Start Nodes" are offered on
+  // a *running* lab, where netlab refuses a second `up` in the same directory
+  // ("Cannot start another lab in the same directory"), so they run
+  // `netlab restart` (down + up) — mirrors topoViewerHost.runLifecycle.
   "containerlab.lab.deploy": handleDeployLab,
   "containerlab.lab.deploy.cleanup": handleDeployLab,
-  "containerlab.lab.redeploy": handleDeployLab,
-  "containerlab.lab.redeploy.cleanup": handleDeployLab,
-  "containerlab.lab.start": handleDeployLab,
+  "containerlab.lab.redeploy": handleNetlabRestart,
+  "containerlab.lab.redeploy.cleanup": handleNetlabRestart,
+  "containerlab.lab.start": handleNetlabRestart,
   // "Destroy (Cleanup)"/"Stop Nodes" all resolve to the same `netlab down`
   // run as canvas Destroy.
   "containerlab.lab.destroy": handleDestroyLab,
