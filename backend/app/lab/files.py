@@ -53,9 +53,10 @@ def _count_labs(workspace_path: Path) -> int:
 def _workspace_entries() -> list[dict]:
     """Workspace list with existence + lab counts for the manage dialog."""
     out = []
+    common_ws = ws_store.shared()
     for p in ws_store.load():
         path = Path(p)
-        out.append({"path": p, "exists": path.exists(), "labCount": _count_labs(path)})
+        out.append({"path": p, "exists": path.exists(), "labCount": _count_labs(path), "shared": p == common_ws})
     return out
 
 
@@ -99,6 +100,7 @@ def _scan_workspace(workspace_path: Path, running_status: dict) -> list[dict]:
                 "labName": lab_name,
                 "deploymentState": "deployed" if is_running else "undeployed",
                 "workspace": str(workspace_path.resolve()),
+                "shared": str(workspace_path.resolve()) == ws_store.shared(),
                 "topologyRef": {
                     "topologyId": f"standalone:local::{abs_path}",
                     "labName": lab_name,

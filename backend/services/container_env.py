@@ -209,7 +209,7 @@ def _host_config_checks(info: dict[str, Any]) -> list[dict[str, Any]]:
 def _exposure_check() -> dict[str, Any]:
     host = os.environ.get("UVICORN_HOST", "").strip()
     exposed = host not in {"", "127.0.0.1", "localhost", "::1"}
-    protected = bool(os.environ.get("NETLAB_UI_AUTH", "").strip())
+    protected = any(os.environ.get(var, "").strip() for var in ("NETLAB_UI_AUTH", "NETLAB_UI_AUTH_FILE"))
     ok = not exposed or protected
     return _check(
         "exposure",

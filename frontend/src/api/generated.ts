@@ -3172,6 +3172,11 @@ export interface components {
             topologyRef: components["schemas"]["TopologyRef"];
             /** Workspace */
             workspace?: string | null;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
         };
         /** LabInstance */
         LabInstance: {
@@ -5090,6 +5095,11 @@ export interface components {
              * @default 0
              */
             labCount: number;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
         };
         /** WorkspaceListResult */
         WorkspaceListResult: {

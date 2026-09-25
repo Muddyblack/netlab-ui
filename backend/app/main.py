@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import BasicAuthMiddleware, configured_credentials
+from app.auth import BasicAuthMiddleware, configured_users
 from app.contract.responses import HealthStatus
 from app.contract.router import router as contract_router
 from app.docs.router import router as docs_router
@@ -124,9 +124,9 @@ app.add_middleware(
 
 # Optional login (NETLAB_UI_AUTH=user:password) — see app/auth.py. Added after
 # CORS so it wraps it: every request, SSE stream and WebSocket is checked.
-_credentials = configured_credentials()
-if _credentials:
-    app.add_middleware(BasicAuthMiddleware, user=_credentials[0], password=_credentials[1])
+_users = configured_users()
+if _users:
+    app.add_middleware(BasicAuthMiddleware, users=_users)
 
 
 # Filesystem errors (e.g. a sidecar file owned by another user) must become a

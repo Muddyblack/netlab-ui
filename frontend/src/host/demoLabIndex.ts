@@ -102,7 +102,8 @@ export function toLabFile(lab: DemoLabRecord): DemoLabFile {
     hasAnnotations: false,
     labName: lab.labName,
     deploymentState: "undeployed",
-    topologyRef: buildTopologyRef(lab)
+    topologyRef: buildTopologyRef(lab),
+    shared: false
   };
 }
 

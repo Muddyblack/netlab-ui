@@ -140,9 +140,9 @@ export function buildFileProvider(
         const wsList = workspacesRef.current ?? [];
         return wsList.map((ws) => ({
           id: `file-ws:local:${ws.path}`,
-          label: basename(ws.path),
+          label: ws.shared ? `${basename(ws.path)} (shared)` : basename(ws.path),
           description: wsList.length > 1 ? ws.path : undefined,
-          tooltip: ws.path,
+          tooltip: ws.shared ? `${ws.path}\nShared workspace: every user can open, edit, deploy and destroy these labs.` : ws.path,
           // Native clab-ui root context: surfaces "New Folder" plus our
           // contributed "Clone Repo Here" / "Remove From Workspace" actions.
           contextValue: "containerlabFileExplorerRoot",

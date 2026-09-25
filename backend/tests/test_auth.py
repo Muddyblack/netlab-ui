@@ -1,6 +1,6 @@
 import base64
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -18,13 +18,17 @@ def _client() -> TestClient:
     def files():
         return []
 
+    @app.get("/api/whoami")
+    def whoami(request: Request):
+        return {"user": auth.request_user(request)}
+
     @app.websocket("/api/node/r1/shell")
     async def shell(ws: WebSocket):
         await ws.accept()
         await ws.send_text("hi")
         await ws.close()
 
-    app.add_middleware(auth.BasicAuthMiddleware, user="admin", password="s3cret")
+    app.add_middleware(auth.BasicAuthMiddleware, users={"admin": "s3cret", "bob": "pw2"})
     return TestClient(app)
 
 
@@ -61,14 +65,31 @@ def test_websocket_requires_credentials():
         assert ws.receive_text() == "hi"
 
 
-def test_credentials_parsing(monkeypatch):
+def test_request_carries_the_authenticated_user():
+    client = _client()
+    assert client.get("/api/whoami", headers=_basic("bob", "pw2")).json() == {"user": "bob"}
+    assert client.get("/api/whoami", headers=_basic("bob", "s3cret")).status_code == 401
+
+
+def test_credentials_parsing(monkeypatch, tmp_path):
     monkeypatch.delenv(auth.ENV_VAR, raising=False)
-    assert auth.configured_credentials() is None
+    monkeypatch.delenv(auth.FILE_ENV_VAR, raising=False)
+    assert auth.configured_users() == {}
     monkeypatch.setenv(auth.ENV_VAR, "me:pa:ss")
-    assert auth.configured_credentials() == ("me", "pa:ss")
+    assert auth.configured_users() == {"me": "pa:ss"}
+    monkeypatch.setenv(auth.ENV_VAR, "alice:one,bob:two")
+    assert auth.configured_users() == {"alice": "one", "bob": "two"}
+    monkeypatch.setenv(auth.ENV_VAR, "me:a,b")  # a comma inside a single password
+    assert auth.configured_users() == {"me": "a,b"}
+    users_file = tmp_path / "users"
+    users_file.write_text("# team\ncarol:three\n")
+    monkeypatch.delenv(auth.ENV_VAR)
+    monkeypatch.setenv(auth.FILE_ENV_VAR, str(users_file))
+    assert auth.configured_users() == {"carol": "three"}
+    monkeypatch.setenv(auth.FILE_ENV_VAR, "")
     monkeypatch.setenv(auth.ENV_VAR, "nopassword")
     try:
-        auth.configured_credentials()
+        auth.configured_users()
         raise AssertionError("expected a configuration error")
     except RuntimeError:
         pass
