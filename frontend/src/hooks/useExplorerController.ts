@@ -8,6 +8,7 @@ import { buildRunningProvider, buildHelpProvider } from "../host/runningProvider
 import { readPersistedExplorerUiState, persistExplorerUiState, closeExplorerTransientUi } from "../lifecycle/persistence";
 import type { WorkspaceEntry } from "../lifecycle/types";
 import type { LabFileEntry } from "../api/client";
+import { requestCopyLab } from "../host/copyLabStore";
 import type { RunningLabsStatus } from "./useAppData";
 
 type ExplorerControllerOptions = Parameters<typeof createExplorerController>[0];
@@ -247,6 +248,16 @@ async function handleRunningConfigs({ cb, topoRef }: ActionCtx) {
   if (topoRef) await cb.openRunningConfigs(topoRef);
 }
 
+async function handleCopyLab({ cb, item, topoRef }: ActionCtx) {
+  const path = topoRef?.yamlPath || item?.path;
+  if (!path) return;
+  requestCopyLab({
+    topologyPath: path,
+    labName: topoRef?.labName || path.split("/").slice(-2, -1)[0] || "lab",
+    onCopied: (ref) => { void cb.openLab(ref as TopologyRef); },
+  });
+}
+
 async function handleCopyPath({ cb, item }: ActionCtx) {
   const path = item?.topologyRef?.yamlPath || item?.path || item?.resourcePath;
   if (path) {
@@ -394,6 +405,7 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
   "netlab.lab.shell.runOnNodes": handleRunOnNodes,
   "netlab.lab.inspect.runningConfigs": handleRunningConfigs,
+  "netlab.lab.addtoworkspace.copyLab": handleCopyLab,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
   "containerlab.file.newFile": handleOpenNewLabDialog,
@@ -576,7 +588,9 @@ export function useExplorerController({
             // ".shell." / ".inspect." in the ids file these under clab-ui's
             // Access and Inspect groups (same substring rules as above).
             { commandId: "netlab.lab.shell.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" },
-            { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" }
+            { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" },
+            // ".addtoworkspace." files it under clab-ui's Topology group.
+            { commandId: "netlab.lab.addtoworkspace.copyLab", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Copy Lab to Workspace…" }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -596,6 +610,7 @@ export function useExplorerController({
             ["netlab.lab.collect", "Netlab Collect (Gather configs)"],
             ["netlab.lab.shell.runOnNodes", "Run Command on Nodes…"],
             ["netlab.lab.inspect.runningConfigs", "Running Configs & Changes…"],
+            ["netlab.lab.addtoworkspace.copyLab", "Copy Lab to Workspace…"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

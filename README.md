@@ -466,6 +466,7 @@ Why each flag matters — each one fails late and cryptically when missing:
 - **`NETLAB_UI_AUTH=alice:pw1,bob:pw2`** (or one `user:password` per line in the file named by **`NETLAB_UI_AUTH_FILE`**) — each person logs in as themselves.
 - **`NETLAB_UI_SHARED_WORKSPACE=/srv/labs`** — a folder everyone works in. It is always listed (as *name (shared)*), cannot be removed from the UI, and its labs carry a *shared* badge.
 - Running labs show who deployed them (*team-lab (7) · by alice · shared*). The owner is recorded next to netlab's own registry in `~/.netlab/netlab-ui-owners.json` and cleared on `netlab down`.
+- **Copy Lab to Workspace…** (right-click any lab → Copy) forks a shared lab into your own workspace, publishes yours to the shared one, or duplicates it. The copy gets its own folder and `name:`, keeps its layout, tours and scripts, and leaves netlab's generated files and running state behind; it opens right away and can run next to the original. **Clone Repository…** / **Browse Example Labs…** import from git.
 - **`NETLAB_UI_LAB_HOURS=4`**: a lab deployed from the UI shuts down (`netlab down`) 4 hours later.
   - The canvas shows *Running until 14:30*, turning red with a countdown in the last 10 minutes.
   - **Extend** gives the lab another full period.

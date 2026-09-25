@@ -904,6 +904,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy Lab Endpoint */
+        post: operations["copy_lab_endpoint_api_lab_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/instances": {
         parameters: {
             query?: never;
@@ -2783,6 +2800,24 @@ export interface components {
              * @default []
              */
             availableLayers: ("bgp" | "ospf" | "isis" | "bfd" | "evpn")[];
+        };
+        /** CopyLabRequest */
+        CopyLabRequest: {
+            /** Topologypath */
+            topologyPath: string;
+            /** Name */
+            name: string;
+            /** Targetworkspace */
+            targetWorkspace?: string | null;
+        };
+        /** CopyLabResult */
+        CopyLabResult: {
+            /** Path */
+            path: string;
+            /** Topologyref */
+            topologyRef: {
+                [key: string]: string;
+            };
         };
         /** CreateChat */
         CreateChat: {
@@ -7301,6 +7336,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImageOpResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_lab_endpoint_api_lab_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyLabRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyLabResult"];
                 };
             };
             /** @description Validation Error */

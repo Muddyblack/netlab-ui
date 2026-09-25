@@ -363,6 +363,9 @@ export const api = {
       body: JSON.stringify({ action }),
     }, 1, 120000),
 
+  copyLab: (topologyPath: string, name: string, targetWorkspace: string) =>
+    http<Schemas["CopyLabResult"]>("/api/lab/copy", { method: "POST", body: JSON.stringify({ topologyPath, name, targetWorkspace }) }, 1, 60000),
+
   getLease: (sessionId: string) =>
     http<{ expiresAt?: string | null }>(`/api/lab/lease?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1),
 
