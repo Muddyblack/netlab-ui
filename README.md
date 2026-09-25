@@ -185,10 +185,10 @@ nix develop        # Drop into the dev shell (or run `direnv allow`)
 The frontend imports `@containerlab/clab-ui` directly wherever it's needed (see `frontend/src/App.tsx`, `frontend/src/host/`, etc.) — there is no local checkout, stub, or swap-point to configure.
 
 > **Note:** `@containerlab/clab-ui` is currently pinned to an exact version (`0.3.2`)
-> with a `patch-package` patch applied on install (`frontend/patches/`) to
-> restore exports an upstream cleanup accidentally dropped. This is temporary —
-> see `frontend/AGENTS.md` for details and the removal plan once upstream
-> republishes a fixed version.
+> with small `patch-package` patches applied on install (`frontend/patches/`):
+> one restores exports an upstream cleanup accidentally dropped (temporary),
+> two add generic host hooks (lifecycle-modal lab name/actions, host-owned
+> node-editor fields). See `frontend/AGENTS.md` for what each does.
 
 ---
 
