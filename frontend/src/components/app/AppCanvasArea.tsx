@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { App as ClabUiApp } from "@containerlab/clab-ui";
 import type { createClabUiRuntime, ClabUiRuntime } from "@containerlab/clab-ui/host";
 import { NodeEditorSessionProvider } from "../node-editor/NodeEditorSessionContext";
-import { NetlabAttrsSavedProvider } from "../node-editor/NetlabAttrsTab";
 import { TransformIndicator } from "../TransformIndicator";
 import { AttractorEmptyState } from "../AttractorEmptyState";
 import { INITIAL_GRAPH_DATA } from "../../icons";
@@ -21,7 +20,6 @@ interface AppCanvasAreaProps {
   handleOpenLab: (topoRef: TopologyRef, opts?: { fitView?: boolean }) => Promise<void>;
   navbarPortalContainer: HTMLElement | null;
   toolbarActions: ReactNode;
-  refreshCanvas: () => void;
 }
 
 export function AppCanvasArea({
@@ -34,19 +32,16 @@ export function AppCanvasArea({
   labFiles,
   handleOpenLab,
   navbarPortalContainer,
-  toolbarActions,
-  refreshCanvas
+  toolbarActions
 }: AppCanvasAreaProps) {
   return (
     <>
       {runtime && (
         <NodeEditorSessionProvider value={sessionId}>
-          <NetlabAttrsSavedProvider value={refreshCanvas}>
-            <ClabUiApp
-              initialData={INITIAL_GRAPH_DATA}
-              runtime={appRuntime}
-            />
-          </NetlabAttrsSavedProvider>
+          <ClabUiApp
+            initialData={INITIAL_GRAPH_DATA}
+            runtime={appRuntime}
+          />
         </NodeEditorSessionProvider>
       )}
 

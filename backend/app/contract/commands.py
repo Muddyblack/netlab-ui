@@ -351,6 +351,19 @@ def _set_node_group_membership(path: str, cmd: dict[str, Any]) -> bool:
     return False
 
 
+def _is_default_image(device: str | None, image: Any) -> bool:
+    """Is ``image`` netlab's default containerlab image for ``device``?"""
+    if not device or not isinstance(image, str) or not image:
+        return False
+    from app.lab.images import _netsim_clab_devices  # local: app.lab imports this module
+
+    try:
+        info = _netsim_clab_devices().get(device)
+    except Exception:  # noqa: BLE001 — no device data: treat as user-set
+        return False
+    return bool(info) and info.get("image") == image
+
+
 def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
     topo = load_topology(path)
     node_id = cmd.get("id")
@@ -378,6 +391,16 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
 
     extra_data = dict(cmd.get("extraData", {}))
 
+    # The node's netlab attributes as edited in the netlab editor tabs (see
+    # snapshot.py): the complete set, so it replaces the declared attributes.
+    # Built-in clab-ui fields below (cpu, memory, ...) are applied after it.
+    host_fields = extra_data.pop("hostFields", None)
+    if isinstance(host_fields, dict):
+        host_fields = dict(host_fields)
+        if "device" in host_fields:
+            node_to_update.device = host_fields.pop("device") or None
+        node_to_update.attrs = {k: v for k, v in host_fields.items() if v is not None and v != ""}
+
     # device/kind mapping
     if "device" in extra_data:
         node_to_update.device = extra_data.pop("device") or None
@@ -404,8 +427,14 @@ def _edit_node(path: str, cmd: dict[str, Any]) -> bool:
             if entry.get("id") == old_name:
                 entry["id"] = node_name
 
+    effective_device = node_to_update.device or topo.defaults.get("device")
     for key in list(extra_data.keys()):
         val = extra_data.pop(key)
+        # clab-ui's form always carries the *resolved* container image; saving
+        # it verbatim pinned netlab's default image into the topology on any
+        # node edit. Only a value the user actually set (or changed) is kept.
+        if key == "image" and "image" not in node_to_update.attrs and _is_default_image(effective_device, val):
+            continue
         if key in ui_keys:
             if key == "topoViewerRole":
                 if val:

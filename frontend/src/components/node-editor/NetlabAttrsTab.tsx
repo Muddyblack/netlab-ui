@@ -1,20 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ComponentType } from "react";
-import { useNodes, type NodeEditorTabProps } from "@containerlab/clab-ui";
-import { getApiBase } from "../../api/endpoint";
-import { useNodeEditorSession } from "./NodeEditorSessionContext";
+import { useCallback, useMemo, type ComponentType } from "react";
+import type { NodeEditorTabProps } from "@containerlab/clab-ui";
 
 /**
- * clab-ui's node editor models containerlab fields only: it builds the form
- * from a fixed set of containerlab properties and saves (and dirty-checks)
- * only those. netlab attributes edited in our tabs — role, provider, box,
- * module, config, module settings, custom attributes — were therefore never
- * shown with their current value and silently dropped on save.
+ * clab-ui's node editor models containerlab fields only. netlab attributes
+ * (role, provider, box, module, config, module settings, custom attributes)
+ * travel in its host-owned field bag instead — `hostFields`, added by
+ * patches/@containerlab+clab-ui+*+editor-host-fields.patch: the snapshot fills
+ * it with the node's declared netlab attributes, clab-ui loads it into the
+ * form, dirty-checks it, and sends it back with `editNode` on Apply.
  *
- * This wrapper closes both gaps without touching clab-ui:
- *  - read: overlays the node's declared netlab attributes (the snapshot
- *    stashes them under `extraData.netlabAttrs`) under the form data;
- *  - write: sends changed netlab-only keys straight to the backend's
- *    `editNode` command (undoable like any canvas edit) and refreshes.
+ * The netlab tabs are written against flat fields (`data.role`,
+ * `onChange({ module })`); this wrapper maps those onto `hostFields` and
+ * leaves clab-ui's own fields to clab-ui.
  */
 
 /** Editor fields clab-ui converts and saves itself (see its
@@ -26,73 +23,39 @@ const CLAB_EDITOR_KEYS = new Set([
   "labels", "user", "entrypoint", "cmd", "exec", "restartPolicy", "autoRemove", "startupDelay",
   "mgmtIpv4", "mgmtIpv6", "networkMode", "ports", "dnsServers", "aliases", "cpu", "cpuSet", "memory",
   "shmSize", "capAdd", "sysctls", "devices", "imagePullPolicy", "runtime", "certIssue", "certKeySize",
-  "certValidity", "sans", "healthCheck", "healthcheck", "components", "extraData",
+  "certValidity", "sans", "healthCheck", "healthcheck", "components", "extraData", "hostFields",
 ]);
 
-const SAVE_DEBOUNCE_MS = 400;
-
-/** Called after netlab attributes were written, to refresh the canvas. */
-const NetlabAttrsSavedContext = createContext<(() => void) | null>(null);
-export const NetlabAttrsSavedProvider = NetlabAttrsSavedContext.Provider;
-
-function storedNetlabAttrs(nodes: ReturnType<typeof useNodes>, nodeId: unknown): Record<string, unknown> {
-  const node = nodes.find((candidate) => candidate.id === nodeId);
-  const extra = (node?.data as { extraData?: { netlabAttrs?: unknown } } | undefined)?.extraData;
-  const attrs = extra?.netlabAttrs;
-  return attrs && typeof attrs === "object" && !Array.isArray(attrs) ? (attrs as Record<string, unknown>) : {};
-}
-
-function same(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
+type FieldBag = Record<string, unknown>;
 
 export function withNetlabAttrs(Tab: ComponentType<NodeEditorTabProps>): ComponentType<NodeEditorTabProps> {
   function NetlabAttrsTab(props: NodeEditorTabProps) {
     const { data, onChange } = props;
-    const sessionId = useNodeEditorSession();
-    const onSaved = useContext(NetlabAttrsSavedContext);
-    const nodes = useNodes();
-    const nodeId = (data as { id?: unknown }).id;
-    const stored = useMemo(() => storedNetlabAttrs(nodes, nodeId), [nodes, nodeId]);
-    const merged = useMemo(() => ({ ...stored, ...(data as unknown as Record<string, unknown>) }), [stored, data]);
+    const editor = data as unknown as FieldBag;
+    const hostFields = useMemo(() => (editor.hostFields as FieldBag | undefined) ?? {}, [editor.hostFields]);
+    const merged = useMemo(() => ({ ...hostFields, ...editor }), [hostFields, editor]);
 
-    const pending = useRef<Record<string, unknown>>({});
-    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const target = useRef({ sessionId, nodeId, onSaved });
-    target.current = { sessionId, nodeId, onSaved };
-
-    const flush = useCallback(() => {
-      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-      const updates = pending.current;
-      pending.current = {};
-      const { sessionId: sid, nodeId: id, onSaved: saved } = target.current;
-      if (!sid || typeof id !== "string" || Object.keys(updates).length === 0) return;
-      // undefined is dropped by JSON; the backend removes attributes sent as null.
-      const extraData = Object.fromEntries(Object.entries(updates).map(([k, v]) => [k, v === undefined ? null : v]));
-      void fetch(`${getApiBase()}/api/topology/command`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: sid, command: { command: "editNode", payload: { id, extraData } } }),
-      })
-        .then(() => saved?.())
-        .catch((err) => console.error("Failed to save netlab node attributes:", err));
-    }, []);
-
-    // Don't lose a pending edit when the editor closes or switches node.
-    useEffect(() => () => flush(), [flush, nodeId]);
-
-    const handleChange = useCallback((updates: Record<string, unknown>) => {
-      onChange(updates);
-      let changed = false;
+    const handleChange = useCallback((updates: FieldBag) => {
+      const clabUpdates: FieldBag = {};
+      let nextHost: FieldBag | null = null;
       for (const [key, value] of Object.entries(updates)) {
-        if (!key || CLAB_EDITOR_KEYS.has(key) || same(value, merged[key])) continue;
-        pending.current[key] = value;
-        changed = true;
+        if (!key) continue;
+        if (CLAB_EDITOR_KEYS.has(key)) {
+          clabUpdates[key] = value;
+          continue;
+        }
+        nextHost ??= { ...hostFields };
+        if (value === undefined || value === null || value === "") delete nextHost[key];
+        else nextHost[key] = value;
       }
-      if (!changed) return;
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(flush, SAVE_DEBOUNCE_MS);
-    }, [flush, merged, onChange]);
+      // Device is both: clab-ui's kind drives the icon/palette, netlab's
+      // device is what gets written.
+      if ("kind" in updates && typeof updates.device === "string") {
+        nextHost ??= { ...hostFields };
+        nextHost.device = updates.device;
+      }
+      onChange((nextHost ? { ...clabUpdates, hostFields: nextHost } : clabUpdates) as never);
+    }, [hostFields, onChange]);
 
     return <Tab {...props} data={merged as unknown as NodeEditorTabProps["data"]} onChange={handleChange as NodeEditorTabProps["onChange"]} />;
   }

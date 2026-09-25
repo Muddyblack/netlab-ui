@@ -1,0 +1,31 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-5ODV6KJE.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-5ODV6KJE.js
+index f2c061c..706eed3 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-5ODV6KJE.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-5ODV6KJE.js
+@@ -158,9 +158,17 @@ function convertToEditorData(rawData) {
+     ...parseAdvancedProps(extra),
+     ...parseCertProps(extra),
+     ...parseHealthCheckProps(extra),
+-    ...parseComponentsProps(extra)
++    ...parseComponentsProps(extra),
++    ...parseHostFields(extra)
+   };
+ }
++// Host-owned node fields: an opaque object a host keeps under
++// extraData.hostFields. Custom editor tabs edit it; it is dirty-checked and
++// saved with the node like any built-in field.
++function parseHostFields(extra) {
++  const hostFields = getRecordUnknown(extra.hostFields);
++  return hostFields ? { hostFields: { ...hostFields } } : {};
++}
+ function toStringOrNull(value) {
+   if (typeof value === "string") {
+     return value === "" ? null : value;
+@@ -373,6 +381,7 @@ function convertEditorDataToYaml(data) {
+   convertCertToYaml(data, extraData);
+   convertHealthcheckToYaml(data, extraData);
+   convertComponentsToYaml(data, extraData);
++  if ("hostFields" in data) extraData.hostFields = getRecordUnknown(data.hostFields) ?? null;
+   return extraData;
+ }
+ function mapDefaultToNull(value, defaultValue) {

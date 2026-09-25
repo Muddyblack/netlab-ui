@@ -529,6 +529,10 @@ async def build(
             # construction: nothing here names a specific attribute.
             if source_node.attrs:
                 node["data"].setdefault("extraData", {})["netlabAttrs"] = copy.deepcopy(source_node.attrs)
+            # The node editor's netlab tabs edit these through clab-ui's
+            # host-owned field bag (patch 003): loaded into the form,
+            # dirty-checked, and sent back with editNode.
+            node["data"].setdefault("extraData", {})["hostFields"] = copy.deepcopy(source_node.attrs)
         if "label" not in node["data"]:
             node["data"]["label"] = node_id
         # clab-ui's node `role` is the *icon*. netlab's own node `role`
