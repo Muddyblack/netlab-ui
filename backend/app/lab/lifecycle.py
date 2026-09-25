@@ -323,6 +323,8 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                     for out_stream, out_line in fmt.flush():
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
                     done_payload: dict[str, Any] = {"done": True, "code": int(line)}
+                    # Labs were started/stopped: the next status read must be fresh.
+                    runner._clear_status_cache()
                     transcript = "".join(captured)
                     if body.action == "up" and "already running in directory" in transcript:
                         done_payload["hint"] = (
@@ -422,7 +424,9 @@ async def lab_status():
     if not runner.is_installed():
         return {}
     try:
-        return owners.annotate(await runner.status())
+        # Coalesce with the SSE poller: `netlab status --all` costs ~1 s and
+        # the UI refreshes this after every lifecycle action.
+        return owners.annotate(await runner.status_cached(max_age=2.0))
     except runner.NetlabError as exc:
         raise HTTPException(500, str(exc)) from exc
 

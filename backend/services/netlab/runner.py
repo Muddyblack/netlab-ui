@@ -1016,9 +1016,32 @@ def _tool_output(binary: str, args: list[str], timeout: float = 3) -> tuple[str,
         return stdout_file.read(), stderr_file.read()
 
 
+_tool_version_cache: dict[tuple[str, tuple[str, ...]], tuple[float, str | None]] = {}
+
+
 def tool_version(binary: str, args: list[str]) -> str | None:
     """Return the first non-empty stdout/stderr line from a local tool version
-    command, or None if the tool is unavailable or cannot be queried."""
+    command, or None if the tool is unavailable or cannot be queried.
+
+    Cached per resolved binary and its mtime: ``containerlab version`` alone
+    takes about a second, and /api/health asks on every call."""
+    resolved = shutil.which(binary)
+    if resolved is None:
+        return None
+    try:
+        mtime = os.stat(resolved).st_mtime
+    except OSError:
+        mtime = 0.0
+    key = (resolved, tuple(args))
+    cached = _tool_version_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    version = _tool_version_uncached(binary, args)
+    _tool_version_cache[key] = (mtime, version)
+    return version
+
+
+def _tool_version_uncached(binary: str, args: list[str]) -> str | None:
     result = _tool_output(binary, args)
     if result is None:
         return None
@@ -1067,13 +1090,8 @@ def cached_version_components() -> list[dict[str, str | bool]]:
     global _components_cache
     if _components_cache is not None:
         return _components_cache
-    result = _tool_output("netlab", ["version"], timeout=5)
-    if result is None:
-        _components_cache = []
-        return _components_cache
-    stdout, stderr = result
-    _components_cache = parse_version_components(stdout or stderr)
-    return _components_cache
+    _load_netlab_version()
+    return _components_cache or []
 
 
 def containerlab_version() -> str | None:
@@ -1122,8 +1140,21 @@ def cached_version() -> str | None:
     if not is_installed():
         _version_cache = None
         return None
-    _version_cache = tool_version("netlab", ["version"])
-    return _version_cache
+    _load_netlab_version()
+    return _version_cache if _version_cache is not False else None
+
+
+def _load_netlab_version() -> None:
+    """One `netlab version` run (~0.5 s) fills both the version line and the
+    component list; they used to run it once each."""
+    global _version_cache, _components_cache
+    result = _tool_output("netlab", ["version"], timeout=5)
+    if result is None:
+        _version_cache, _components_cache = None, []
+        return
+    output = result[0] or result[1]
+    _version_cache = next((line.strip() for line in output.splitlines() if line.strip()), None)
+    _components_cache = parse_version_components(output)
 
 
 def reset_version_cache() -> None:

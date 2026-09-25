@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -77,10 +78,19 @@ if assistant.assistant_enabled():
         _assistant_mcp = None
 
 
+def _warm_tool_versions() -> None:
+    runner.cached_version()
+    runner.containerlab_version()
+    runner.libvirt_version()
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Push file-change events to connected UIs (no-op if watchfiles is absent).
     watcher = asyncio.create_task(events.watch_workspaces())
+    # Warm the tool-version cache so the first /api/health (the startup
+    # splash) doesn't wait on `containerlab version`.
+    warmup = asyncio.create_task(asyncio.to_thread(_warm_tool_versions))
     try:
         if _assistant_mcp is not None:
             # A mounted sub-app's lifespan is not run by Starlette, so the MCP
@@ -93,6 +103,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         if _assistant_router is not None:
             await _assistant_router_shutdown()
         watcher.cancel()
+        warmup.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watcher
 
@@ -156,8 +167,10 @@ if _assistant_router is not None and _assistant_mcp is not None:
     _assistant_mcp.install(app)
 
 
+# Plain `def`: probing tool versions shells out (first call, or after an
+# upgrade), which must not stall the event loop for every other request.
 @app.get("/api/health", response_model=HealthStatus)
-async def health():
+def health():
     netlab_version = runner.cached_version()
     containerlab_present = runner.is_containerlab_installed()
     libvirt_present = runner.is_libvirt_installed()
@@ -182,6 +195,25 @@ async def health():
 # as the API — no separate frontend process, no CORS needed. Mounted last so
 # it never shadows an /api/* route: Starlette matches routes in registration
 # order, and this StaticFiles mount only catches what nothing above matched.
+class _FrontendFiles(StaticFiles):
+    """The built UI: Vite's content-hashed /assets/* never change, so browsers
+    may keep them forever; index.html must be revalidated to pick up a new
+    build. Without these headers every reload re-requested ~100 files."""
+
+    async def get_response(self, path: str, scope):  # type: ignore[no-untyped-def]
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            immutable = path.startswith("assets/")
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable" if immutable else "no-cache"
+        return response
+
+
 _frontend_dist = Path(os.environ.get("FRONTEND_DIST_DIR", "/app/frontend_dist"))
 if _frontend_dist.is_dir():
-    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")
+    # Compressed: the bundle is ~4.7 MB raw, ~1.3 MB gzipped. Only the static
+    # mount is wrapped, so API event streams are never buffered by gzip.
+    app.mount(
+        "/",
+        GZipMiddleware(_FrontendFiles(directory=_frontend_dist, html=True), minimum_size=1024),
+        name="frontend",
+    )
