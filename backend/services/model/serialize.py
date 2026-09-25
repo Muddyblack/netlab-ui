@@ -239,6 +239,10 @@ def _endpoint_name(e: Any) -> str:
 def _parse_groups(raw: Any) -> list[Group]:
     groups: list[Group] = []
     for name, body in dict(raw or {}).items():
+        if isinstance(body, list):
+            # netlab's short form: a group is just its member list.
+            groups.append(Group(name=name, members=[str(m) for m in body], short_form=True))
+            continue
         body = dict(body or {})
         groups.append(
             Group(
@@ -269,6 +273,9 @@ def to_dict(topo: Topology) -> dict[str, Any]:
 
     groups: dict[str, Any] = {}
     for g in topo.groups:
+        if g.short_form and not g.module and not g.attrs:
+            groups[g.name] = list(g.members)
+            continue
         body = {}
         if g.members:
             body["members"] = list(g.members)

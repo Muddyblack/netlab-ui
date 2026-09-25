@@ -152,3 +152,11 @@ def test_added_and_removed_list_items_keep_the_rest_intact():
 def test_model_built_topology_still_serializes_fresh():
     topo = serialize.from_dict({"name": "t", "nodes": {"r1": None}})
     assert serialize.to_yaml(topo) == "name: t\nnodes:\n  r1:\n"
+
+
+def test_short_form_groups_keep_their_members_and_form():
+    topo = serialize.from_yaml("nodes: [r1, r2, r3]\ngroups:\n  core: [r1, r2]\n")
+    assert topo.groups[0].members == ["r1", "r2"]
+    assert "core: [r1, r2]" in serialize.to_yaml(topo)
+    topo.groups[0].module = ["ospf"]
+    assert serialize.from_yaml(serialize.to_yaml(topo)).groups[0].members == ["r1", "r2"]

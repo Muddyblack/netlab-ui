@@ -88,7 +88,8 @@ def _node_groups(
         elif isinstance(raw, list):
             names.update(str(item) for item in raw)
     for group_name, raw_group in groups.items():
-        members = _list(_dict(raw_group).get("members"))
+        # netlab's short form (`core: [r1, r2]`) is just the member list.
+        members = _list(raw_group) if isinstance(raw_group, list) else _list(_dict(raw_group).get("members"))
         if node_name in members:
             names.add(str(group_name))
     return [(name, _dict(groups.get(name))) for name in sorted(names)]

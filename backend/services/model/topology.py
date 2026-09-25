@@ -59,6 +59,9 @@ class Group:
     members: list[str] = field(default_factory=list)
     module: list[str] = field(default_factory=list)
     attrs: dict[str, Any] = field(default_factory=dict)
+    # Written as netlab's short form (``core: [r1, r2]``); kept on save while
+    # the group still has nothing but members.
+    short_form: bool = field(default=False, compare=False)
 
 
 @dataclass
