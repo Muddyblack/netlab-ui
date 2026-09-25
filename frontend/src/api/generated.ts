@@ -1383,6 +1383,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/topology/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Lab
+         * @description Find nodes by address, prefix, AS, VLAN, VRF, module, group, device…
+         *     in netlab's transformed topology (see services/lenses/search.py).
+         */
+        get: operations["search_lab_api_topology_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/path": {
         parameters: {
             query?: never;
@@ -3367,6 +3388,30 @@ export interface components {
              * @enum {string}
              */
             action: "cleanup" | "force-cleanup" | "forget";
+        };
+        /** LabSearchHit */
+        LabSearchHit: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+        };
+        /** LabSearchResult */
+        LabSearchResult: {
+            /** Results */
+            results: components["schemas"]["LabSearchHit"][];
+            /** Modules */
+            modules: components["schemas"]["LabSearchHit"][];
         };
         /** LensAddressAssignment */
         LensAddressAssignment: {
@@ -7825,6 +7870,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LensBundleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_lab_api_topology_search_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabSearchResult"];
                 };
             };
             /** @description Validation Error */

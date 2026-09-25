@@ -328,3 +328,16 @@ class LensBundleResult(BaseModel):
     validation: ValidationLens = ValidationLens()
     reachability: ReachabilityLens = ReachabilityLens()
     derivation: DerivationLens = DerivationLens()
+
+
+class LabSearchHit(BaseModel):
+    kind: str
+    title: str
+    detail: str = ""
+    nodes: list[str] = []
+
+
+class LabSearchResult(BaseModel):
+    results: list[LabSearchHit]
+    # Every module in the lab (with its nodes), for the canvas filter chips.
+    modules: list[LabSearchHit]

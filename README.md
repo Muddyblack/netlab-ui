@@ -255,6 +255,24 @@ mix of nodes, groups and `all`, in parallel:
   ⏵ scripts menu replays one; **Export transcript** downloads the session as
   Markdown.
 
+### Find anything in a lab
+
+**Ctrl+P** searches netlab's *transformed* topology as well as labs, nodes
+and actions. That includes addresses netlab assigned from its pools and
+modules a node inherits from a group.
+
+| Type | Finds |
+|---|---|
+| `10.1.0.5` | the interface holding it, or whose subnet contains it |
+| `10.1.0.0/16` | every address inside the prefix |
+| `as 65001` | BGP AS |
+| `10` | VLAN id, AS or node id |
+| `module:ospf`, `vlan:`, `vrf:`, `group:`, `device:eos`, `role:` | that kind only (`module:` alone lists all modules) |
+
+Picking a hit spotlights its nodes: everything else on the canvas is dimmed.
+The spotlight bar has one chip per module, so you can switch the canvas
+between "who runs OSPF / BGP / VLANs"; press Esc to show everything again.
+
 ### Live traffic
 
 Click a link on a deployed lab to see its traffic chart (clab-ui's link

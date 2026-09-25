@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.contract.responses import (
     ConfigDiffResult,
+    LabSearchResult,
     LensBundleResult,
     PathResult,
     ReadinessResult,
@@ -15,7 +16,7 @@ from app.contract.responses import (
     TeachingSaveResult,
 )
 from app.sessions.store import store
-from services.lenses import config_diff, path_explorer, readiness, reports, service, teaching
+from services.lenses import config_diff, path_explorer, readiness, reports, search, service, teaching
 from services.netlab import config_preview, runner
 
 router = APIRouter(prefix="/api/topology", tags=["lenses"])
@@ -34,6 +35,23 @@ async def get_lenses(session_id: str = Query(alias="sessionId")):
     except runner.NetlabError as exc:
         detail = exc.stderr.strip() or str(exc)
         raise HTTPException(422, detail) from exc
+
+
+@router.get("/search", response_model=LabSearchResult)
+async def search_lab(session_id: str = Query(alias="sessionId"), q: str = Query("", max_length=200)):
+    """Find nodes by address, prefix, AS, VLAN, VRF, module, group, device…
+    in netlab's transformed topology (see services/lenses/search.py)."""
+    try:
+        session = store.require(session_id)
+    except KeyError as exc:
+        raise HTTPException(404, "unknown session") from exc
+    try:
+        transformed = (await runner.create(session.topology_path))["snapshot"]
+    except runner.NetlabNotInstalled as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except runner.NetlabError as exc:
+        raise HTTPException(422, exc.stderr.strip() or str(exc)) from exc
+    return {"results": search.search(transformed, q), "modules": search.modules(transformed)}
 
 
 @router.get("/path", response_model=PathResult)

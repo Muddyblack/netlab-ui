@@ -29,6 +29,8 @@ export type PluginImportRequest = Schemas["PluginImportRequest"];
 export type PluginImportResult = Schemas["PluginImportResult"];
 export type VersionResult = Schemas["VersionResult"];
 export type ExecTargets = Schemas["ExecTargets"];
+export type LabSearchHit = Schemas["LabSearchHit"];
+export type LabSearchResult = Schemas["LabSearchResult"];
 export type ExecScript = Schemas["ExecScript"];
 export type ExecMode = Schemas["ExecRequest"]["mode"];
 
@@ -357,6 +359,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ action }),
     }, 1, 120000),
+
+  searchLab: (sessionId: string, query: string) =>
+    http<LabSearchResult>(`/api/topology/search?sessionId=${encodeURIComponent(sessionId)}&q=${encodeURIComponent(query)}`, undefined, 1, 30000),
 
   getExecTargets: (sessionId: string) =>
     http<ExecTargets>(`/api/lab/exec/targets?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 15000),
