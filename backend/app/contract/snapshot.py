@@ -413,6 +413,7 @@ async def build(
 
     annotations = ann_store.load(topology_path)
     deployment_state: dict[str, Any] = {}
+    runtime_mgmt: dict[str, str] = {}
 
     nodes: list[dict]
     edges: list[dict]
@@ -466,7 +467,9 @@ async def build(
         try:
             # status_cached: the SSE poller refreshes status every 5 s anyway;
             # re-running the CLI here would add ~4 s to every snapshot.
-            deployment_state = _state_from_status(await runner.status_for(topology_path), topo.name)
+            lab_status = await runner.status_for(topology_path)
+            deployment_state = _state_from_status(lab_status, topo.name)
+            runtime_mgmt = _mgmt_from_status(lab_status, topo.name)
         except (runner.NetlabError, runner.NetlabNotInstalled):
             deployment_state = {}
         lab_registered = await _has_instance_record(topology_path)
@@ -558,6 +561,10 @@ async def build(
             node["data"]["groupId"] = saved_group
             node["data"]["group"] = saved_group
         node["data"]["state"] = deployment_state.get(node_id, "undeployed")
+        # A running lab's real management address: the projection assumes the
+        # default 192.168.121.0/24, which is wrong for a multilab instance.
+        if node_id in runtime_mgmt:
+            node["data"]["mgmt-ipv4"] = runtime_mgmt[node_id]
         if node_id in node_issues:
             node["data"].setdefault("extraData", {})["validationIssues"] = node_issues[node_id]
             # clab-ui's public node data contract exposes iconColor; use it to
@@ -662,6 +669,25 @@ def _state_from_status(status: Any, lab_name: str) -> dict[str, Any]:
         for node, info in (lab.get("nodes") or {}).items():
             out[node] = runner.normalize_node_state((info or {}).get("status"))
     return out
+
+
+def _status_nodes(status: Any, lab_name: str) -> dict[str, Any]:
+    if isinstance(status, dict) and isinstance(status.get("nodes"), dict):
+        return status["nodes"]
+    out: dict[str, Any] = {}
+    for key, lab in (status if isinstance(status, dict) else {}).items():
+        if isinstance(lab, dict) and (not lab_name or key == lab_name or lab.get("name") == lab_name):
+            out.update(lab.get("nodes") or {})
+    return out
+
+
+def _mgmt_from_status(status: Any, lab_name: str) -> dict[str, str]:
+    """``{node: management IPv4}`` as netlab reports it for the running lab."""
+    return {
+        node: str(info["mgmt"])
+        for node, info in _status_nodes(status, lab_name).items()
+        if isinstance(info, dict) and info.get("mgmt")
+    }
 
 
 STATIC_FIXTURE: dict[str, Any] = {

@@ -474,3 +474,10 @@ def test_canvas_icon_follows_netlab_role_and_keeps_declared_role(tmp_path, monke
     assert by_id["s1"]["role"] == "bridge"
     assert by_id["r2"]["role"] == "frr"  # unchanged fallback: the netlab device name
     assert by_id["r1"]["extraData"]["netlabAttrs"]["role"] == "host"
+
+
+def test_running_lab_uses_management_address_from_netlab_status():
+    status = {"nodes": {"r1": {"mgmt": "192.168.5.101", "status": "Up 1 minute"}, "r2": {}}}
+    assert snapshot._mgmt_from_status(status, "lab") == {"r1": "192.168.5.101"}
+    registry = {"1": {"name": "ml-1", "nodes": {"h1": {"mgmt": "192.168.1.101"}}}}
+    assert snapshot._mgmt_from_status(registry, "ml-1") == {"h1": "192.168.1.101"}
