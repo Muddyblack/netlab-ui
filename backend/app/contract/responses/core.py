@@ -191,4 +191,6 @@ class RuntimeContainer(BaseModel):
     image: str = ""
     ipv4Address: str = ""
     ipv6Address: str = ""
+    # clab | libvirt | external — which runtime actions apply to the node.
+    provider: str = ""
     interfaces: list[RuntimeInterface] = []

@@ -25,6 +25,18 @@ from services.netlab import runtime as runtime_state
 router = APIRouter(tags=["shell"])
 
 
+def _logs_unavailable(node: str, provider: str) -> str | None:
+    """Why a node has no container log stream (None when it has one)."""
+    if provider == "clab":
+        return None
+    if provider == "libvirt":
+        return (
+            f"{node} is a libvirt VM — there is no container log to stream. "
+            "Open its shell (netlab connect) and read the device's own logs there."
+        )
+    return f"{node} is an external device — netlab doesn't run it, so there are no logs to stream from here."
+
+
 @router.websocket("/api/node/{node}/shell")
 async def node_shell(websocket: WebSocket, node: str, sessionId: str):
     await websocket.accept()
@@ -140,15 +152,20 @@ async def node_logs(websocket: WebSocket, node: str, sessionId: str):
         from app.contract import commands
 
         topology = commands.load_topology(topology_path)
-        runtime_bin = runner.container_runtime_binary(runtime_state.clab_runtime(topology))
-        if not runtime_bin:
-            await websocket.send_json({"stream": "stderr", "line": "docker or podman is not available on the backend"})
-            await websocket.close()
-            return
         status = await runner.status_for(topology_path, max_age=0)
         info = (status.get("nodes") or {}).get(node) if isinstance(status, dict) else None
         if not isinstance(info, dict):
             await websocket.send_json({"stream": "stderr", "line": f"No running node named {node}"})
+            await websocket.close()
+            return
+        reason = _logs_unavailable(node, str(info.get("provider") or "clab"))
+        if reason:
+            await websocket.send_json({"stream": "stderr", "line": reason})
+            await websocket.close()
+            return
+        runtime_bin = runner.container_runtime_binary(runtime_state.clab_runtime(topology))
+        if not runtime_bin:
+            await websocket.send_json({"stream": "stderr", "line": "docker or podman is not available on the backend"})
             await websocket.close()
             return
         container = str(info.get("provider_name") or node)

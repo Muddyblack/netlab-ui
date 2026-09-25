@@ -4817,6 +4817,11 @@ export interface components {
              */
             ipv6Address: string;
             /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
              * Interfaces
              * @default []
              */

@@ -19,12 +19,13 @@ import contextlib
 import re
 import sys
 import time
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.lab import common
-from services.netlab import runner
+from services.netlab import libvirt, runner
 from services.netlab import runtime as runtime_state
 
 router = APIRouter()
@@ -40,9 +41,10 @@ _CAPTURE_SCRIPT = r"""
 import ctypes, os, select, socket, struct, sys, time
 pid, iface, seconds, max_packets = int(sys.argv[1]), sys.argv[2], float(sys.argv[3]), int(sys.argv[4])
 libc = ctypes.CDLL(None, use_errno=True)
-fd = os.open(f"/proc/{pid}/ns/net", os.O_RDONLY)
-if libc.setns(fd, 0x40000000) != 0:
-    sys.exit(f"cannot enter the node's network namespace: {os.strerror(ctypes.get_errno())}")
+if pid:  # 0 = a host interface (a libvirt VM's tap): stay in this namespace
+    fd = os.open(f"/proc/{pid}/ns/net", os.O_RDONLY)
+    if libc.setns(fd, 0x40000000) != 0:
+        sys.exit(f"cannot enter the node's network namespace: {os.strerror(ctypes.get_errno())}")
 sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
 sock.setsockopt(263, 8, 1)  # SOL_PACKET, PACKET_AUXDATA
 try:
@@ -105,8 +107,12 @@ def _topology_path(session_id: str | None, topology: str | None) -> str:
     raise HTTPException(400, "pass sessionId or topology")
 
 
-async def _running_container(path: str, node: str) -> tuple[str, str]:
-    """(container name, preferred runtime) for a running clab node of the lab at ``path``."""
+async def _capture_target(path: str, node: str, interface: str) -> tuple[int, str]:
+    """(network-namespace pid, interface) to capture a node interface on.
+
+    Containers: the container's own namespace. libvirt VMs: the host tap of
+    the NIC (pid 0 = the host namespace) — netlab gives VMs a tap only on LAN
+    links. External devices can't be captured from here."""
     from app.contract import commands
 
     try:
@@ -116,9 +122,25 @@ async def _running_container(path: str, node: str) -> tuple[str, str]:
     info = ((status or {}).get("nodes") or {}).get(node) if isinstance(status, dict) else None
     if not isinstance(info, dict):
         raise HTTPException(404, f"node {node!r} is not part of the running lab")
-    if info.get("provider") != "clab":
-        raise HTTPException(409, f"node {node!r} is not a container; capture on VMs is not supported")
-    return str(info.get("provider_name") or node), runtime_state.clab_runtime(commands.load_topology(path))
+    provider = info.get("provider")
+    if provider == "clab":
+        container = str(info.get("provider_name") or node)
+        return await _container_pid(container, runtime_state.clab_runtime(commands.load_topology(path))), interface
+    if provider == "libvirt":
+        try:
+            transformed = (await runner.create(path))["snapshot"]
+        except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
+            raise HTTPException(409, f"Cannot read the deployed lab: {exc}") from exc
+        lab_name = str(transformed.get("name") or Path(path).parent.name)
+        domain = str(info.get("provider_name") or libvirt.domain_name(lab_name, node))
+        vm_node = dict((transformed.get("nodes") or {}).get(node) or {})
+        try:
+            return 0, await libvirt.capture_interface(domain, vm_node, interface)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+    raise HTTPException(
+        409, f"{node} is an external device: capture on the device itself or on the network it is attached to."
+    )
 
 
 @router.get("/capture/pcap")
@@ -133,14 +155,13 @@ async def capture_pcap(
     """Capture on one node interface and stream it as a pcap file."""
     if not _IFACE_RE.fullmatch(interface):
         raise HTTPException(400, f"invalid interface name {interface!r}")
-    container, preferred_runtime = await _running_container(_topology_path(sessionId, topology), node)
-    pid = await _container_pid(container, preferred_runtime)
+    pid, capture_on = await _capture_target(_topology_path(sessionId, topology), node, interface)
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-c",
         _CAPTURE_SCRIPT,
         str(pid),
-        interface,
+        capture_on,
         str(seconds or MAX_SECONDS),
         str(maxPackets),
         stdout=asyncio.subprocess.PIPE,

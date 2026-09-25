@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from services.model.topology import Topology
-from services.netlab import runner
+from services.netlab import libvirt, runner
 
 _counter_cache: dict[tuple[str, str], tuple[float, int, int, int, int, int]] = {}
 
@@ -113,6 +113,28 @@ def _interface(container: str, raw: dict[str, Any], now: float) -> dict[str, Any
     }
 
 
+async def _transformed_vm_nodes(topology_path: str | Path, nodes_status: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Transformed nodes of the running libvirt VMs — their interface list is
+    what maps each VM NIC to a netlab interface name. Read only when the lab
+    has a running VM; ``runner.create`` is hash-cached and reads the deployed
+    snapshot while the lab is up."""
+    running_vms = [
+        name
+        for name, info in nodes_status.items()
+        if isinstance(info, dict)
+        and info.get("provider") == "libvirt"
+        and runner.normalize_node_state(info.get("status")) == "running"
+    ]
+    if not running_vms:
+        return {}
+    try:
+        transformed = (await runner.create(topology_path))["snapshot"]
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return {}
+    nodes = transformed.get("nodes") if isinstance(transformed.get("nodes"), dict) else {}
+    return {name: nodes[name] for name in running_vms if isinstance(nodes.get(name), dict)}
+
+
 async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, Any]]:
     status = await runner.status_for(topology_path)
     lab = status if isinstance(status, dict) and "nodes" in status else {}
@@ -120,6 +142,7 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
     if not isinstance(nodes_status, dict):
         return []
     preferred_runtime = clab_runtime(topo)
+    vm_nodes = await _transformed_vm_nodes(topology_path, nodes_status)
 
     async def one(node_name: str, info: dict[str, Any]) -> dict[str, Any]:
         provider_name = str(info.get("provider_name") or node_name)
@@ -131,6 +154,8 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
         if info.get("provider") == "clab" and state == "running":
             raw_interfaces, qdisc_text = await runner.container_link_snapshot(provider_name, preferred_runtime)
             netem = parse_netem(qdisc_text)
+        elif info.get("provider") == "libvirt" and state == "running" and node_name in vm_nodes:
+            raw_interfaces = await libvirt.runtime_interfaces(provider_name, vm_nodes[node_name])
         now = time.monotonic()
         source_node = topo.node(node_name)
         return {
@@ -142,6 +167,7 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
             "image": str(info.get("image") or ""),
             "ipv4Address": str(info.get("mgmt") or ""),
             "ipv6Address": "",
+            "provider": str(info.get("provider") or ""),
             "interfaces": [
                 {**_interface(provider_name, item, now), "netemState": netem.get(str(item.get("ifname") or ""))}
                 for item in raw_interfaces

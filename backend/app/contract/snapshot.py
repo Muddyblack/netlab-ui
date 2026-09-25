@@ -30,7 +30,7 @@ from services import events
 from services.model import serialize
 from services.model.edge_ids import EdgeIdCounter, edge_id
 from services.model.topology import Topology
-from services.netlab import runner
+from services.netlab import projection, runner
 from services.netlab import validation as validation_store
 
 # Where a canvas projection came from — and, for the previews, why it is only an
@@ -51,6 +51,9 @@ ProjectionSource = Literal[
     # Straight off the netlab model, with no real projection to blend onto —
     # a lab that has never been transformed, or netlab not installed at all.
     "model",
+    # The real `netlab create` transform of a lab with libvirt VMs or external
+    # devices (no clab.yml, or one listing only the containers of a mixed lab).
+    "transform",
 ]
 
 
@@ -149,9 +152,7 @@ def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list
                 # projection instead of the model-derived preview this used to
                 # fall back to.
                 result = await runner.create(topology_path, isolated=True)
-                clab = result.get("clab")
-                nodes, edges = _nodes_edges_from_clab(clab) if clab else fallback
-                source: ProjectionSource = "clab" if clab else "failed-preview"
+                nodes, edges, source = _projection_from_create(result, fallback)
                 _transform_errors.pop(topology_path, None)
             except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
                 # Record the failure before choosing a fallback projection.
@@ -212,6 +213,26 @@ def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list
             events.hub.publish({"type": "transform", "path": topology_path})
 
     _transform_tasks[topology_path] = asyncio.create_task(_work())
+
+
+def _projection_from_create(
+    result: dict[str, Any], fallback: tuple[list[dict], list[dict]]
+) -> tuple[list[dict], list[dict], ProjectionSource]:
+    """Canvas elements from a successful ``netlab create``.
+
+    ``clab.yml`` is authoritative for an all-container lab. A lab with any
+    libvirt VM or external device is drawn from the transformed topology
+    instead: it has no clab.yml at all, or (mixed lab) one that lists only
+    its containers."""
+    transformed = result.get("snapshot")
+    if isinstance(transformed, dict) and projection.providers_in(transformed) - {"clab"}:
+        nodes, edges = _nodes_edges_from_clab(projection.from_transformed(transformed))
+        return nodes, edges, "transform"
+    clab = result.get("clab")
+    if clab:
+        nodes, edges = _nodes_edges_from_clab(clab)
+        return nodes, edges, "clab"
+    return fallback[0], fallback[1], "failed-preview"
 
 
 def _nodes_edges_from_clab(clab: dict[str, Any]) -> tuple[list[dict], list[dict]]:
@@ -556,6 +577,12 @@ async def build(
             or node.get("kind")
             or "router"
         )
+        # Which provider runs the node (containerlab, libvirt VM, external
+        # device): decides which runtime actions the UI can offer for it.
+        node_provider = (source_node.attrs.get("provider") if source_node else None) or topo.provider
+        if node.get("kind") == "bridge":
+            node_provider = "bridge"
+        node["data"].setdefault("extraData", {})["netlabProvider"] = str(node_provider or "clab")
         saved_icon = node_view.get(node_id, {}).get("icon")
         if saved_icon:
             node["data"]["topoViewerRole"] = saved_icon

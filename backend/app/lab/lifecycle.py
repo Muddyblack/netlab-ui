@@ -37,7 +37,7 @@ from app.contract.responses import (
 )
 from app.lab import common
 from services import lab_limits, owners
-from services.netlab import config_snapshots, deploy_diff, deployment, multilab, runner
+from services.netlab import config_snapshots, deploy_diff, deployment, libvirt, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
@@ -191,15 +191,37 @@ async def _running_node_info(session_id: str, node: str) -> tuple[str, dict[str,
     return path, info
 
 
-def _require_clab_node(node: str, info: dict[str, Any]) -> str:
+def _require_clab_node(node: str, info: dict[str, Any], what: str = "this action") -> str:
     """Container name for a clab-provided node; 409 for other providers."""
     if info.get("provider") != "clab":
-        raise HTTPException(
-            409,
-            f"Node {node!r} runs under provider {info.get('provider')!r}; "
-            "this action is only supported for containerlab nodes",
-        )
+        raise HTTPException(409, _provider_limit(node, info, what))
     return str(info.get("provider_name") or node)
+
+
+def _provider_limit(node: str, info: dict[str, Any], what: str) -> str:
+    """Why ``what`` can't be done on this node, in the user's terms."""
+    provider = str(info.get("provider") or "unknown")
+    if provider in {"external", "unmanaged"}:
+        return (
+            f"{node} is an external device: netlab configures it but doesn't control its power or links, "
+            f"so {what} isn't possible from here."
+        )
+    if provider == "libvirt":
+        return f"{node} is a libvirt VM: {what} is available for containerlab nodes only."
+    return f"{node} runs under the {provider} provider: {what} is available for containerlab nodes only."
+
+
+async def _vm_target(path: str, node: str, info: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """(libvirt domain, transformed node) for a running VM. The transformed
+    node comes from the deployed snapshot (``netlab inspect`` while locked),
+    which is what the running VM was built from."""
+    try:
+        transformed = (await runner.create(path))["snapshot"]
+    except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
+        raise HTTPException(409, f"Cannot read the deployed lab: {exc}") from exc
+    lab_name = str(transformed.get("name") or Path(path).parent.name)
+    domain = str(info.get("provider_name") or libvirt.domain_name(lab_name, node))
+    return domain, dict((transformed.get("nodes") or {}).get(node) or {})
 
 
 @router.post("/node-action", response_model=CommandResult)
@@ -219,7 +241,11 @@ async def lab_node_action(body: NodeAction):
         return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
     from app.contract import commands
 
-    container = _require_clab_node(body.node, info)
+    if info.get("provider") == "libvirt":
+        domain, _node = await _vm_target(path, body.node, info)
+        result = await libvirt.node_action(domain, body.action)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+    container = _require_clab_node(body.node, info, f"{body.action} of a single node")
     topo = commands.load_topology(path)
     result = await runner.container_action(
         container,
@@ -246,7 +272,7 @@ async def lab_link_impairment(body: LinkImpairment):
     """Apply (or clear, when every field is empty) netem impairments on one
     node interface via `containerlab tools netem set`."""
     _, info = await _running_node_info(body.sessionId, body.node)
-    container = _require_clab_node(body.node, info)
+    container = _require_clab_node(body.node, info, "link impairment")
     result = await runner.netem_set(
         container,
         body.interface,
@@ -278,7 +304,11 @@ async def lab_link_state(body: LinkStateRequest):
     fault. The peer sees carrier loss, so routing protocols react as they
     would to a real link failure."""
     path, info = await _running_node_info(body.sessionId, body.node)
-    container = _require_clab_node(body.node, info)
+    if info.get("provider") == "libvirt":
+        domain, vm_node = await _vm_target(path, body.node, info)
+        result = await libvirt.set_link(domain, vm_node, body.interface, body.up)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+    container = _require_clab_node(body.node, info, "taking a link down")
     from app.contract import commands
 
     result = await runner.set_interface_state(

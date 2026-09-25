@@ -126,6 +126,8 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 - **Explorer action ids choose their clab-ui menu group by substring** (`ACTION_GROUP_RULES`: `.graph.`, `copy`, `inspect`, `shell`, `addtoworkspace`, …). An id matching nothing lands in "Other".
 - **netlab's transformed topology stores `validate:` as a list** of tests with a `name` key, not the YAML's mapping. The same goes for other normalized blocks: read both forms.
 - **netlab's short group form (`core: [r1, r2]`) is a member list**, and `Group.short_form` keeps it that way on save.
+- **Providers are per node** (`node.provider`, else the lab's; netlab reports unmanaged devices as `unmanaged`). A lab with any non-clab node gets its canvas from `services/netlab/projection.py` (source `"transform"`), because `clab.yml` lists containers only. Gate runtime actions on the node's provider in the backend (`lifecycle._require_clab_node` / `_provider_limit`) with a message the user can act on, and keep `frontend/src/netlabProviders.ts` (the support table) and the README table in step.
+- **libvirt NICs map to netlab interfaces by order** (`services/netlab/libvirt.py`): `virsh domiflist` lists the management NIC first, then one NIC per non-virtual, non-loopback interface. p2p links are UDP tunnels (no host tap, target `-`); only LAN links have a `vnetN` tap. Tap counters are the host's view, so rx/tx are swapped. No KVM in CI: test with the fake `virsh` in `tests/test_libvirt.py`.
 
 ## Key rules
 

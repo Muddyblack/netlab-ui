@@ -15,6 +15,7 @@ import { api, type ExecMode, type ExecScript, type ExecTargets } from "../../api
 import { suggestCommands } from "./suggestions";
 import { downloadText, scriptFromRuns, transcriptMarkdown, type ExecRun } from "./model";
 import { RunResults } from "./RunResults";
+import { providerLabel } from "../../netlabProviders";
 
 const HISTORY_KEY = "netlab.multiExec.history";
 const MAX_HISTORY = 50;
@@ -38,7 +39,7 @@ function targetOptions(targets: ExecTargets | null): TargetOption[] {
   return [
     { value: "all", label: `all nodes (${running}/${targets.nodes.length} running)`, kind: "all" },
     ...Object.keys(targets.groups).map((name) => ({ value: name, label: `group ${name}`, kind: "group" as const })),
-    ...targets.nodes.map((node) => ({ value: node.name, label: node.device ? `${node.name} · ${node.device}` : node.name, kind: "node" as const, running: node.running })),
+    ...targets.nodes.map((node) => ({ value: node.name, label: [node.name, node.device, providerLabel(node.provider)].filter(Boolean).join(" · "), kind: "node" as const, running: node.running })),
   ];
 }
 

@@ -10,7 +10,7 @@ def _session(tmp_path, monkeypatch):
     path.write_text("name: t\nnodes: [r1, sw]\n")
 
     async def status_for(_path):
-        return {"nodes": {"r1": {"provider": "clab", "provider_name": "clab-t-r1"}, "sw": {"provider": "libvirt"}}}
+        return {"nodes": {"r1": {"provider": "clab", "provider_name": "clab-t-r1"}, "sw": {"provider": "external"}}}
 
     monkeypatch.setattr(runner, "status_for", status_for)
     return store.create(str(path)).id

@@ -360,6 +360,37 @@ dialog with three ways to capture:
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
 
+### Providers: containerlab, libvirt VMs, external devices
+
+netlab has three providers, and every lab can mix them (`provider:` on a node
+overrides the lab's). The UI works with all three. A lab without containers
+gets its canvas straight from netlab's transformed topology, so VMs show
+netlab's real interface names (`Ethernet1`, `GigabitEthernet0/1`). Settings →
+Environment has the same table as below; hover a mark there for the reason.
+
+| Feature | containerlab | libvirt VMs | external devices |
+|---|:-:|:-:|:-:|
+| Draw/edit, validate, preview configs, deploy diff | ✅ | ✅ | ✅ |
+| Deploy / destroy | ✅ | ✅ ¹ | ◐ configs only |
+| Web shell, run on many nodes, running configs | ✅ | ✅ (SSH) | ✅ |
+| Start / stop / restart / pause a node | ✅ | ✅ `virsh` | — |
+| Link down / up | ✅ | ✅ `domif-setlink` | — |
+| Live traffic and errors | ✅ | ◐ ² | — |
+| Packet capture | ✅ | ◐ ² | — |
+| Link impairment (delay, loss, rate) | ✅ | — ³ | — |
+| Node logs | ✅ | — | — |
+| Image manager | ✅ | — (Vagrant boxes) | — |
+
+¹ Needs KVM, libvirt and Vagrant on the backend host. The container image has
+none of them; run the backend natively, or use the UI-only image with a host
+netlab install.
+² Link state works on every VM link. Counters and capture work on LAN links
+only: netlab builds point-to-point VM links as UDP tunnels with no host
+interface (the same limit `netlab capture` has).
+³ `netlab tc` on the host covers LAN links.
+
+Where something isn't possible for a node, the UI says why instead of failing.
+
 ## 🤖 AI Assistant (experimental, optional)
 
 > [!WARNING]

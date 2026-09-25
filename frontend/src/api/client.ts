@@ -86,7 +86,7 @@ export interface NetlabProjection {
    * projection to blend onto. The *-preview values are approximations, and say
    * why the real transform could not run.
    */
-  source: "clab" | "blended" | "model" | "locked-preview" | "failed-preview";
+  source: "clab" | "blended" | "model" | "locked-preview" | "failed-preview" | "transform";
   /** A background `netlab create` is running; its result arrives via SSE. */
   pending: boolean;
   /** The last `netlab create` failure for the YAML currently on disk. */
