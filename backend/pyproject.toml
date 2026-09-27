@@ -25,7 +25,8 @@ netlab = [
 ]
 # See NETLAB_APP_ASSISTANT in services/assistant — feature is absent without this.
 assistant = [
-    "mcp>=1.9",
+    # mcp 2.x renamed FastMCP → MCPServer; services/assistant/mcp_server.py targets 1.x.
+    "mcp>=1.9,<2",
     "claude-agent-sdk>=0.1",
     "google-genai>=1.0",
     "openai>=1.99",

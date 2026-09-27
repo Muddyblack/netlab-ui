@@ -76,6 +76,23 @@ class NetlabEnvironment(BaseModel):
     libvirt: bool = False
 
 
+class ContainerCheck(BaseModel):
+    id: str
+    ok: bool
+    severity: Literal["error", "warning"]
+    title: str
+    detail: str
+    fix: str | None = None
+
+
+class ContainerDiagnostics(BaseModel):
+    """Self-inspection of the containerized UI's `docker run` setup."""
+
+    inContainer: bool
+    inspected: bool
+    checks: list[ContainerCheck] = []
+
+
 class SetNetlabPathRequest(BaseModel):
     path: str | None = None
 
@@ -108,6 +125,21 @@ class DeployDiffResult(BaseModel):
     baselineExists: bool
     recordedAt: str | None = None
     diff: str = ""
+
+
+class InstanceConflict(BaseModel):
+    instanceId: str
+    directory: str
+    name: str | None = None
+
+
+class DeployPlan(BaseModel):
+    """What `netlab up` would collide with (see services/netlab/multilab.py)."""
+
+    instanceId: str
+    configured: bool
+    conflict: InstanceConflict | None = None
+    suggestedMultilabId: int | None = None
 
 
 class RuntimeInterfaceStats(BaseModel):

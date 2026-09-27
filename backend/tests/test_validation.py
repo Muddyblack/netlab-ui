@@ -46,7 +46,7 @@ def test_preflight_returns_entity_mapped_transform_warnings(tmp_path: Path, monk
     topology = tmp_path / "lab.yml"
     topology.write_text("name: lab\nnodes: [r1]\n")
 
-    async def fake_create(_path):
+    async def fake_create(_path, **_kwargs):
         return {"stdout": "WARNING node r1 uses a default value\n", "stderr": ""}
 
     monkeypatch.setattr(lifecycle.common, "session_path", lambda _session_id: str(topology))
@@ -63,7 +63,7 @@ def test_preflight_never_hides_unclassified_transform_failure(tmp_path: Path, mo
     topology = tmp_path / "lab.yml"
     topology.write_text("name: lab\nnodes: [r1]\n")
 
-    async def fake_create(_path):
+    async def fake_create(_path, **_kwargs):
         raise NetlabError(["netlab", "create"], 2, "IncorrectValue in nodes.r1.device")
 
     monkeypatch.setattr(lifecycle.common, "session_path", lambda _session_id: str(topology))
@@ -80,3 +80,28 @@ def test_preflight_never_hides_unclassified_transform_failure(tmp_path: Path, mo
             "entityId": None,
         }
     ]
+
+
+def test_preflight_validates_edited_yaml_in_isolation_on_deployed_lab(tmp_path: Path, monkeypatch):
+    """On a deployed lab the non-isolated transform is `netlab inspect`, whose
+    stdout is the whole topology as JSON; scanning that for diagnostics turned
+    schema strings like `"type": "error"` into bogus deploy-review errors."""
+    topology = tmp_path / "lab.yml"
+    topology.write_text("name: lab\nnodes: [r1]\n")
+    (tmp_path / "netlab.lock").write_text("")
+    calls = []
+
+    async def fake_create(_path, **kwargs):
+        calls.append(kwargs)
+        if not kwargs.get("isolated"):
+            return {"stdout": '{"defaults": {"attributes": {"type": "error", "fail": "str"}}}', "stderr": ""}
+        return {"stdout": "Created provider configuration file: clab.yml\n", "stderr": ""}
+
+    monkeypatch.setattr(lifecycle.common, "session_path", lambda _session_id: str(topology))
+    monkeypatch.setattr(lifecycle.runner, "create", fake_create)
+
+    result = asyncio.run(lifecycle.lab_preflight(lifecycle.LabAction(sessionId="test")))
+
+    assert calls == [{"isolated": True}]
+    assert result["code"] == 0
+    assert result["issues"] == []

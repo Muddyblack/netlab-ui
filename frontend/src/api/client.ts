@@ -15,6 +15,8 @@ import { getApiBase } from "./endpoint";
 type Schemas = components["schemas"];
 
 export type HealthStatus = Schemas["HealthStatus"];
+export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
+export type ContainerCheck = Schemas["ContainerCheck"];
 export type LabFileEntry = Schemas["LabFileEntry"];
 export type LabInstance = Schemas["LabInstance"];
 export type CommandResult = Schemas["CommandResult"];
@@ -74,6 +76,7 @@ export type MultiserverVxlan = Schemas["MultiserverVxlan"];
 export type ConfigPreviewResult = Schemas["ConfigPreviewResult"];
 export type NetlabLinkResult = Schemas["NetlabLinkResult"];
 export type DeployDiffResult = Schemas["DeployDiffResult"];
+export type DeployPlan = Schemas["DeployPlan"];
 export type DeploymentOverview = Schemas["DeploymentOverview"];
 export type DeploymentNodeDetail = Schemas["DeploymentNodeDetail"];
 export type DeploymentLog = Schemas["DeploymentLog"];
@@ -170,6 +173,9 @@ export const api = {
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
 
+  getContainerDiagnostics: (refresh = false) =>
+    http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
+
   getNetlabEnvironment: () =>
     http<NetlabEnvironment>("/api/environment/netlab", { cache: "no-store" }, 1, 15000),
 
@@ -258,6 +264,9 @@ export const api = {
       1,
       120000
     ),
+
+  getDeployPlan: (sessionId: string) =>
+    http<DeployPlan>(`/api/lab/deploy-plan?sessionId=${encodeURIComponent(sessionId)}`),
 
   getDeployDiff: (sessionId: string) =>
     http<DeployDiffResult>(`/api/lab/deploy-diff?sessionId=${encodeURIComponent(sessionId)}`),

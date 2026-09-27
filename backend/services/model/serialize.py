@@ -13,10 +13,14 @@ therefore intentionally drops ``topology.templates``.
 
 from __future__ import annotations
 
+import copy
+import difflib
 import io
+import json
 from typing import Any
 
 from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from .topology import Group, Link, Node, Topology
 
@@ -88,7 +92,12 @@ def from_yaml(text: str) -> Topology:
     # rest of the process — stamping "%YAML 1.1" onto unrelated topologies
     # that never had it. Reset it after every load so dumps stay directive-free.
     _yaml.version = None
-    return from_dict(data)
+    topo = from_dict(data)
+    if isinstance(data, CommentedMap):
+        # A private copy: the model shares nested objects with ``data`` and may
+        # mutate them, while the merge in to_yaml needs the file as loaded.
+        topo.source = copy.deepcopy(data)
+    return topo
 
 
 def _parse_nodes(raw: Any) -> list[Node]:
@@ -324,6 +333,88 @@ def _emit_link(link: Link) -> Any:
 
 
 def to_yaml(topo: Topology) -> str:
+    data: Any = to_dict(topo)
+    if isinstance(topo.source, CommentedMap):
+        # Merge into the document the model was loaded from: only what changed
+        # is rewritten, so comments, flow-style lists and key order elsewhere
+        # in the file survive a UI edit.
+        doc = copy.deepcopy(topo.source)
+        _merge_map(doc, data, top_level=True)
+        data = doc
     buf = io.StringIO()
-    _yaml.dump(to_dict(topo), buf)
+    _yaml.dump(data, buf)
     return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# merge: apply a freshly emitted dict onto the loaded ruamel document
+# --------------------------------------------------------------------------- #
+
+
+def _equal(a: Any, b: Any) -> bool:
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    try:
+        return bool(a == b)
+    except Exception:  # noqa: BLE001 — exotic scalar types: treat as changed
+        return False
+
+
+def _item_key(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, default=str)
+
+
+def _merge_value(container: Any, key: Any, old: Any, new: Any) -> None:
+    if _equal(old, new):
+        return
+    if isinstance(old, CommentedMap) and isinstance(new, dict):
+        _merge_map(old, new)
+    elif isinstance(old, CommentedSeq) and isinstance(new, list):
+        _merge_seq(old, new)
+    else:
+        container[key] = new
+
+
+def _merge_map(doc: CommentedMap, new: dict[str, Any], top_level: bool = False) -> None:
+    for key in [k for k in doc if k not in new]:
+        del doc[key]
+    for key, value in new.items():
+        if key in doc:
+            old = doc[key]
+            # `nodes: [r1, r2]` stays a list while no node has attributes.
+            if (
+                top_level
+                and key == "nodes"
+                and isinstance(old, CommentedSeq)
+                and isinstance(value, dict)
+                and all(isinstance(item, str) for item in old)
+                and all(not body for body in value.values())
+            ):
+                value = list(value)
+            _merge_value(doc, key, old, value)
+        else:
+            doc[key] = value
+    if top_level:
+        # Keep to_dict's canonical top-level order (plugin/module before the
+        # blocks that use them). Comments ride along: ruamel attaches them to
+        # their key, not to a position.
+        for key in list(new):
+            doc.move_to_end(key)
+
+
+def _merge_seq(doc: CommentedSeq, new: list[Any]) -> None:
+    matcher = difflib.SequenceMatcher(
+        a=[_item_key(item) for item in doc], b=[_item_key(item) for item in new], autojunk=False
+    )
+    # Back to front, so earlier indices stay valid while editing in place.
+    for tag, i1, i2, j1, j2 in reversed(matcher.get_opcodes()):
+        if tag == "equal":
+            continue
+        if tag == "replace" and i2 - i1 == j2 - j1:
+            for offset in range(i2 - i1):
+                _merge_value(doc, i1 + offset, doc[i1 + offset], new[j1 + offset])
+            continue
+        for index in range(i2 - 1, i1 - 1, -1):
+            del doc[index]
+        for offset, item in enumerate(new[j1:j2]):
+            doc.insert(i1 + offset, item)

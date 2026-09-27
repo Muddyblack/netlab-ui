@@ -1,20 +1,27 @@
 import { createApiClabUiHost as officialCreateApiClabUiHost } from "@containerlab/clab-ui/host";
 import type { ClabUiHost, ClabUiTopoViewerHost, ClabUiTopoViewerEvent, HostRuntimeContainer, TopoViewerLifecycleAction, TopoViewerNodeAction, TopoViewerSvgExportPayload } from "@containerlab/clab-ui/host";
 import type { DeploymentProgress } from "../components/CanvasDeploymentProgress";
-import type { LifecycleCompletion } from "../hooks/useLabLifecycle";
+import type { DeployDecision, LifecycleCompletion } from "../hooks/useLabLifecycle";
 import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
 import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
+import { runningLabMatches } from "./runningMatch";
+import type { RunningLabsStatus } from "../hooks/useAppData";
 
 export interface AppClabUiHost extends ClabUiHost {
+  /** Opens a backend session. Does not make it the host's active session —
+   * helper sessions (explorer actions on a lab that isn't open) must not
+   * redirect canvas callbacks; call `activateSession` for the open tab. */
   createSession(topologyPath: string): Promise<{ sessionId: string }>;
+  /** Marks `sessionId` as the one the canvas is showing (or clears it). */
+  activateSession(sessionId: string | null): void;
   disposeSession(sessionId: string): Promise<void>;
   createLab?: (labName: string) => Promise<{ topologyRef: LabFileEntry["topologyRef"] }>;
   listLabFiles?: () => Promise<LabFileEntry[]>;
   sessionId: string | null;
   onNodeAction?: (action: string, nodeName: string) => void;
-  onBeforeDeploy?: () => Promise<boolean>;
+  onBeforeDeploy?: (sessionId: string) => Promise<DeployDecision>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
   setLifecycleCancel?(cancel: (() => void) | null): void;
@@ -87,16 +94,17 @@ type BackendLifecycleAction = "up" | "down" | "initial" | "restart";
 // containers were never created, and every later `initial` failed with
 // "No such container". netlab regenerates node_files on `up`, so mapping
 // the cleanup variants onto the same base action is the correct intent.
-function mapLifecycleAction(action: TopoViewerLifecycleAction): BackendLifecycleAction | null {
+function mapLifecycleAction(action: TopoViewerLifecycleAction, labDeployed: boolean): BackendLifecycleAction | null {
   if (action === "deployLab" || action === "deployLabCleanup" || action === "redeployLab" || action === "redeployLabCleanup" || action === "startLab") {
     return "up";
   }
   if (action === "applyLab") {
-    // clab-ui uses "apply" for pushing the generated configuration to an
-    // already-running lab. The equivalent netlab lifecycle command is
-    // `netlab initial`; treating this as an unknown action used to emit an
-    // immediate false success without ever contacting the backend.
-    return "initial";
+    // clab-ui's primary ▶ button is always "Apply" — containerlab's
+    // deploy-or-reconcile. For netlab that is `netlab up` while the lab is not
+    // running (mapping it to `initial` there just failed with "No such
+    // container"), and `netlab initial` — re-push the generated configuration
+    // — once it is.
+    return labDeployed ? "initial" : "up";
   }
   if (action === "destroyLab" || action === "destroyLabCleanup" || action === "stopLab") return "down";
   if (action === "restartLab") return "restart";
@@ -152,6 +160,8 @@ export function createApiClabUiHost(options?: {
 
   const subscribers = new Set<(event: ClabUiTopoViewerEvent) => void>();
   let currentSessionId: string | null = null;
+  // Topology path of every session this host opened (for per-lab state).
+  const sessionPaths = new Map<string, string>();
   let runtimeContainers: HostRuntimeContainer[] = [];
   let activeLifecycleCancel: (() => void) | null = null;
 
@@ -233,15 +243,21 @@ export function createApiClabUiHost(options?: {
   // flips — clab-ui's setMode clears editing state (open dialogs/panels), so
   // firing it on every identical SSE tick would close dialogs the user has
   // open (e.g. the "Create Node Template" modal) "after a short while".
+  //
+  // The state is the *canvas lab's*: another lab running on the host must not
+  // make an undeployed topology look deployed (that disabled Deploy entries
+  // and turned ▶ Apply into a re-push to containers that do not exist).
   let lastDeploymentState: "deployed" | "undeployed" | null = null;
-  api.subscribeStatus((status) => {
-    let nodeCount = 0;
-    if (status && typeof status === "object") {
-      for (const lab of Object.values(status as Record<string, { nodes?: object }>)) {
-        nodeCount += Object.keys(lab?.nodes ?? {}).length;
-      }
-    }
-    const deploymentState: "deployed" | "undeployed" = nodeCount > 0 ? "deployed" : "undeployed";
+  let lastStatus: RunningLabsStatus | null = null;
+  const isActiveLabDeployed = (): boolean => {
+    const path = currentSessionId ? sessionPaths.get(currentSessionId) : undefined;
+    if (!path || !lastStatus) return false;
+    return Object.values(lastStatus).some((info) =>
+      runningLabMatches(info, path) && Object.keys(info?.nodes ?? {}).length > 0
+    );
+  };
+  const emitDeploymentState = () => {
+    const deploymentState: "deployed" | "undeployed" = isActiveLabDeployed() ? "deployed" : "undeployed";
     if (deploymentState === lastDeploymentState) return;
     lastDeploymentState = deploymentState;
     subscribers.forEach((s) =>
@@ -251,13 +267,17 @@ export function createApiClabUiHost(options?: {
         deploymentState,
       })
     );
+  };
+  api.subscribeStatus((status) => {
+    lastStatus = status && typeof status === "object" ? (status as RunningLabsStatus) : null;
+    emitDeploymentState();
   });
 
   const topoViewerHost: ClabUiTopoViewerHost = {
     runLifecycle(action: TopoViewerLifecycleAction) {
       if (!currentSessionId) return;
 
-      const backendAction = mapLifecycleAction(action);
+      const backendAction = mapLifecycleAction(action, isActiveLabDeployed());
       if (!backendAction) {
         subscribers.forEach((s) => s({
           type: "lifecycleStatus",
@@ -306,12 +326,14 @@ export function createApiClabUiHost(options?: {
         activeLifecycleCancel?.();
         activeLifecycleCancel = cancel;
         try {
+          let multilabId: number | undefined;
           if (backendAction === "up" && resultHost.onBeforeDeploy) {
-            const proceed = await resultHost.onBeforeDeploy();
-            if (!proceed) {
+            const decision = await resultHost.onBeforeDeploy(sessionId);
+            if (!decision.proceed) {
               cancel();
               return;
             }
+            multilabId = decision.multilabId;
           }
           if (settled) return;
           // Emit this after preflight approval because approval temporarily
@@ -320,7 +342,7 @@ export function createApiClabUiHost(options?: {
           const res = await safeFetch(`${BASE}/api/lab/lifecycle/stream`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionId, action: backendAction }),
+            body: JSON.stringify({ sessionId, action: backendAction, multilabId }),
             signal: controller.signal,
           });
           if (!res.ok || !res.body) {
@@ -535,12 +557,18 @@ export function createApiClabUiHost(options?: {
       });
       if (!res.ok) throw new Error(`createSession failed: ${res.status}`);
       const data = (await res.json()) as { sessionId: string };
-      currentSessionId = data.sessionId;
-      resultHost.sessionId = data.sessionId;
-
-      try {
-        const cnRes = await safeFetch(`${BASE}/api/topology/custom-nodes?sessionId=${data.sessionId}`);
-        if (cnRes.ok) {
+      sessionPaths.set(data.sessionId, topologyPath);
+      return data;
+    },
+    activateSession(sessionId: string | null) {
+      if (currentSessionId === sessionId) return;
+      currentSessionId = sessionId;
+      resultHost.sessionId = sessionId;
+      emitDeploymentState();
+      if (!sessionId) return;
+      safeFetch(`${BASE}/api/topology/custom-nodes?sessionId=${sessionId}`)
+        .then(async (cnRes) => {
+          if (!cnRes.ok || currentSessionId !== sessionId) return;
           const cnData = await cnRes.json();
           subscribers.forEach((s) =>
             s({
@@ -549,20 +577,19 @@ export function createApiClabUiHost(options?: {
               defaultNode: cnData.defaultNode || "",
             })
           );
-        }
-      } catch (err) {
-        console.error("Failed to load custom nodes on session creation:", err);
-      }
-
-      return data;
+        })
+        .catch((err) => console.error("Failed to load custom nodes on session activation:", err));
     },
     async disposeSession(sessionId: string) {
+      if (currentSessionId === sessionId) {
+        currentSessionId = null;
+        resultHost.sessionId = null;
+      }
+      sessionPaths.delete(sessionId);
       const res = await safeFetch(`${BASE}/api/topology/sessions/${sessionId}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`disposeSession failed: ${res.status}`);
-      currentSessionId = null;
-      resultHost.sessionId = null;
     },
     emitTopoViewerEvent(event: ClabUiTopoViewerEvent) {
       subscribers.forEach((s) => s(event));

@@ -977,6 +977,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/deploy-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lab Deploy Plan
+         * @description Would `netlab up` collide with a lab instance running elsewhere?
+         */
+        get: operations["lab_deploy_plan_api_lab_deploy_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/lifecycle/stream": {
         parameters: {
             query?: never;
@@ -1610,6 +1630,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment/netlab": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Netlab Environment */
+        get: operations["get_netlab_environment_api_environment_netlab_get"];
+        /** Set Netlab Path */
+        put: operations["set_netlab_path_api_environment_netlab_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/container": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Container Diagnostics */
+        get: operations["get_container_diagnostics_api_environment_container_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assistant/capabilities": {
         parameters: {
             query?: never;
@@ -2123,6 +2178,8 @@ export interface components {
              * @default false
              */
             takesModel: boolean;
+            /** Apikeyurl */
+            apiKeyUrl?: string | null;
         };
         /**
          * AssistantProviderSettings
@@ -2359,6 +2416,39 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** ContainerCheck */
+        ContainerCheck: {
+            /** Id */
+            id: string;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "error" | "warning";
+            /** Title */
+            title: string;
+            /** Detail */
+            detail: string;
+            /** Fix */
+            fix?: string | null;
+        };
+        /**
+         * ContainerDiagnostics
+         * @description Self-inspection of the containerized UI's `docker run` setup.
+         */
+        ContainerDiagnostics: {
+            /** Incontainer */
+            inContainer: boolean;
+            /** Inspected */
+            inspected: boolean;
+            /**
+             * Checks
+             * @default []
+             */
+            checks: components["schemas"]["ContainerCheck"][];
+        };
         /** ControlPlaneLens */
         ControlPlaneLens: {
             /**
@@ -2450,6 +2540,19 @@ export interface components {
              * @default
              */
             diff: string;
+        };
+        /**
+         * DeployPlan
+         * @description What `netlab up` would collide with (see services/netlab/multilab.py).
+         */
+        DeployPlan: {
+            /** Instanceid */
+            instanceId: string;
+            /** Configured */
+            configured: boolean;
+            conflict?: components["schemas"]["InstanceConflict"] | null;
+            /** Suggestedmultilabid */
+            suggestedMultilabId?: number | null;
         };
         /** DeploymentEvent */
         DeploymentEvent: {
@@ -2973,6 +3076,15 @@ export interface components {
             /** Output */
             output?: string | null;
         };
+        /** InstanceConflict */
+        InstanceConflict: {
+            /** Instanceid */
+            instanceId: string;
+            /** Directory */
+            directory: string;
+            /** Name */
+            name?: string | null;
+        };
         /** InstantiateRequest */
         InstantiateRequest: {
             /** Sessionid */
@@ -3388,6 +3500,8 @@ export interface components {
             sessionId: string;
             /** Action */
             action: string;
+            /** Multilabid */
+            multilabId?: number | null;
         };
         /** LinkImpairment */
         LinkImpairment: {
@@ -3536,6 +3650,48 @@ export interface components {
             category: "required" | "optional" | "ansible";
             /** Installed */
             installed: boolean;
+        };
+        /**
+         * NetlabEnvironment
+         * @description Where netlab resolved to and how — drives the Settings UI and Info tab.
+         */
+        NetlabEnvironment: {
+            /** Configured */
+            configured?: string | null;
+            /** Source */
+            source: string;
+            /** Command */
+            command: string;
+            /** Binpath */
+            binPath?: string | null;
+            /** Found */
+            found: boolean;
+            /** Bindir */
+            binDir?: string | null;
+            /** Targetpython */
+            targetPython?: string | null;
+            /** Inbackendvenv */
+            inBackendVenv: boolean;
+            /** Envvar */
+            envVar: string;
+            /** Configpath */
+            configPath: string;
+            /** Netlabversion */
+            netlabVersion?: string | null;
+            /** Netlabversionsupported */
+            netlabVersionSupported?: boolean | null;
+            /** Minnetlabversion */
+            minNetlabVersion?: string | null;
+            /**
+             * Containerlab
+             * @default false
+             */
+            containerlab: boolean;
+            /**
+             * Libvirt
+             * @default false
+             */
+            libvirt: boolean;
         };
         /** NetlabLinkPut */
         NetlabLinkPut: {
@@ -4453,6 +4609,11 @@ export interface components {
              * @default []
              */
             vlans: string[];
+        };
+        /** SetNetlabPathRequest */
+        SetNetlabPathRequest: {
+            /** Path */
+            path?: string | null;
         };
         /** SnapshotRequest */
         SnapshotRequest: {
@@ -6709,6 +6870,37 @@ export interface operations {
             };
         };
     };
+    lab_deploy_plan_api_lab_deploy_plan_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     lab_lifecycle_stream_api_lab_lifecycle_stream_post: {
         parameters: {
             query?: never;
@@ -7818,6 +8010,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocsDocument"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_netlab_environment_api_environment_netlab_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetlabEnvironment"];
+                };
+            };
+        };
+    };
+    set_netlab_path_api_environment_netlab_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetNetlabPathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetlabEnvironment"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_container_diagnostics_api_environment_container_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContainerDiagnostics"];
                 };
             };
             /** @description Validation Error */

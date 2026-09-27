@@ -6,7 +6,7 @@ export { useAppData } from "../hooks/useAppData";
 export { usePortalInjection } from "../hooks/usePortalInjection";
 export { useDeployLogCopyButton } from "../hooks/useDeployLogCopyButton";
 export { useTabManager } from "../hooks/useTabManager";
-export { useLabLifecycle, type ValidationIssue } from "../hooks/useLabLifecycle";
+export { useLabLifecycle, type ValidationIssue, type DeployDecision } from "../hooks/useLabLifecycle";
 export { useExplorerController, type ExplorerIncomingMessage } from "../hooks/useExplorerController";
 export { useSessionDock, type SessionTab } from "../hooks/useSessionDock";
 export { useBrowserNotifications } from "../hooks/useBrowserNotifications";

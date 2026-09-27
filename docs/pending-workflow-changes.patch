@@ -1,0 +1,162 @@
+Workflow edits from the container work that the session's GitHub token was
+not allowed to push (OAuth apps need the 'workflow' scope). Apply with:
+
+    git apply docs/pending-workflow-changes.patch && git rm docs/pending-workflow-changes.patch
+
+- container-release.yml: publish the -full image too, pass NETLAB_GUI_VERSION,
+  and fix the release-notes docker command (lowercase image, no 'v' in tag).
+- ci.yml: build both Dockerfile targets (ui, full) on PRs.
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index c3c547f..0b64d49 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -127,6 +127,10 @@ jobs:
+     needs: changes
+     if: needs.changes.outputs.docker == 'true'
+     runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        # Both published images: the UI-only default and the bundled toolchain.
++        target: [ui, full]
+     steps:
+       - uses: actions/checkout@v4
+ 
+@@ -135,6 +139,7 @@ jobs:
+       - uses: docker/build-push-action@v6
+         with:
+           context: .
++          target: ${{ matrix.target }}
+           push: false
+           # Single arch on PRs: this is a "does it build" gate, and emulating
+           # arm64 here would roughly double the run for no extra signal.
+diff --git a/.github/workflows/container-release.yml b/.github/workflows/container-release.yml
+index 56b82c4..19127ce 100644
+--- a/.github/workflows/container-release.yml
++++ b/.github/workflows/container-release.yml
+@@ -40,15 +40,31 @@ jobs:
+             type=semver,pattern={{major}}.{{minor}}
+             type=semver,pattern={{major}}
+ 
++      # Same tags with a -full suffix (latest → latest-full) for the image that
++      # bundles netlab, Ansible and containerlab (Dockerfile target `full`).
++      - id: metadata-full
++        uses: docker/metadata-action@v5
++        with:
++          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
++          flavor: |
++            suffix=-full,onlatest=true
++          tags: |
++            type=semver,pattern={{version}}
++            type=semver,pattern={{major}}.{{minor}}
++            type=semver,pattern={{major}}
++
+       - uses: docker/setup-qemu-action@v3
+       - uses: docker/setup-buildx-action@v3
+ 
+       - uses: docker/build-push-action@v6
+         with:
+           context: .
++          target: ui
+           # arm64 matters for Apple Silicon and arm-based lab hosts. Only the
+           # Python stage is emulated — the frontend stage builds natively.
+           platforms: linux/amd64,linux/arm64
++          build-args: |
++            NETLAB_GUI_VERSION=${{ github.ref_name }}
+           push: true
+           tags: ${{ steps.metadata.outputs.tags }}
+           labels: ${{ steps.metadata.outputs.labels }}
+@@ -57,6 +73,21 @@ jobs:
+           cache-from: type=gha
+           cache-to: type=gha,mode=max
+ 
++      - uses: docker/build-push-action@v6
++        with:
++          context: .
++          target: full
++          platforms: linux/amd64,linux/arm64
++          build-args: |
++            NETLAB_GUI_VERSION=${{ github.ref_name }}
++          push: true
++          tags: ${{ steps.metadata-full.outputs.tags }}
++          labels: ${{ steps.metadata-full.outputs.labels }}
++          provenance: mode=max
++          sbom: true
++          cache-from: type=gha
++          cache-to: type=gha,mode=max
++
+   release:
+     needs: publish
+     runs-on: ubuntu-latest
+@@ -65,6 +96,11 @@ jobs:
+         with:
+           fetch-depth: 0
+ 
++      # Image tags come from docker/metadata-action's semver patterns, which
++      # drop the leading "v" (tag v1.2.3 → image 1.2.3).
++      - id: version
++        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
++
+       # The GitHub Release is the landing page people reach from the tag, so
+       # it leads with the pull command rather than only a source zip.
+       - uses: softprops/action-gh-release@v2
+@@ -76,27 +112,44 @@ jobs:
+           body: |
+             ## Run it
+ 
++            Everything included (netlab, Ansible, containerlab) — the host only
++            needs Docker. Download `docker-compose.yml` from this release, then:
++
+             ```bash
++            docker compose up -d        # → http://localhost:8000
++            ```
++
++            or the equivalent `docker run`:
++
++            ```bash
++            mkdir -p "$PWD/labs"
+             docker run -d --name netlab-ui \
+-              -p 8000:8000 \
++              --privileged --network host --pid host \
+               -v /var/run/docker.sock:/var/run/docker.sock \
+-              -v "$PWD/labs:/work" \
+-              ghcr.io/${{ github.repository }}:${{ github.ref_name }}
++              -v /var/run/netns:/var/run/netns \
++              -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
++              -v "$HOME/.netlab:/root/.netlab" \
++              -e UVICORN_HOST=127.0.0.1 \
++              ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}-full
+             ```
+ 
+-            Then open <http://localhost:8000>.
++            The labs directory must be mounted at the **same path** as on the
++            host (containerlab bind-mounts node files through the host Docker
++            daemon), and `~/.netlab` keeps netlab's running-lab registry shared
++            with the host. The UI checks all of this itself: see
++            **Settings → Environment → Container Setup**.
+ 
+-            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest`.
++            ### UI-only image
+ 
+-            ### Scope
++            `ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}` (no `-full`)
++            leaves netlab, Ansible and containerlab on your host. Use the same
++            flags, plus mount your netlab install at its own path and point the
++            UI at it:
+ 
+-            This image is the **UI only**. `netlab`, Ansible and containerlab
+-            stay on your host — run it on a machine that already has netlab
+-            set up, and point Settings → Environment at that install (or set
+-            `NETLAB_BIN`).
++            ```bash
++              -v /opt/netlab-venv:/opt/netlab-venv:ro \
++              -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
++              -v /usr/bin/containerlab:/usr/bin/containerlab:ro
++            ```
+ 
+-            Features that call containerlab directly — link impairment,
+-            orphaned-instance cleanup, post-start link reconcile — need the
+-            binary visible inside the container. It is a static Go binary, so
+-            add `-v /usr/bin/containerlab:/usr/bin/containerlab:ro` to enable
+-            them. Everything else works without it.
++            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest` / `latest-full`.

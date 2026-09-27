@@ -354,9 +354,16 @@ async def new_lab(body: NewLabRequest):
     # `[A-Za-z0-9_-]`, so anything failing here means the input was crafted.
     if not _LAB_NAME_RE.fullmatch(safe):
         raise HTTPException(400, "invalid lab name")
-    path = common.resolve_within(common.workspace(), f"{safe}.yml")
-    if path.exists():
-        raise HTTPException(409, f"{safe}.yml already exists")
+    # One directory per lab: netlab keeps per-lab state next to the topology
+    # (netlab.lock, clab.yml, node_files/, the running-instance registry
+    # entry), so two topologies in one folder overwrite each other's generated
+    # files and cannot be tracked apart. Running Labs and the Manage dialog also
+    # assume the <dir>/topology.yml convention.
+    lab_dir = common.resolve_within(common.workspace(), safe)
+    if lab_dir.exists():
+        raise HTTPException(409, f"{safe} already exists")
+    path = common.resolve_within(lab_dir, "topology.yml")
+    lab_dir.mkdir(parents=True)
     # `defaults.device` is not optional in practice: canvas node drops may leave
     # `device` unset (see contract/commands.py `_add_node`), and netlab aborts the
     # whole transform with "No device type specified for node X and there is no
