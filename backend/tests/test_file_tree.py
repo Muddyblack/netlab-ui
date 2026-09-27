@@ -117,10 +117,12 @@ def test_new_lab_scaffold_is_transformable(client, workspace):
 
 @pytest.mark.parametrize("name", ["../escape", "/etc/passwd", "..", "sub/lab", "a" * 200])
 def test_new_lab_keeps_the_file_inside_the_workspace(client, workspace, name):
-    """Whatever the name, the created file lands directly in the workspace."""
+    """Whatever the name, the lab directory lands directly in the workspace."""
     resp = client.post("/api/lab/new", json={"name": name})
     if resp.status_code == 200:
-        assert Path(resp.json()["path"]).parent == workspace.resolve()
+        created = Path(resp.json()["path"])
+        assert created.name == "topology.yml"
+        assert created.parent.parent == workspace.resolve()
     else:
         assert resp.status_code == 400
 
@@ -135,3 +137,12 @@ def test_session_rejects_a_topology_outside_every_workspace(client, workspace, t
     resp = client.post("/api/topology/sessions", json={"topologyPath": str(outside)})
 
     assert resp.status_code == 403
+
+
+def test_new_lab_gets_its_own_directory(client, workspace):
+    """netlab keeps per-lab state (netlab.lock, clab.yml, node_files/) next to
+    the topology, so each lab needs its own folder."""
+    resp = client.post("/api/lab/new", json={"name": "lab-a"})
+    assert resp.status_code == 200
+    assert Path(resp.json()["path"]) == workspace.resolve() / "lab-a" / "topology.yml"
+    assert client.post("/api/lab/new", json={"name": "lab-a"}).status_code == 409

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, Divider, Stack, TextField, Typography } from "@mui/material";
 import { api, HttpError, type HealthStatus, type NetlabEnvironment } from "../../api/client";
 import { RuntimeInfo } from "../NetlabAboutModal";
+import { ContainerSetupPanel } from "../ContainerSetup";
 
 const TEXT_SECONDARY = "text.secondary";
 
@@ -83,6 +84,8 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
   return (
     <Stack spacing={2.5}>
       {envError && <Alert severity="error">{envError}</Alert>}
+
+      <ContainerSetupPanel active={active} />
 
       <Box>
         <Typography variant="subtitle2" fontWeight={650} gutterBottom>

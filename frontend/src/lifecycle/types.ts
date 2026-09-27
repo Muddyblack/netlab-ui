@@ -1,15 +1,8 @@
-import { NetlabBasicTab } from "../components/node-editor/NetlabBasicTab";
-import { NetlabConfigTab } from "../components/node-editor/NetlabConfigTab";
-import { NetlabAdvancedTab } from "../components/node-editor/NetlabAdvancedTab";
 import type { HealthStatus, LabFileEntry } from "../api/client";
 
 export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
-export const netlabNodeEditorTabs = [
-  { id: "basic", label: "Basic", component: NetlabBasicTab },
-  { id: "config", label: "Configuration", component: NetlabConfigTab },
-  { id: "advanced", label: "Advanced", component: NetlabAdvancedTab }
-];
+// The node-editor tab list lives in app/netlabNodeEditorTabs.ts.
 
 export interface OpenLabTab {
   kind: "topology";

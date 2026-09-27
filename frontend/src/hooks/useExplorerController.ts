@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { runningLabMatches } from "../host/runningMatch";
 import type React from "react";
 import { createExplorerController } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
@@ -42,14 +43,15 @@ export interface ExplorerActionCallbacks {
   openDrawioWizard: () => void;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
-  openShell: (nodeName: string) => void;
-  showLogs: (nodeName: string) => void;
-  nodeLifecycle: (nodeName: string, action: "start" | "stop" | "restart" | "pause" | "unpause" | "save") => void;
+  /** `lab` is the node's own topology (Running Labs tree items carry it);
+   * without it the action targets the lab on the canvas. */
+  openShell: (nodeName: string, lab?: TopologyRef) => void | Promise<void>;
+  showLogs: (nodeName: string, lab?: TopologyRef) => void | Promise<void>;
+  nodeLifecycle: (nodeName: string, action: "start" | "stop" | "restart" | "pause" | "unpause" | "save", lab?: TopologyRef) => void | Promise<void>;
   installEdgeshark: () => void;
   uninstallEdgeshark: () => void;
   killAllWiresharkVNC: () => void;
   addToast: (message: string, severity?: "info" | "success" | "warning" | "error") => void;
-  getSessionId: () => string | null;
 }
 
 interface Options {
@@ -130,23 +132,16 @@ interface ActionCtx {
   runningLabsStatusRef: React.RefObject<RunningLabsStatus>;
 }
 
+// Always resolve by the clicked lab's topology: the active session is only
+// reused when it is that same lab (getOrCreateSession checks), so an action on
+// lab B never runs against lab A just because A is the open tab.
 async function resolveSession(cb: ExplorerActionCallbacks, ref: TopologyRef): Promise<string | null> {
-  let sid = cb.getSessionId();
-  if (!sid) sid = await cb.getOrCreateSession(ref);
-  return sid;
+  return cb.getOrCreateSession(ref);
 }
 
-// Same directory-prefix match App.tsx's `activeLabRunning` uses: `netlab
-// status --all` instance summaries only carry `dir`, no lab name or
-// topology path, so that's the match that actually fires for netlab-managed
-// labs.
 function findRunningNodeNames(runningLabsStatusRef: React.RefObject<RunningLabsStatus>, ref: TopologyRef): string[] {
-  const labName = ref.labName;
-  const yamlPath = ref.yamlPath;
   const info = Object.values(runningLabsStatusRef.current ?? {}).find((entry) =>
-    (!!labName && entry.name === labName) ||
-    (!!yamlPath && entry.path === yamlPath) ||
-    (!!yamlPath && !!entry.dir && yamlPath.startsWith(`${entry.dir}/`))
+    runningLabMatches(entry, ref.yamlPath, ref.labName)
   );
   return Object.keys(info?.nodes ?? {});
 }
@@ -235,7 +230,7 @@ async function handleSshToAllNodes({ cb, topoRef, runningLabsStatusRef }: Action
   if (sid && nodeNames.length === 0) {
     cb.addToast("No running nodes found for this lab", "warning");
   } else if (sid) {
-    nodeNames.forEach((nodeName) => cb.openShell(nodeName));
+    for (const nodeName of nodeNames) await cb.openShell(nodeName, topoRef);
   }
 }
 
@@ -291,20 +286,20 @@ function handleOpenRunningLabs({ cb }: ActionCtx) {
   cb.openRunningLabs();
 }
 
-function handleNodeShell({ cb, item }: ActionCtx) {
+async function handleNodeShell({ cb, item, topoRef }: ActionCtx) {
   const nodeName = item?.name || item?.label;
-  if (nodeName) cb.openShell(nodeName);
+  if (nodeName) await cb.openShell(nodeName, topoRef);
 }
 
-function handleNodeLogs({ cb, item }: ActionCtx) {
+async function handleNodeLogs({ cb, item, topoRef }: ActionCtx) {
   const nodeName = item?.name || item?.label;
-  if (nodeName) cb.showLogs(nodeName);
+  if (nodeName) await cb.showLogs(nodeName, topoRef);
 }
 
 function makeNodeLifecycleHandler(action: "start" | "stop" | "restart" | "pause" | "unpause" | "save") {
-  return ({ cb, item }: ActionCtx) => {
+  return async ({ cb, item, topoRef }: ActionCtx) => {
     const nodeName = item?.name || item?.label;
-    if (nodeName) cb.nodeLifecycle(nodeName, action);
+    if (nodeName) await cb.nodeLifecycle(nodeName, action, topoRef);
   };
 }
 

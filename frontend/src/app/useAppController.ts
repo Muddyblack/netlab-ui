@@ -17,11 +17,13 @@ import {
 import { createApiClabUiHost, type AppClabUiHost } from "../host/createHost";
 import { createDemoClabUiHost } from "../host/createDemoHost";
 import { type DeploymentProgress } from "../components/CanvasDeploymentProgress";
-import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type NetlabProjection } from "../api/client";
+import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
 import { persistAssistantOpen, readAssistantOpen } from "../panels/assistant/preferences";
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
+import type { TopologyRef } from "../hooks/useTabManager";
+import { runningLabMatches } from "../host/runningMatch";
 
 import {
   useAppData,
@@ -30,6 +32,7 @@ import {
   useTabManager,
   useLabLifecycle,
   type ValidationIssue,
+  type DeployDecision,
   useExplorerController,
   type ExplorerIncomingMessage,
   useSessionDock,
@@ -176,7 +179,9 @@ export function useAppController() {
   const deploymentProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deployDiff, setDeployDiff] = useState<DeployDiffResult | null>(null);
   const [deployValidationIssues, setDeployValidationIssues] = useState<ValidationIssue[]>([]);
-  const deployDecisionRef = useRef<((proceed: boolean) => void) | null>(null);
+  const [deployTargetLab, setDeployTargetLab] = useState<string | null>(null);
+  const deployDecisionRef = useRef<((decision: DeployDecision) => void) | null>(null);
+  const [deployPlan, setDeployPlan] = useState<DeployPlan | null>(null);
 
   useEffect(() => {
     persistAssistantOpen(assistantOpen);
@@ -307,15 +312,17 @@ export function useAppController() {
       exportDrawio: (sid, layout) => exportDrawioDownload(sid, layout, addToast),
       inspectLab: (sid) => inspectLabAndSet(sid, setInspectOutput),
       runFcli: (sid, command) => runFcliPopup(sid, command, addToast),
-      openShell: (n) => openShellRef.current(n),
-      showLogs: (n) => openLogsRef.current(n),
+      // Node items from the Running Labs tree carry their lab; open that lab
+      // first so the terminal lands in the right session even when a
+      // different lab (or none) is on the canvas.
+      openShell: async (n, ref) => openShellRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
+      showLogs: async (n, ref) => openLogsRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       openDrawioWizard: () => openDrawioWizardRef.current(),
-      nodeLifecycle: (n, action) => handleNodeLifecycleRef.current(n, action),
+      nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
       uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),
       killAllWiresharkVNC: () => killAllWiresharkVncAction(addToast),
-      addToast,
-      getSessionId: () => sessionIdRef.current
+      addToast
     }
   });
 
@@ -452,7 +459,7 @@ export function useAppController() {
     sessionId, openTabs, activeTabId, activeFileTab,
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
-    handleCreateLab, getOrCreateSession, restoreTabSession
+    handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession
   } = useTabManager({ host, fetchFiles, addToast, runtimeRef });
 
   // ── Session dock (node shells + log streams) ────────────────────────────────
@@ -517,33 +524,46 @@ export function useAppController() {
     }
   }, [activeTabId, addToast, openTabs, sendSystemNotification]);
 
-  const requestDeployApproval = useCallback(async (): Promise<boolean> => {
-    if (!sessionId) return false;
+  const requestDeployApproval = useCallback(async (targetSid?: string): Promise<DeployDecision> => {
+    // Review the lab that is being deployed — an explorer "Deploy" on another
+    // lab must not be reviewed (and badged) against the canvas's lab.
+    const sid = targetSid ?? sessionId;
+    if (!sid) return { proceed: false };
+    const onCanvas = sid === sessionId;
+    const targetPath = topologyPathForSession(sid);
+    const targetLab = labFilesRef.current.find((file) => file.path === targetPath)?.labName
+      ?? (targetPath ? targetPath.split("/").slice(-2, -1)[0] ?? targetPath : null);
     try {
-      const [validation, diff] = await Promise.all([
-        api.labPreflight(sessionId),
-        api.getDeployDiff(sessionId)
+      const [validation, diff, plan] = await Promise.all([
+        api.labPreflight(sid),
+        api.getDeployDiff(sid),
+        // Best effort: without it the review simply omits the conflict hint.
+        api.getDeployPlan(sid).catch(() => null)
       ]);
       const issues = validation.issues as ValidationIssue[];
-      setValidationIssues(issues);
+      if (onCanvas) {
+        setValidationIssues(issues);
+        refreshCanvas();
+      }
       setDeployValidationIssues(issues);
-      refreshCanvas();
+      setDeployTargetLab(targetLab);
+      setDeployPlan(plan);
       setDeployDiff(diff);
       // clab-ui opens its lifecycle progress modal before calling the host.
       // Hide that modal while the preflight review is awaiting a decision;
       // otherwise the review dialog sits behind it and deployment appears to
       // hang forever at "Waiting for command output".
       topoViewerActions.closeLifecycleModal();
-      const proceed = await new Promise<boolean>((resolve) => {
+      const decision = await new Promise<DeployDecision>((resolve) => {
         deployDecisionRef.current = resolve;
       });
-      topoViewerActions.setProcessing(proceed, proceed ? "deploy" : undefined);
-      return proceed;
+      topoViewerActions.setProcessing(decision.proceed, decision.proceed ? "deploy" : undefined);
+      return decision;
     } catch (err) {
       addToast(`Could not prepare deploy review: ${err instanceof Error ? err.message : String(err)}`, "error");
-      return false;
+      return { proceed: false };
     }
-  }, [addToast, refreshCanvas, sessionId, topoViewerActions]);
+  }, [addToast, refreshCanvas, sessionId, topologyPathForSession, topoViewerActions]);
 
   const handleDeploymentProgress = useCallback((progress: DeploymentProgress) => {
     if (deploymentProgressTimerRef.current) clearTimeout(deploymentProgressTimerRef.current);
@@ -639,17 +659,18 @@ export function useAppController() {
     setValidationIssues([]);
     setDeployDiff(null);
     setDeployValidationIssues([]);
-    deployDecisionRef.current?.(false);
+    deployDecisionRef.current?.({ proceed: false });
     deployDecisionRef.current = null;
   }, [sessionId]);
 
   // Per-node container lifecycle: containerlab 0.77+ reconciles links via
   // `clab apply` after a start/restart (the backend runs it when available),
   // so individual node toggles are safe to expose.
-  const handleNodeLifecycle = useCallback((nodeName: string, action: "start" | "stop" | "restart" | "pause" | "unpause" | "save") => {
-    if (!sessionId) return;
+  const handleNodeLifecycle = useCallback((nodeName: string, action: "start" | "stop" | "restart" | "pause" | "unpause" | "save", forSession?: string | null) => {
+    const sid = forSession ?? sessionId;
+    if (!sid) return;
     addToast(`Running ${action} on ${nodeName}…`, "info");
-    void api.nodeAction(sessionId, nodeName, action)
+    void api.nodeAction(sid, nodeName, action)
       .then((res) => {
         if (res.code !== 0) addToast(`Node ${nodeName}: ${action} failed — ${res.stderr || res.stdout || `exit ${res.code}`}`, "error");
         // A zero exit with stderr is a success with a caveat (e.g. links not
@@ -768,8 +789,16 @@ export function useAppController() {
 
   // Stable callback refs for explorer controller (avoids re-creating controller on dependency changes)
   const sessionIdRef = useRef(sessionId); sessionIdRef.current = sessionId;
-  const openShell = useCallback((node: string) => sessionDock.openTab("shell", node), [sessionDock]);
-  const openLogs = useCallback((node: string) => sessionDock.openTab("logs", node), [sessionDock]);
+  const openShell = useCallback((node: string, sid?: string | null) => sessionDock.openTab("shell", node, sid ?? undefined), [sessionDock]);
+  const openLogs = useCallback((node: string, sid?: string | null) => sessionDock.openTab("logs", node, sid ?? undefined), [sessionDock]);
+  // Make `ref` the canvas's lab (opening it if needed) and return its session.
+  const ensureLabActive = useCallback(async (ref: TopologyRef): Promise<string | null> => {
+    const sid = await getOrCreateSession(ref);
+    if (sid && sid === sessionIdRef.current) return sid;
+    await handleOpenLab(ref);
+    return getOrCreateSession(ref);
+  }, [getOrCreateSession, handleOpenLab]);
+  const ensureLabActiveRef = useRef(ensureLabActive); ensureLabActiveRef.current = ensureLabActive;
   const openDrawioWizard = useCallback(() => sessionDock.openTab("drawio", "diagram"), [sessionDock]);
   const openShellRef = useRef(openShell); openShellRef.current = openShell;
   const openLogsRef = useRef(openLogs); openLogsRef.current = openLogs;
@@ -895,21 +924,14 @@ export function useAppController() {
     setSettingsOpen,
   });
 
-  // The active lab is "running" when its name/path/directory shows up in the
-  // live `netlab status` snapshot (same match clab-ui's explorer uses).
-  // `netlab status --all` instance summaries only carry `dir` — no lab name,
-  // no topology path — so the directory-prefix match is the one that actually
-  // fires for netlab-managed labs.
+  // The active lab is "running" when it matches an instance in the live
+  // `netlab status` snapshot (same matcher the explorer tree uses).
   const activeLabRunning = useMemo(() => {
     const activeLab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
     if (activeLab?.kind !== "topology") return false;
     const labName = activeLab.topologyRef?.labName;
     const yamlPath = activeLab.topologyRef?.yamlPath;
-    return Object.values(runningLabsStatus).some((info) =>
-      (!!labName && info.name === labName) ||
-      (!!yamlPath && info.path === yamlPath) ||
-      (!!yamlPath && !!info.dir && yamlPath.startsWith(`${info.dir}/`))
-    );
+    return Object.values(runningLabsStatus).some((info) => runningLabMatches(info, yamlPath, labName));
   }, [openTabs, activeTabId, runningLabsStatus]);
 
   // null until the lens bundle loads; then reflects whether the topology
@@ -962,7 +984,7 @@ export function useAppController() {
     notificationsSupported, notificationsEnabled, notificationPermission, toggleNotifications,
     assistantCapabilities, assistantOpen, setAssistantOpen, assistantSettingsProviderId,
     refreshAssistantCapabilities,
-    deployDiff, deployValidationIssues, setDeployDiff, setDeployValidationIssues, deployDecisionRef,
+    deployDiff, deployValidationIssues, deployTargetLab, deployPlan, setDeployDiff, setDeployValidationIssues, deployDecisionRef,
     quickOpen, setQuickOpen,
     isTopologyLocked, quickActions,
     imageManagerOpen, setImageManagerOpen,

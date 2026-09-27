@@ -42,8 +42,9 @@ const ROLE_OPTIONS = [
   { value: "router", label: "Router" },
   { value: "host", label: "Host" },
   { value: "bridge", label: "Bridge" },
-  { value: "gateway", label: "Gateway" },
-  { value: "switch", label: "Switch" }
+  { value: "gateway", label: "Gateway" }
+  // netlab's node role accepts exactly these (defaults/attributes.yml);
+  // "switch" used to be offered here and produced an invalid topology.
 ];
 
 const PROVIDER_OPTIONS = [

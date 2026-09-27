@@ -81,6 +81,7 @@ export default function App() {
             handleOpenLab={c.handleOpenLab}
             navbarPortalContainer={c.navbarPortalContainer}
             toolbarActions={toolbarActions}
+            refreshCanvas={c.refreshCanvas}
           />
 
           <AppSidebarPortals
@@ -141,9 +142,11 @@ export default function App() {
             startup={c.startup}
             deployDiff={c.deployDiff}
             deployValidationIssues={c.deployValidationIssues}
+            deployTargetLab={c.deployTargetLab}
             setDeployDiff={c.setDeployDiff}
             setDeployValidationIssues={c.setDeployValidationIssues}
             deployDecisionRef={c.deployDecisionRef}
+            deployPlan={c.deployPlan}
             quickOpen={c.quickOpen}
             setQuickOpen={c.setQuickOpen}
             sessionId={c.sessionId}
@@ -186,6 +189,7 @@ export default function App() {
             startup={c.startup}
             runtimeSnackbar={c.runtimeSnackbar}
             setRuntimeSnackbar={c.setRuntimeSnackbar}
+            openEnvironmentSettings={() => { c.setSettingsTab("environment"); c.setSettingsOpen(true); }}
           />
         </Box>
       )}

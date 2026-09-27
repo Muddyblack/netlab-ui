@@ -450,3 +450,27 @@ def test_locked_preview_is_rerun_once_the_lab_is_torn_down(tmp_path, monkeypatch
     # ...landing on the real thing.
     assert settled["projection"]["source"] == "clab"
     assert next(n for n in settled["nodes"] if n["id"] == "r1")["kind"] == "linux"
+
+
+def test_canvas_icon_follows_netlab_role_and_keeps_declared_role(tmp_path, monkeypatch):
+    """clab-ui's `role` is the icon; netlab's node `role` must not replace it
+    with an unknown icon name (every host rendered as a router)."""
+    monkeypatch.setattr(snapshot.runner, "is_installed", lambda: False)
+    topology_path = tmp_path / "lab.yml"
+    topology_path.write_text(
+        "name: t\nnodes:\n"
+        "  h1:\n    device: linux\n"
+        "  r1:\n    device: frr\n    role: host\n"
+        "  s1:\n    device: frr\n    role: bridge\n"
+        "  r2:\n    device: frr\n"
+    )
+    topo = serialize.from_yaml(topology_path.read_text())
+
+    snap = asyncio.run(snapshot.build(str(topology_path), topo, 0))
+    by_id = {node["id"]: node["data"] for node in snap["nodes"]}
+
+    assert by_id["h1"]["role"] == "client"
+    assert by_id["r1"]["role"] == "client"
+    assert by_id["s1"]["role"] == "bridge"
+    assert by_id["r2"]["role"] == "frr"  # unchanged fallback: the netlab device name
+    assert by_id["r1"]["extraData"]["netlabAttrs"]["role"] == "host"
