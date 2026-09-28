@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import hashlib
 import json
 import os
@@ -372,9 +373,93 @@ _lab_status_cache: dict[str, tuple[float, Any]] = {}
 _lab_status_locks: dict[str, asyncio.Lock] = {}
 
 
+# The full status costs one `netlab status` CLI run for the registry plus one
+# per running lab (~0.45 s of CPU each), and the UI's status stream asks every
+# 5 s. What changes between ticks is almost only the containers' state, so the
+# CLI output is reused while netlab's registry and the labs' snapshot files are
+# unchanged (and for at most _STATUS_FULL_TTL), and container states are
+# refreshed from a single `docker ps`.
+_STATUS_FULL_TTL = 30.0
+_status_base: tuple[Any, float, Any] | None = None
+
+
+def _status_fingerprint(result: Any) -> Any:
+    def mtime(path: Path) -> float | None:
+        try:
+            return path.stat().st_mtime
+        except OSError:
+            return None
+
+    registry = mtime(Path("~/.netlab/status.yaml").expanduser())
+    dirs = sorted(str(v.get("dir")) for v in (result or {}).values() if isinstance(v, dict) and v.get("dir"))
+    return (registry, tuple((d, mtime(Path(d) / "netlab.snapshot.pickle")) for d in dirs))
+
+
+async def _container_states() -> dict[str, str] | None:
+    """``{container name: docker status}`` for all containers, or None."""
+    binary = shutil.which("docker")
+    if not binary:
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            binary,
+            "ps",
+            "-a",
+            "--format",
+            "{{.Names}}\t{{.Status}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+    except (OSError, TimeoutError):
+        return None
+    if proc.returncode != 0:
+        return None
+    states = {}
+    for line in out.decode(errors="replace").splitlines():
+        name, _, state = line.partition("\t")
+        if name:
+            states[name] = state
+    return states
+
+
+def _with_container_states(result: Any, states: dict[str, str]) -> Any:
+    fresh = copy.deepcopy(result)
+    for lab in (fresh or {}).values():
+        for node in ((lab or {}).get("nodes") or {}).values() if isinstance(lab, dict) else ():
+            if not isinstance(node, dict) or node.get("provider") != "clab" or not node.get("provider_name"):
+                continue
+            state = states.get(str(node["provider_name"]))
+            if state is None:
+                node.pop("status", None)  # container gone, as `netlab status` reports it
+            else:
+                node["status"] = state
+    return fresh
+
+
 async def status() -> Any:
     """Return all active labs, enriched with their per-node provider state."""
-    global _status_cache
+    global _status_cache, _status_base
+    base = _status_base
+    reusable = (
+        base is not None and time.monotonic() - base[1] < _STATUS_FULL_TTL and _status_fingerprint(base[2]) == base[0]
+    )
+    states = await _container_states() if reusable else None
+    if base is not None and states is not None:
+        result = _with_container_states(base[2], states)
+        _status_cache = (time.monotonic(), result)
+        return result
+    base_result = await _full_status()
+    _status_base = (_status_fingerprint(base_result), time.monotonic(), base_result)
+    # Same container view on both paths (netlab omits exited containers'
+    # state; docker reports it), so nodes don't flip every _STATUS_FULL_TTL.
+    states = await _container_states()
+    result = _with_container_states(base_result, states) if states is not None else base_result
+    _status_cache = (time.monotonic(), result)
+    return result
+
+
+async def _full_status() -> Any:
     status_result = await _run(["status", "--format", "json", "--all"])
     if status_result.code != 0:
         output = status_result.stderr or status_result.stdout
@@ -404,13 +489,13 @@ async def status() -> Any:
                 return key, summary
 
         result = dict(await asyncio.gather(*(enrich(str(key), value) for key, value in result.items())))
-    _status_cache = (time.monotonic(), result)
     return result
 
 
 def _clear_status_cache() -> None:
-    global _status_cache
+    global _status_cache, _status_base
     _status_cache = None
+    _status_base = None
     _lab_status_cache.clear()
 
 
@@ -592,6 +677,19 @@ async def status_for(topology_path: str | Path, max_age: float = 4.0) -> Any:
     cached = _lab_status_cache.get(key)
     if cached and time.monotonic() - cached[0] < max_age:
         return cached[1]
+    # The shared status already holds every running lab's per-node detail
+    # (status() enriches each entry with this same command), refreshed cheaply
+    # — see _status_base. Use it rather than a CLI run per snapshot build; a
+    # lab that isn't registered is simply not running.
+    lab_dir = Path(topology_path).resolve().parent
+    labs: Any = None
+    with contextlib.suppress(NetlabError, NetlabNotInstalled):
+        labs = await status_cached(max_age=max_age)
+    if isinstance(labs, dict):
+        for entry in labs.values():
+            if isinstance(entry, dict) and entry.get("dir") and Path(str(entry["dir"])).resolve() == lab_dir:
+                return entry
+        raise NetlabError(["netlab", "status"], 1, "no lab is running in this directory")
     lock = _lab_status_locks.setdefault(key, asyncio.Lock())
     async with lock:
         cached = _lab_status_cache.get(key)
@@ -1016,9 +1114,32 @@ def _tool_output(binary: str, args: list[str], timeout: float = 3) -> tuple[str,
         return stdout_file.read(), stderr_file.read()
 
 
+_tool_version_cache: dict[tuple[str, tuple[str, ...]], tuple[float, str | None]] = {}
+
+
 def tool_version(binary: str, args: list[str]) -> str | None:
     """Return the first non-empty stdout/stderr line from a local tool version
-    command, or None if the tool is unavailable or cannot be queried."""
+    command, or None if the tool is unavailable or cannot be queried.
+
+    Cached per resolved binary and its mtime: ``containerlab version`` alone
+    takes about a second, and /api/health asks on every call."""
+    resolved = shutil.which(binary)
+    if resolved is None:
+        return None
+    try:
+        mtime = os.stat(resolved).st_mtime
+    except OSError:
+        mtime = 0.0
+    key = (resolved, tuple(args))
+    cached = _tool_version_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    version = _tool_version_uncached(binary, args)
+    _tool_version_cache[key] = (mtime, version)
+    return version
+
+
+def _tool_version_uncached(binary: str, args: list[str]) -> str | None:
     result = _tool_output(binary, args)
     if result is None:
         return None
@@ -1067,13 +1188,8 @@ def cached_version_components() -> list[dict[str, str | bool]]:
     global _components_cache
     if _components_cache is not None:
         return _components_cache
-    result = _tool_output("netlab", ["version"], timeout=5)
-    if result is None:
-        _components_cache = []
-        return _components_cache
-    stdout, stderr = result
-    _components_cache = parse_version_components(stdout or stderr)
-    return _components_cache
+    _load_netlab_version()
+    return _components_cache or []
 
 
 def containerlab_version() -> str | None:
@@ -1122,8 +1238,21 @@ def cached_version() -> str | None:
     if not is_installed():
         _version_cache = None
         return None
-    _version_cache = tool_version("netlab", ["version"])
-    return _version_cache
+    _load_netlab_version()
+    return _version_cache if _version_cache is not False else None
+
+
+def _load_netlab_version() -> None:
+    """One `netlab version` run (~0.5 s) fills both the version line and the
+    component list; they used to run it once each."""
+    global _version_cache, _components_cache
+    result = _tool_output("netlab", ["version"], timeout=5)
+    if result is None:
+        _version_cache, _components_cache = None, []
+        return
+    output = result[0] or result[1]
+    _version_cache = next((line.strip() for line in output.splitlines() if line.strip()), None)
+    _components_cache = parse_version_components(output)
 
 
 def reset_version_cache() -> None:

@@ -56,3 +56,34 @@ def test_up_argv_carries_multilab_plugin(tmp_path):
     assert cwd == path.parent
     # Other actions ignore it.
     assert "--plugin" not in runner.lifecycle_argv("down", path, multilab_id=4)[0]
+
+
+def test_restart_keeps_the_registered_multilab_id(tmp_path, monkeypatch):
+    import asyncio
+
+    from app.lab import lifecycle
+
+    path = _topo(tmp_path)
+
+    async def status(**_kw):
+        return {"default": {"dir": "/elsewhere"}, "3": {"dir": str(path.parent)}}
+
+    monkeypatch.setattr(lifecycle.runner, "status_cached", status)
+    assert asyncio.run(lifecycle._registered_multilab_id(str(path))) == 3
+
+
+def test_sequence_stops_at_first_failure(monkeypatch):
+    import asyncio
+
+    from app.lab import lifecycle
+
+    async def fake_stream(args, cwd=None):
+        yield "stdout", f"ran {args[0]}"
+        yield "exit", "1" if args[0] == "down" else "0"
+
+    monkeypatch.setattr(lifecycle.runner, "run_streaming", fake_stream)
+
+    async def collect():
+        return [item async for item in lifecycle._run_sequence([(["down"], None), (["up"], None)])]
+
+    assert asyncio.run(collect()) == [("stdout", "ran down"), ("exit", "1")]

@@ -23,12 +23,15 @@ class LabFileEntry(BaseModel):
     deploymentState: str
     topologyRef: TopologyRef
     workspace: str | None = None
+    # In the shared workspace (NETLAB_UI_SHARED_WORKSPACE).
+    shared: bool = False
 
 
 class WorkspaceEntry(BaseModel):
     path: str
     exists: bool
     labCount: int = 0
+    shared: bool = False
 
 
 class LabInstance(BaseModel):

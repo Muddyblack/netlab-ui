@@ -23,17 +23,29 @@ def _default() -> str:
     return str(Path(raw).expanduser().resolve())
 
 
+def shared() -> str | None:
+    """The shared workspace (``NETLAB_UI_SHARED_WORKSPACE``): a folder every
+    user of a multi-user installation works in. Always listed, never removed."""
+    raw = os.environ.get("NETLAB_UI_SHARED_WORKSPACE", "").strip()
+    return str(Path(raw).expanduser().resolve()) if raw else None
+
+
+def _with_shared(paths: list[str]) -> list[str]:
+    common = shared()
+    return paths if not common or common in paths else [*paths, common]
+
+
 def load() -> list[str]:
     """Return the list of configured workspace paths (always at least one)."""
     p = _config_path()
     if not p.exists():
-        return [_default()]
+        return _with_shared([_default()])
     try:
         data = json.loads(p.read_text())
         paths = [str(Path(ws).expanduser().resolve()) for ws in (data.get("workspaces") or [])]
-        return paths if paths else [_default()]
+        return _with_shared(paths if paths else [_default()])
     except (AttributeError, json.JSONDecodeError, OSError, TypeError):
-        return [_default()]
+        return _with_shared([_default()])
 
 
 def save(workspaces: list[str]) -> None:
@@ -53,6 +65,8 @@ def add(path: str) -> list[str]:
 def remove(path: str) -> list[str]:
     resolved = str(Path(path).expanduser().resolve())
     current = load()
+    if resolved == shared():
+        return current  # the shared workspace is configured by the operator
     updated = [w for w in current if w != resolved]
     if not updated:
         return current  # refuse to remove last workspace

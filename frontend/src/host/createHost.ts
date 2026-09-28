@@ -1,7 +1,7 @@
 import { createApiClabUiHost as officialCreateApiClabUiHost } from "@containerlab/clab-ui/host";
 import type { ClabUiHost, ClabUiTopoViewerHost, ClabUiTopoViewerEvent, HostRuntimeContainer, TopoViewerLifecycleAction, TopoViewerNodeAction, TopoViewerSvgExportPayload } from "@containerlab/clab-ui/host";
 import type { DeploymentProgress } from "../components/CanvasDeploymentProgress";
-import type { DeployDecision, LifecycleCompletion } from "../hooks/useLabLifecycle";
+import { setLifecycleContext, type DeployDecision, type LifecycleCompletion } from "../hooks/useLabLifecycle";
 import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
 import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
@@ -30,6 +30,18 @@ export interface AppClabUiHost extends ClabUiHost {
 }
 
 type OfficialHostOptions = NonNullable<Parameters<typeof officialCreateApiClabUiHost>[0]>;
+
+function downloadText(filename: string, content: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoke after the browser has picked the download up.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
 
 function buildPacketflixUri(configuredHost: string, configuredPortRaw: string | undefined, containerName: string, interfaceName: string): string {
   const authorityHost = configuredHost.includes(":") && !configuredHost.startsWith("[")
@@ -95,9 +107,10 @@ type BackendLifecycleAction = "up" | "down" | "initial" | "restart";
 // "No such container". netlab regenerates node_files on `up`, so mapping
 // the cleanup variants onto the same base action is the correct intent.
 function mapLifecycleAction(action: TopoViewerLifecycleAction, labDeployed: boolean): BackendLifecycleAction | null {
-  if (action === "deployLab" || action === "deployLabCleanup" || action === "redeployLab" || action === "redeployLabCleanup" || action === "startLab") {
-    return "up";
-  }
+  if (action === "deployLab" || action === "deployLabCleanup") return "up";
+  // Offered on a running lab, where netlab refuses a second `up` in the same
+  // directory: restart is netlab's down + up.
+  if (action === "redeployLab" || action === "redeployLabCleanup" || action === "startLab") return "restart";
   if (action === "applyLab") {
     // clab-ui's primary ▶ button is always "Apply" — containerlab's
     // deploy-or-reconcile. For netlab that is `netlab up` while the lab is not
@@ -304,6 +317,7 @@ export function createApiClabUiHost(options?: {
           initial: "netlab initial",
           restart: "netlab restart",
         }[backendAction];
+        let suggestedMultilabId: number | undefined;
         const finish = (success: boolean, errorMessage?: string) => {
           if (completionSent) return;
           completionSent = true;
@@ -312,8 +326,13 @@ export function createApiClabUiHost(options?: {
             label,
             success,
             errorMessage,
+            sessionId: sessionId ?? undefined,
+            suggestedMultilabId,
           });
         };
+        // Canvas commands target the canvas lab: drop any name a previous
+        // explorer command left on the (patched) lifecycle modal.
+        setLifecycleContext(null);
         const cancel = () => {
           if (settled) return;
           settled = true;
@@ -356,7 +375,7 @@ export function createApiClabUiHost(options?: {
             if (!trimmed.startsWith("data:")) return;
             const payload = trimmed.slice(trimmed.indexOf(":") + 1).trim();
             if (!payload) return;
-            let frame: { stream?: string; line?: string; done?: boolean; code?: number; error?: string; hint?: string; progress?: DeploymentProgress };
+            let frame: { stream?: string; line?: string; done?: boolean; code?: number; error?: string; hint?: string; progress?: DeploymentProgress; suggestedMultilabId?: number };
             try {
               frame = JSON.parse(payload);
             } catch {
@@ -369,6 +388,7 @@ export function createApiClabUiHost(options?: {
               finish(false, frame.error);
             } else if (frame.done) {
               settled = true;
+              if (typeof frame.suggestedMultilabId === "number") suggestedMultilabId = frame.suggestedMultilabId;
               if (frame.code === 0) {
                 emitStatus({ type: "lifecycleStatus", status: "success" });
                 finish(true);
@@ -515,7 +535,22 @@ export function createApiClabUiHost(options?: {
         }
       })().catch((err) => console.error("Failed to reconcile custom icons:", err));
     },
-    exportGrafanaBundle(_payload: TopoViewerSvgExportPayload) {},
+    // clab-ui's SVG export dialog builds the Grafana Flow Panel bundle and
+    // waits for this reply; the old no-op made it time out after 30 s.
+    exportGrafanaBundle(payload: TopoViewerSvgExportPayload) {
+      const base = (payload.baseName || "topology").replace(/[\\/:*?"<>|]+/g, "_");
+      const files: Array<[string, string, string]> = [
+        [`${base}.svg`, payload.svgContent, "image/svg+xml"],
+        [`${base}.grafana.json`, payload.dashboardJson, "application/json"],
+        [`${base}.flow_panel.yaml`, payload.panelYaml, "application/yaml"],
+      ];
+      try {
+        for (const [name, content, type] of files) downloadText(name, content, type);
+        subscribers.forEach((s) => s({ type: "svgExportResult", requestId: payload.requestId, success: true, files: files.map(([name]) => name) }));
+      } catch (err) {
+        subscribers.forEach((s) => s({ type: "svgExportResult", requestId: payload.requestId, success: false, error: err instanceof Error ? err.message : String(err) }));
+      }
+    },
     dumpCssVars(_vars: Record<string, string>) {},
 
     subscribe(handler: (event: ClabUiTopoViewerEvent) => void) {
