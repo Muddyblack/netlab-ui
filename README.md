@@ -4,10 +4,10 @@
 
 <p align="center">
   <a href="https://github.com/Muddyblack/netlab-ui/releases/latest"><img src="https://img.shields.io/github/v/release/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=ff9f01&logo=github&label=release" alt="Latest release" /></a>
-  <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=00c9ff&logo=download&label=downloads" alt="Downloads" /></a>
+  <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=download&label=downloads" alt="Downloads" /></a>
   <a href="docs/features.md"><img src="https://img.shields.io/badge/docs-read-ff9f01?style=for-the-badge&labelColor=182431&logoColor=white&logo=readthedocs" alt="Docs" /></a>
   <a href="https://github.com/Muddyblack/netlab-ui/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Muddyblack/netlab-ui/ci.yml?style=for-the-badge&labelColor=182431&logoColor=white&logo=githubactions&label=ci" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=00c9ff&logo=apache&label=license" alt="License" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=apache&label=license" alt="License" /></a>
 </p>
 
 ---
