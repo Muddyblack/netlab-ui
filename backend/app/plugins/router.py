@@ -4,7 +4,11 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from app.contract import commands as command_dispatch
 from app.contract.responses import (
+    Generator,
+    GeneratorApplyRequest,
+    GeneratorPreview,
     Plugin,
     PluginDebug,
     PluginImportRequest,
@@ -12,10 +16,13 @@ from app.contract.responses import (
     PluginPipeline,
     PluginPipelineEntry,
     PluginTemplate,
+    TopologyPattern,
 )
 from app.sessions.store import store as session_store
 from services.netlab import docs as netlab_docs
+from services.netlab import generators as generator_svc
 from services.netlab import location
+from services.netlab import patterns as pattern_svc
 from services.netlab import plugins as plugin_svc
 
 router = APIRouter(prefix="/api/plugins", tags=["plugins"])
@@ -297,14 +304,58 @@ def plugin_pipeline(
 
 
 @router.get("/template", response_model=PluginTemplate)
-def plugin_template(name: str = Query(default="my_plugin")):
+def plugin_template(
+    name: str = Query(default="my_plugin"),
+    kind: str = Query(default="plugin", pattern="^(plugin|generator)$"),
+):
     """Starting point for a user's own plugin — a documented stub with the
-    hook signature filled in, so "write your own" isn't a blank page."""
+    hook signature filled in, so "write your own" isn't a blank page.
+    ``kind=generator`` gives a ``topology_expand`` plugin with a parameter
+    schema the Generators form can render."""
     try:
         safe_name = plugin_svc.validate_name(name)
     except plugin_svc.PluginImportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"name": safe_name, "content": plugin_svc.PLUGIN_TEMPLATE.format(name=safe_name)}
+    template = generator_svc.GENERATOR_TEMPLATE if kind == "generator" else plugin_svc.PLUGIN_TEMPLATE
+    return {"name": safe_name, "content": template.format(name=safe_name)}
+
+
+def _session_topology_path(session_id: str) -> Path:
+    session = session_store.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Unknown session")
+    return Path(session.topology_path).expanduser()
+
+
+@router.get("/generators", response_model=list[Generator])
+def list_generators(session_id: str | None = Query(default=None, alias="sessionId")):
+    """Plugins that build topology (a ``topology_expand`` hook), with the
+    parameters each accepts — read from the plugin, never by running it."""
+    found = generator_svc.discover(_plugin_search_path(_session_topology_dir(session_id)))
+    return [gen.as_dict() for gen in found]
+
+
+@router.get("/generators/patterns", response_model=list[TopologyPattern])
+def detect_patterns(session_id: str = Query(alias="sessionId")):
+    """Shapes in the lab's hand-built topology (leaf-spine, identical nodes,
+    rings, …) and, where an installed generator builds that shape, how to
+    replace them with it."""
+    path = _session_topology_path(session_id)
+    topo = command_dispatch.load_topology(str(path))
+    found = generator_svc.discover(_plugin_search_path(path.parent))
+    return [pattern.as_dict() for pattern in pattern_svc.detect(topo, found)]
+
+
+@router.post("/generators/preview", response_model=GeneratorPreview)
+async def preview_generator(body: GeneratorApplyRequest):
+    """What applying a generator would change: the YAML diff and what netlab
+    expands it to. Writes nothing; send the returned ``command`` to
+    ``/api/topology/command`` to apply it as one undoable step."""
+    path = _session_topology_path(body.sessionId)
+    try:
+        return await generator_svc.plan(path, body.plugin, body.params, node=body.node, replace_nodes=body.replaceNodes)
+    except generator_svc.GeneratorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/import", response_model=PluginImportResult)

@@ -45,3 +45,34 @@ export function useAutoOpenComposerTab(unitPath: string | null): void {
     };
   }, [unitPath]);
 }
+
+/** clab-ui's right-panel handle; its label says what a click does. */
+function openRightPanel(): void {
+  const toggle = document.querySelector<HTMLElement>('[data-testid="panel-toggle-btn"]');
+  if (toggle && /open/i.test(toggle.getAttribute("aria-label") ?? "")) toggle.click();
+}
+
+/** Each time `open` turns true, open the right panel if it's collapsed and
+ * select the palette tab `label` — e.g. the AI agents tab, which only joins
+ * the strip when its toolbar button opens it. */
+export function useSelectPanelTabOnOpen(label: string, open: boolean): void {
+  const wasOpen = useRef(open);
+
+  useEffect(() => {
+    const opened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (!opened) return;
+    openRightPanel();
+    const interval = window.setInterval(() => {
+      const tab = findTab(label);
+      if (!tab) return;
+      if (tab.getAttribute("aria-selected") !== "true") tab.click();
+      window.clearInterval(interval);
+    }, 100);
+    const timeout = window.setTimeout(() => window.clearInterval(interval), 4000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [label, open]);
+}

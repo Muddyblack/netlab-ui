@@ -92,7 +92,7 @@ export function CloneRepoDialog({ open, onClose, onClone }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={loading}>Cancel</Button>
         <Button
           variant="contained"
           onClick={handleSubmit}

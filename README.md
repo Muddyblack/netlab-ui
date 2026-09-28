@@ -2,434 +2,128 @@
   <img src="frontend/public/netlabxclab-netlab-ui-loop.svg" alt="Netlab x clab-ui Logo" width="480" />
 </p>
 
----
-
-> [!WARNING]
-> **Beta testing phase:** netlab-ui is under active development. Features and APIs may change, and you may encounter bugs. Please use it in test environments and report any issues you find.
-
-> _"I always start stuff although I tell myself I don't have time for it... and yet, here we are."_
-
-Welcome to **netlab-ui**! This project is a refurbished, tailormade topology viewer and editor for [**netlab**](https://github.com/ipspace/netlab) (ipspace/netlab).
-
-Ideally, this would have been a generic plugin system built directly into [**Containerlab**](https://github.com/srl-labs/containerlab-app)'s topology viewer. But as both have their own kinda of ways to do things instead of over-engineering a perfect plugin architecture, we built this: a dedicated version of [**clab-ui**](https://github.com/srl-labs/containerlab-app) adjusted for the netlab ecosystem.
-
-It lets you visualize, author, and inspect netlab topologies, then manage their lifecycles (`netlab up`, status, shell)
-
 <p align="center">
-  <img src="docs/screenshots/canvas-overview.png" alt="netlab-ui canvas with multiple topologies, the node palette, and the file explorer open" width="900" />
+  <a href="https://github.com/Muddyblack/netlab-ui/releases/latest"><img src="https://img.shields.io/github/v/release/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=ff9f01&logo=github&label=release" alt="Latest release" /></a>
+  <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=00c9ff&logo=download&label=downloads" alt="Downloads" /></a>
+  <a href="docs/features.md"><img src="https://img.shields.io/badge/docs-read-ff9f01?style=for-the-badge&labelColor=182431&logoColor=white&logo=readthedocs" alt="Docs" /></a>
+  <a href="https://github.com/Muddyblack/netlab-ui/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Muddyblack/netlab-ui/ci.yml?style=for-the-badge&labelColor=182431&logoColor=white&logo=githubactions&label=ci" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=00c9ff&logo=apache&label=license" alt="License" /></a>
 </p>
 
 ---
 
-## Why this approach?
-
-We consume `@containerlab/clab-ui` as a normal **npm dependency** (not a fork or local checkout) and feed it netlab data through a thin Python adapter.
-
-- **No Rebasing Debt:** Because `clab-ui` moves fast and is published as a reusable library with an integrator contract, we get design updates via simple version bumps.
-- **Single Source of Truth:** Netlab remains the ultimate source of truth. The netlab-to-clab projection (`netlab create -o clab`) is what gets rendered.
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    subgraph Frontend ["Frontend (React 19 + Vite)"]
-        App["App.tsx<br>(runtime + host wiring)"]
-        Canvas["@containerlab/clab-ui<br>(Canvas, explorer, palette, lifecycle UI)"]
-        Panels["Netlab UI Extensions<br>(Lenses, Units, Links, Groups, Plugins, Workers, Assistant)"]
-        Editor["Lazy Tooling<br>(Monaco file editor, xterm shells/logs)"]
-        Client["Generated API Client<br>(OpenAPI TypeScript types)"]
-    end
-
-    subgraph Backend ["FastAPI Backend (Python)"]
-        Contract["/api/topology<br>(ClabUiHost sessions, snapshots, commands, model edits)"]
-        Lab["/api/lab<br>(workspaces, files, lifecycle, runtime, images, capture)"]
-        Lenses["/api/lenses<br>(validation, readiness, paths, services, reports)"]
-        Extras["Optional /api/assistant + /mcp<br>Plugins, docs, schema, shell WebSocket"]
-        HostState["Session Host<br>(undo/redo, revision, transactions)"]
-        Snapshot["Snapshot Builder<br>(netlab model + clab projection + status)"]
-        Model["Model Service<br>(YAML parsing + ruamel round-trip)"]
-        Annotations["Annotation Service<br>(layout sidecar)"]
-        Runner["Runner Service<br>(netlab/containerlab/libvirt commands + streams)"]
-        Events["Event Hub<br>(SSE status + workspace push events)"]
-    end
-
-    subgraph Host ["Host Environment / Runtimes"]
-        NetlabCLI["netlab CLI"]
-        Providers["containerlab / libvirt / Docker"]
-        AgentCLI["Agent CLI<br>(optional Claude/Codex/Gemini provider)"]
-    end
-
-    subgraph Storage ["Workspace Storage"]
-        NetlabYAML[("Topology YAML<br>(topology.yml)")]
-        Sidecar[("Layout Sidecar<br>(*.netlab-ui.json)")]
-        RuntimeFiles[("Generated runtime files<br>(clab.yml, configs, logs)")]
-        IconsUnits[("User assets<br>(icons, unit templates)")]
-    end
-
-    App --> Canvas
-    App --> Panels
-    App --> Editor
-    Canvas <-->|Host contract| Contract
-    Panels <-->|HTTP API| Client
-    Editor <-->|HTTP / WebSocket| Client
-    Client <-->|fetch / SSE| Lab
-    Client <-->|fetch| Contract
-    Client <-->|fetch| Lenses
-    Client <-->|fetch / WebSocket| Extras
-
-    Contract <--> HostState
-    Contract <--> Snapshot
-    Contract <--> Model
-    Contract <--> Annotations
-    Lab <--> Runner
-    Lab <--> Events
-    Lenses <--> Runner
-    Extras <--> Runner
-
-    Annotations <-->|Read / Write| Sidecar
-    Model <-->|Read / Write| NetlabYAML
-    Runner <-->|Read / Write| RuntimeFiles
-    Lab <-->|Read / Write| IconsUnits
-
-    Runner -->|CLI invocations| NetlabCLI
-    NetlabCLI -->|Deploy / Destroy / Inspect| Providers
-    Snapshot -->|Background netlab create cache| NetlabCLI
-    Extras -.->|MCP tools| AgentCLI
-    AgentCLI -.->|HTTP MCP| Extras
-```
-
-- **Backend (`backend/`)** — Built with FastAPI. It implements clab-ui's `ClabUiHost` contract (`/api/topology/{sessions,snapshot,command}`), wraps lab lifecycle/runtime/file APIs, and provides lenses, plugin, schema/docs, shell, capture, and optional assistant surfaces.
-- **Frontend (`frontend/`)** — React 19 + Vite. Consumes the clab-ui canvas and overlays netlab-native panels and tools for units, links, groups, plugins, workers, lenses, files, shells/logs, and the optional assistant.
-
-### Data & Projection Flow
-
-To keep the primary netlab YAML file clean, coordinates and visual metadata are projected/merged on-the-fly and stored in a sidecar file.
-
-```mermaid
-flowchart LR
-    YAML[("netlab YAML<br>(topology.yml)")] -->|Parse with ruamel| Model["Netlab Model"]
-    Model -->|Immediate fallback projection| Snapshot["Topology Snapshot"]
-    YAML -->|Hash miss schedules background transform| NetlabCreate["netlab create -o clab"]
-    NetlabCreate -->|Cache clab nodes + links| Snapshot
-    Sidecar[("Layout Sidecar<br>(*.netlab-ui.json)")] -->|Merge coordinates + UI metadata| Snapshot
-    Status["netlab status<br>(SSE cache)"] -->|Deployment state + node dots| Snapshot
-    Snapshot -->|/api/topology/snapshot| Frontend["clab-ui Canvas"]
-    Frontend -->|Topology commands| Commands["/api/topology/command"]
-    Commands -->|Model edits| YAML
-    Commands -->|Layout-only updates| Sidecar
-```
-
----
-
-## Quick Start
-
-### 🐍 Venv + NPM (the normal path)
-
-**1. Spin up the backend:**
-
-```bash
-cd backend
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
-# pip install -e ".[netlab]"           # if you don't already have netlab + ansible installed locally
-# pip install -e ".[assistant]"
-pytest                                   # Run the tests
-uvicorn app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
-```
-
-The backend package and application images do not bundle netlab or Ansible.
-Use **Settings → Environment** to select an existing `netlab` executable, or
-set `NETLAB_BIN=/path/to/netlab`. A pipx or separate virtualenv installation is
-supported: the backend uses that executable's Python environment for `netsim`
-metadata and prepends its `bin/` directory when netlab launches child tools.
-For a containerized UI, mount the selected netlab environment into the
-container at the same path.
-
-**2. Spin up the frontend:**
-
-```bash
-cd frontend
-npm install
-npm run dev                              # Frontend runs at http://localhost:5173
-```
-
-### ❄️ Nix (Flake) — if that's your thing
-
-Nobody's making you use Nix, but if you already do, the included `flake.nix` gives you a dev shell with Python 3.12, Node 24, and the `networklab` package.
-
-```bash
-nix run            # Starts backend (:8000) + frontend (:5173). Ctrl-C stops both!
-```
-
-> [!NOTE]
-> The first run will automatically execute `npm install` for the frontend.
-
-#### Other Flake entrypoints:
-
-```bash
-nix run .#backend  # Start only the backend
-nix run .#frontend # Start only the frontend
-nix run .#test     # Run pytest suites
-
-nix develop        # Drop into the dev shell (or run `direnv allow`)
-```
-
----
-
-## About `@containerlab/clab-ui`
-
-[`@containerlab/clab-ui`](https://www.npmjs.com/package/@containerlab/clab-ui) is published on the public npm registry (source lives in the [containerlab-app](https://github.com/srl-labs/containerlab-app) monorepo), so a plain `npm install` is all it takes — no token or `.npmrc`. It requires **Node ≥ 24**.
-
-The frontend imports `@containerlab/clab-ui` directly wherever it's needed (see `frontend/src/App.tsx`, `frontend/src/host/`, etc.) — there is no local checkout, stub, or swap-point to configure.
-
-> **Note:** `@containerlab/clab-ui` is currently pinned to an exact version (`0.3.2`)
-> with small `patch-package` patches applied on install (`frontend/patches/`):
-> one restores exports an upstream cleanup accidentally dropped (temporary),
-> two add generic host hooks (lifecycle-modal lab name/actions, host-owned
-> node-editor fields). See `frontend/AGENTS.md` for what each does.
-
----
-
-## API Types (generated, single source of truth)
-
-Response shapes are defined **once** in Python and the frontend's TypeScript
-types are **generated** from them.
-
-- **Source of truth:** every API response is a Pydantic model in
-  [`backend/app/contract/responses.py`](backend/app/contract/responses.py),
-  attached to its endpoint via `response_model=`. This makes FastAPI's
-  `/openapi.json` schema complete.
-- **Generated types:** [`frontend/src/api/generated.ts`](frontend/src/api/generated.ts)
-  is produced from that schema with [`openapi-typescript`]. **Do not edit it by
-  hand.**
-- **Consumer:** [`frontend/src/api/client.ts`](frontend/src/api/client.ts) imports
-  those generated types (`Schemas["CommandResult"]`, etc.) instead of hand-rolling
-  response interfaces.
-
-### Regenerating after a backend change
-
-```bash
-# 1. Backend must be running so its OpenAPI schema is reachable:
-cd backend && uvicorn app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
-
-# 2. In another shell, regenerate the TS types and type-check:
-cd frontend
-npm run gen:api          # reads http://localhost:8000/openapi.json -> src/api/generated.ts
-npm run typecheck        # tsc --noEmit; fails if a consumer is out of sync
-```
-
-Point at a non-default backend with `OPENAPI_URL`:
-
-```bash
-OPENAPI_URL=http://my-host:9000/openapi.json npm run gen:api
-```
-
-**Workflow:** change a response shape → add/adjust the model in `responses.py` →
-`npm run gen:api` → `tsc` flags any frontend code that no longer matches. A
-mismatched Pydantic field and TS interface now fails at compile time instead of
-at runtime.
-
-[`openapi-typescript`]: https://github.com/openapi-ts/openapi-typescript
-
----
-
-## 🤖 AI Assistant (experimental, optional)
-
-> [!WARNING]
-> **This is a trial feature.** It ships switched on where its dependencies are installed and off everywhere else, so it can be evaluated in real use — and removed again without ceremony if it turns out not to earn its place. Everything it touches lives in `backend/services/assistant/`, `backend/app/assistant/` and `frontend/src/panels/assistant/`, plus three small hooks (a guarded import in `backend/app/main.py`, one tab push in `frontend/src/App.tsx`, a few wrappers in `frontend/src/api/client.ts`). Deleting those three directories and reverting those three hooks removes the feature entirely.
-
-An **Assistant** tab that can read your topology, inspect the running lab, and propose changes you approve as a diff. Pick the provider, model and agent **mode** (Ask / Plan / Build / Tutor) from the composer; type `/` for slash commands (`/model`, `/provider`, `/new`, `/history`); toggle the whole panel with **Ctrl+I**. Conversations are kept per lab, survive a page refresh, and can be reopened or deleted from the history list.
-
-### Two ways to connect
-
-Whichever you use, netlab-ui exposes its capabilities as an **MCP server** and the agent reaches back into the lab through it:
-
-```mermaid
-flowchart LR
-    Panel["Assistant panel"] --> Agent["Agent provider"]
-    Agent --> Cli["CLI agent<br/>existing login"]
-    Agent --> Api["Direct API provider<br/>local key"]
-    Cli --> Mcp["netlab-ui /mcp<br/>HTTP + bearer token"]
-    Api --> Mcp
-    Mcp --> Tools["netlab CLI<br/>topology model<br/>lab state"]
-```
-
-- **CLI agents — your existing login, no key handled by netlab-ui.** It drives an agent CLI you've already installed and signed in (a Claude Pro/Max plan just works). **Claude Code** and **Codex** are supported.
-- **Direct-API providers — your key, stored on this machine only.** **Gemini**, **ChatGPT (OpenAI)**, and any **OpenAI-compatible endpoint** (Ollama, LM Studio, vLLM, OpenRouter…). Set the key from the panel's provider settings or via an environment variable; choose the model from the composer.
-
-The panel shows each provider's status (which CLIs it found, which keys are set), so an unavailable provider is diagnosable from the UI rather than a silent failure.
-
-### What it can do
-
-|             |                                                                                                                                                                                          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Explain** | Reads the source YAML _and_ the transformed model, so it can answer "what IP did r1 get" — which the file alone can't.                                                                   |
-| **Author**  | Proposes edits as a unified diff. Nothing is written until you click Apply, and what lands goes through the same undoable command path as a canvas edit — so `Ctrl-Z` works.             |
-| **Analyse** | Runs read-only commands on running nodes (`show …`, `ping`, `traceroute`) and interprets the output. Writes and configuration are rejected mechanically, not by asking the model nicely. |
-| **Teach**   | Tutor mode explains rather than does, and can propose a link impairment for you to apply so you have something real to debug.                                                            |
-
-The **mode** picked in the composer shapes each turn: **Ask** (investigate, no changes), **Plan** (research and lay out an ordered plan), **Build** (propose the smallest complete edit, still approval-gated), **Tutor** (guide you rather than do it for you).
-
-### Enabling it
-
-The dependencies are an optional extra, so a normal install doesn't pull them in. When they're absent the tab simply never appears — nothing else changes.
-
-```bash
-cd backend
-pip install -e ".[assistant]"        # adds mcp, claude-agent-sdk, google-genai, openai
-```
-
-Then connect at least one provider and restart the backend; the **Assistant** tab appears next to Workers:
-
-- **A CLI agent** — install it and log in once (e.g. [Claude Code](https://claude.com/claude-code), then run `claude` and sign in; or Codex). It's picked up from `PATH`.
-- **A direct-API provider** — set a key from the panel's provider settings (⚙), or export one before starting the backend: `NETLAB_APP_GEMINI_API_KEY`, `NETLAB_APP_OPENAI_API_KEY`, or `NETLAB_APP_OPENAI_COMPAT_BASE_URL` (+ `…_API_KEY`) for a local/OpenAI-compatible endpoint.
-
-It lives in the right-hand panel, but a conversation outlives that panel — you'll want Nodes or Lenses back while the agent works. The ⧉ button moves it into its own window (`?popout=assistant&sessionId=…`), the same pattern the node shells use.
-
-If the backend extra is installed but no CLI is found, the tab appears and tells you which ones it looked for — that case is diagnosable from the UI. If the extra itself is missing there is no tab at all, which is why the install command lives here.
-
-Switch it off explicitly with `NETLAB_APP_ASSISTANT=off`, regardless of what's installed:
-
-| Variable                       | Default                     | Meaning                                                                                         |
-| ------------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------- |
-| `NETLAB_APP_ASSISTANT`         | `auto`                      | `auto` = on when the extra is installed; `on` = also warn when it isn't; `off` = fully disabled |
-| `NETLAB_APP_ASSISTANT_TOKEN`   | random per start            | Bearer token for `/mcp`; set it to keep the value stable across restarts                        |
-| `NETLAB_APP_ASSISTANT_MCP_URL` | `http://127.0.0.1:8000/mcp` | Override when the backend is behind a proxy or on another port                                  |
-| `NETLAB_APP_ASSISTANT_FAKE`    | unset                       | Adds a scripted "Demo" provider — exercises the whole panel with no CLI and no tokens           |
-| `NETLAB_APP_GEMINI_API_KEY` / `…_MODEL`         | unset  | Gemini key (and optional default model). An env-set value locks the field in the UI            |
-| `NETLAB_APP_OPENAI_API_KEY` / `…_MODEL`         | unset  | OpenAI (ChatGPT) key and optional default model                                                |
-| `NETLAB_APP_OPENAI_COMPAT_BASE_URL` / `…_API_KEY` / `…_MODEL` | unset | Any OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, OpenRouter          |
-
-### Point your own agent at the lab
-
-The same MCP endpoint works for any MCP client, so you can drive a lab from your own terminal agent instead of the panel. `GET /api/assistant/capabilities` returns a ready-to-paste config (URL, token and the tool list):
-
-```bash
-curl -s localhost:8000/api/assistant/capabilities | jq -r .mcp.clientConfig
-```
-
-### Why edits need approval
-
-Everything the assistant reads — device output, file contents, config comments — is untrusted input to a model. So the trust boundary is drawn in code rather than in the prompt: the MCP tools can only read, `exec_on_node` enforces a read-only allowlist, and the single write path (`propose_topology_edit`) stages a diff that a human has to approve. The worst outcome of a prompt injection is a proposal you look at and reject.
-
-### Ideas parked for later
-
-Written down so they don't get lost, not because they're scheduled:
-
-- **More providers** — Claude Code and Codex (CLI), plus Gemini, OpenAI and any OpenAI-compatible endpoint (API key) all ship today. Still open: adapters for other terminal agents, and richer local-model ergonomics for people who want nothing leaving the host.
-- **Deployment troubleshooting** — feed `netlab up` failures and node logs straight into a turn, so "why did this fail" needs no copy-pasting.
-- **Comment-preserving structural edits** — today the assistant is steered towards whole-file edits because the structural command path reformats YAML and drops comments (a pre-existing trait of the serializer, shared with canvas edits). Fixing that at the serializer would make every diff smaller.
-- **Richer tutor mode** — generated exercise sets, progress tracking, and faults injected at the config level rather than only as link impairments.
-- **Topology review** — an on-demand critique of a design (addressing, redundancy, module choices) rather than a chat turn.
-- **Multi-lab context** — reasoning across every topology in a workspace, not just the open one.
-
----
-
-## Running It as One Container
-
-The dev setup above runs the backend and frontend as two separate processes. The root [`Dockerfile`](Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
-
-Two images come out of it:
-
-| Image | Target | Contains | Use when |
-| --- | --- | --- | --- |
-| `ghcr.io/muddyblack/netlab-ui:<ver>-full` | `full` | UI + netlab + Ansible + containerlab | the host only has Docker |
-| `ghcr.io/muddyblack/netlab-ui:<ver>` | `ui` (default) | UI only | you already run netlab on the host and want the UI to use *that* install |
-
-### Quick start (everything included)
+> _"I always start stuff although I tell myself I don't have time for it... and yet, here we are."_
+
+**netlab-ui** is a web interface for [**netlab**](https://netlab.tools/) ([ipspace/netlab](https://github.com/ipspace/netlab)). Build and edit network lab topologies visually, work with netlab YAML, and deploy labs from your browser. It supports containerlab containers, libvirt virtual machines, and external devices, with [features depending on the provider](docs/features.md#providers-containerlab-libvirt-vms-external-devices).
+
+Use the visual topology editor to add nodes and links, configure netlab modules, and inspect your lab. Deploy and destroy labs, open device shells, run commands across nodes, and explore live traffic and network reports from the same UI.
+
+The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-app), with netlab-specific editors and lifecycle actions implemented in this project.
+
+**[Try the UI preview](https://muddyblack.github.io/netlab-ui/)** · **[Quick start](#quick-start)** · **[Features and provider support](docs/features.md)**
+
+<p align="center">
+  <a href="docs/showcase/GALLERY.md#showcase-traffic"><img src="docs/showcase/media/traffic/lens-dark.webp" alt="netlab-ui: a running leaf/spine lab with live traffic on every link" width="900" /></a>
+</p>
+
+## In action
+
+<!-- showcase:start -->
+**▶ [Watch the tour](docs/showcase/media/netlab-ui-showcase.mp4)**: every recorded feature in one video.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-canvas">
+<img src="docs/showcase/media/canvas/new-link-dark.webp" alt="A new s1–s2 link drawn on the canvas" />
+</a>
+<br /><sub><b>Draw labs on a canvas</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-deploy">
+<img src="docs/showcase/media/deploy/progress-dark.webp" alt="netlab up running, with its live output" />
+</a>
+<br /><sub><b>Deploy with live progress</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-command-palette">
+<img src="docs/showcase/media/command-palette/spotlight-dark.webp" alt="Canvas spotlight on the spine group" />
+</a>
+<br /><sub><b>Everything one keystroke away</b></sub>
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-node-editor">
+<img src="docs/showcase/media/node-editor/editor-dark.webp" alt="The node editor next to the canvas" />
+</a>
+<br /><sub><b>Edit nodes the netlab way</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-shell">
+<img src="docs/showcase/media/shell/vtysh-dark.webp" alt="A web shell on s1 showing OSPF neighbors and the BGP summary" />
+</a>
+<br /><sub><b>A shell on every node</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-run-on-nodes">
+<img src="docs/showcase/media/run-on-nodes/focused-dark.webp" alt="The current Run on nodes panel with s1's output expanded" />
+</a>
+<br /><sub><b>One command, every node</b></sub>
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-link-faults">
+<img src="docs/showcase/media/link-faults/link-down-dark.webp" alt="Link s1–l2 down, flagged by the traffic lens" />
+</a>
+<br /><sub><b>Break things on purpose</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-config-drift">
+<img src="docs/showcase/media/config-drift/diff-dark.webp" alt="Running-config drift: l1 changed since the snapshot, with its diff" />
+</a>
+<br /><sub><b>See what changed on the devices</b></sub>
+</td>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-reports">
+<img src="docs/showcase/media/reports/gallery-dark.webp" alt="The report gallery over the lab" />
+</a>
+<br /><sub><b>netlab reports, interactive</b></sub>
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-ai-agents">
+<img src="docs/showcase/media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change, shown as a diff to apply or reject" />
+</a>
+<br /><sub><b>Bring your own AI agent</b></sub>
+</td>
+</tr>
+</table>
+
+<!-- showcase:end -->
+
+## Quick start
+
+Everything included (netlab, Ansible, containerlab); the host only needs Docker:
 
 ```bash
 docker compose up -d          # uses docker-compose.yml; labs live in ./labs
 ```
 
-Open `http://localhost:8000`. The equivalent `docker run`:
+Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-user setups and building it yourself are in [docs/container.md](docs/container.md). To run from source instead, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```bash
-mkdir -p "$PWD/labs"
-docker run -d --name netlab-ui \
-  --privileged --network host --pid host \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /var/run/netns:/var/run/netns \
-  -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
-  -v "$HOME/.netlab:/root/.netlab" \
-  -e UVICORN_HOST=127.0.0.1 \
-  ghcr.io/muddyblack/netlab-ui:latest-full
-```
+## Documentation
 
-Why each flag matters — each one fails late and cryptically when missing:
-
-- **`--privileged --network host --pid host`** — containerlab creates network namespaces, veth links and sysctls for the lab nodes (the same flags containerlab's own container image needs). Without them `netlab up` dies with errors like `rp_filter: read-only file system`.
-- **Docker socket** — labs run on the host's Docker daemon, next to the UI container.
-- **Labs directory at the *same path* as on the host** — containerlab asks the host daemon to bind-mount node config files by their in-container path. Mounting `./labs` at `/work` (as older docs suggested) makes every node fail to start.
-- **`~/.netlab`** — netlab's running-lab registry. Shared with `netlab status` on the host and kept across container re-creation; without it labs started from the UI turn into orphans.
-- **`UVICORN_HOST=127.0.0.1`** — the UI can deploy labs and open root shells, so it listens on loopback unless you set `0.0.0.0` on purpose. When you do, also set **`NETLAB_UI_AUTH=user:password`**: every page, API call, live stream and terminal then requires that login (HTTP Basic — the browser asks once).
-
-### Several users on one lab server
-
-- **`NETLAB_UI_AUTH=alice:pw1,bob:pw2`** (or one `user:password` per line in the file named by **`NETLAB_UI_AUTH_FILE`**) — each person logs in as themselves.
-- **`NETLAB_UI_SHARED_WORKSPACE=/srv/labs`** — a folder everyone works in. It is always listed (as *name (shared)*), cannot be removed from the UI, and its labs carry a *shared* badge.
-- Running labs show who deployed them (*team-lab (7) · by alice · shared*). The owner is recorded next to netlab's own registry in `~/.netlab/netlab-ui-owners.json` and cleared on `netlab down`.
-
-You don't have to remember any of this: the backend inspects its own container and lists anything missing — with the exact flag to add — under **Settings → Environment → Container Setup**, plus a banner at startup when a deployment would fail.
-
-### UI-only image with your host's netlab
-
-Same flags, plus mount your netlab install at its own path and point the UI at it (or pick it in **Settings → Environment**):
-
-```bash
-  -v /opt/netlab-venv:/opt/netlab-venv:ro -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
-  -v /usr/bin/containerlab:/usr/bin/containerlab:ro \
-  ghcr.io/muddyblack/netlab-ui:latest
-```
-
-### Building locally
-
-```bash
-docker build -t netlab-ui .                       # UI only
-docker build --target full -t netlab-ui:full .    # with netlab + containerlab
-docker compose build                              # the compose file's image
-```
-
-libvirt-based providers aren't included in either image.
-
----
-
-## Desktop App
-
-[`desktop/`](desktop/) is an Electron shell around the same UI — no bundled backend, same as the container above: point it at a running netlab-ui backend (this machine or a remote netlab host) and it renders that backend's UI in a native window. Defaults to `http://localhost:8000`; change it any time from the **Server** menu.
-
-The shell does not build a second copy of the frontend. It displays the frontend served by the selected backend, including the `clab-ui` patch applied by `frontend/patches/` during that frontend's build.
-
-The window that loads the backend's UI gets zero Node/IPC access (`contextIsolation`, `sandbox`, `nodeIntegration: false` — see [`desktop/src/main.js`](desktop/src/main.js)); only the local connect screen gets the settings bridge, and [`desktop/src/preload.js`](desktop/src/preload.js) refuses to expose it to anything not loaded from `file://`. Same reasoning containerlab-app, Jellyfin, and Home Assistant's desktop clients use for "point this app at a server I trust."
-
-```bash
-cd desktop
-npm install
-npm start                # launches against your running backend
-npm run check            # lint + unit tests
-```
-
-Packaging is via `electron-builder`:
-
-```bash
-npm run build:linux   # AppImage + .deb + .rpm
-npm run build:mac     # universal .dmg (build on macOS)
-npm run build:win     # NSIS .exe
-```
-
-Cross-compiling `.dmg` needs a macOS host (Apple's toolchain isn't available on Linux); Windows can be built cross-platform. Nothing is code-signed yet, so macOS Gatekeeper/Windows SmartScreen will warn on the built installers — same unsigned state containerlab-app's desktop releases are in today.
-
-**Releasing:** [`.github/workflows/desktop-release.yml`](.github/workflows/desktop-release.yml) builds all three platforms in parallel (Linux/macOS/Windows runners) and publishes them to a GitHub Release. Push a tag to trigger it:
-
-```bash
-git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
-```
-
-That prefix (`desktop-v*`, not `v*`) is deliberate — it keeps desktop releases on their own tag namespace, separate from whatever the repo's other `v*` tags are used for.
-
----
+| | |
+| --- | --- |
+| [Features](docs/features.md) | Shortcuts, run on nodes, search, running configs, exercises, live traffic, faults, packet capture, providers, reports |
+| [AI agents](docs/ai-agents.md) | Start Claude Code, Codex or Gemini CLI connected to your lab, or connect any MCP tool; review what it proposes |
+| [Running as a container](docs/container.md) | Images, required flags, several users on one server |
+| [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
+| [Architecture](docs/architecture.md) | How netlab-ui builds on clab-ui and netlab |
+| [Contributing](CONTRIBUTING.md) | Dev setup, checks, API types, clab-ui patches, showcase |
 
 ## Thanks
 

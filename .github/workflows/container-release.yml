@@ -40,22 +40,54 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
+      # Same tags with a -full suffix (latest → latest-full) for the image that
+      # bundles netlab, Ansible and containerlab (Dockerfile target `full`).
+      - id: metadata-full
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=-full,onlatest=true
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ui
           # arm64 matters for Apple Silicon and arm-based lab hosts. Only the
           # Python stage is emulated — the frontend stage builds natively.
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            NETLAB_GUI_VERSION=${{ github.ref_name }}
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # One cache scope per target, or the second build overwrites the first's.
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: full
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            NETLAB_GUI_VERSION=${{ github.ref_name }}
+          push: true
+          tags: ${{ steps.metadata-full.outputs.tags }}
+          labels: ${{ steps.metadata-full.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=full
+          cache-to: type=gha,mode=max,scope=full
 
   release:
     needs: publish
@@ -64,6 +96,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Image tags come from docker/metadata-action's semver patterns, which
+      # drop the leading "v" (tag v1.2.3 → image 1.2.3).
+      - id: version
+        run: echo "tag=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       # The GitHub Release is the landing page people reach from the tag, so
       # it leads with the pull command rather than only a source zip.
@@ -76,27 +113,44 @@ jobs:
           body: |
             ## Run it
 
+            Everything included (netlab, Ansible, containerlab) — the host only
+            needs Docker. Download `docker-compose.yml` from this release, then:
+
             ```bash
-            docker run -d --name netlab-ui \
-              -p 8000:8000 \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v "$PWD/labs:/work" \
-              ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            docker compose up -d        # → http://localhost:8000
             ```
 
-            Then open <http://localhost:8000>.
+            or the equivalent `docker run`:
 
-            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest`.
+            ```bash
+            mkdir -p "$PWD/labs"
+            docker run -d --name netlab-ui \
+              --privileged --network host --pid host \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v /var/run/netns:/var/run/netns \
+              -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
+              -v "$HOME/.netlab:/root/.netlab" \
+              -e UVICORN_HOST=127.0.0.1 \
+              ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}-full
+            ```
 
-            ### Scope
+            The labs directory must be mounted at the **same path** as on the
+            host (containerlab bind-mounts node files through the host Docker
+            daemon), and `~/.netlab` keeps netlab's running-lab registry shared
+            with the host. The UI checks all of this itself: see
+            **Settings → Environment → Container Setup**.
 
-            This image is the **UI only**. `netlab`, Ansible and containerlab
-            stay on your host — run it on a machine that already has netlab
-            set up, and point Settings → Environment at that install (or set
-            `NETLAB_BIN`).
+            ### UI-only image
 
-            Features that call containerlab directly — link impairment,
-            orphaned-instance cleanup, post-start link reconcile — need the
-            binary visible inside the container. It is a static Go binary, so
-            add `-v /usr/bin/containerlab:/usr/bin/containerlab:ro` to enable
-            them. Everything else works without it.
+            `ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}` (no `-full`)
+            leaves netlab, Ansible and containerlab on your host. Use the same
+            flags, plus mount your netlab install at its own path and point the
+            UI at it:
+
+            ```bash
+              -v /opt/netlab-venv:/opt/netlab-venv:ro \
+              -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
+              -v /usr/bin/containerlab:/usr/bin/containerlab:ro
+            ```
+
+            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest` / `latest-full`.

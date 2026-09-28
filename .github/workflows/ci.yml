@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e ".[dev,netlab,assistant]"
+        run: pip install -e ".[dev,netlab]"
 
       - name: Lint (ruff check)
         run: ruff check
@@ -127,6 +127,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Both published images: the UI-only default and the bundled toolchain.
+        target: [ui, full]
     steps:
       - uses: actions/checkout@v4
 
@@ -135,11 +139,12 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: false
           # Single arch on PRs: this is a "does it build" gate, and emulating
           # arm64 here would roughly double the run for no extra signal.
           platforms: linux/amd64
-          # Shares the cache the release build populates, so tagging later is
-          # mostly cache hits.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Shares the per-target cache the release build uses (scope ui/full),
+          # so tagging later is mostly cache hits.
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

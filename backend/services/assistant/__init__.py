@@ -1,12 +1,13 @@
-"""Optional AI assistant feature.
+"""Optional MCP server that lets the user's own AI agent work with netlab-ui.
 
-Everything AI-related lives under this package plus ``app/assistant/`` — the
-rest of the backend never imports from here except for the guarded block in
-``app.main``. Deleting both directories (and that block) removes the feature
+netlab-ui has no chat of its own: people point Claude Code, Codex, Gemini CLI,
+Cursor, … at this server. Everything AI-related lives under this package plus
+``app/assistant/`` — the rest of the backend never imports from here except for
+the guarded block in ``app.main``. Deleting both directories (and that block) removes the feature
 entirely.
 
 The feature is enabled when ``NETLAB_APP_ASSISTANT`` is not ``off`` *and* the
-optional ``mcp`` dependency is importable (``pip install -e '.[assistant]'``).
+``mcp`` dependency is importable (a default dependency; a trimmed install may lack it).
 This mirrors the ``watchfiles`` pattern in :mod:`services.events`: an absent
 optional dependency degrades to "feature missing", never to a broken backend.
 """

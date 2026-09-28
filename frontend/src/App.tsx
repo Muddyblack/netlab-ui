@@ -30,13 +30,8 @@ export default function App() {
         c.setSettingsOpen(true);
       }}
       assistantAvailable={Boolean(c.assistantCapabilities && c.sessionId)}
-      assistantHasProvider={Boolean(c.assistantCapabilities?.providers?.some((p) => p.available))}
       assistantOpen={c.assistantOpen}
       onToggleAssistant={() => c.setAssistantOpen((open) => !open)}
-      onSetupAssistant={() => {
-        c.setSettingsTab("assistant");
-        c.setSettingsOpen(true);
-      }}
     />
   );
 
@@ -135,9 +130,6 @@ export default function App() {
             setWorkspaces={c.setWorkspaces}
             fetchFiles={c.fetchFiles}
             checkStartup={c.checkStartup}
-            assistantCapabilities={c.assistantCapabilities}
-            assistantSettingsProviderId={c.assistantSettingsProviderId}
-            refreshAssistantCapabilities={c.refreshAssistantCapabilities}
             startup={c.startup}
             deployDiff={c.deployDiff}
             deployValidationIssues={c.deployValidationIssues}

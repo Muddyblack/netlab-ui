@@ -1,0 +1,25 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-YWKQISCS.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-YWKQISCS.js
+index ef10148..fab46b6 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-YWKQISCS.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-YWKQISCS.js
+@@ -5257,7 +5257,9 @@ function applyRuntimeUpdateToEdge(edge, update) {
+   const currentExtraData = getRecordUnknown(data.extraData) ?? {};
+   const nextExtraData = mergeRuntimeExtraData(currentExtraData, update.extraData);
+   const nextClassName = update.classes ?? edge.className;
+-  if (nextExtraData === currentExtraData && nextClassName === edge.className) {
++  // The edge renderer colours by data.linkStatus, not the class: keep them in step.
++  const nextLinkStatus = typeof nextClassName === "string" && nextClassName.includes("link-up") ? "up" : typeof nextClassName === "string" && nextClassName.includes("link-down") ? "down" : data.linkStatus;
++  if (nextExtraData === currentExtraData && nextClassName === edge.className && nextLinkStatus === data.linkStatus) {
+     return edge;
+   }
+   return {
+@@ -5265,7 +5267,8 @@ function applyRuntimeUpdateToEdge(edge, update) {
+     ...update.classes === void 0 ? {} : { className: nextClassName },
+     data: {
+       ...data,
+-      extraData: nextExtraData
++      extraData: nextExtraData,
++      ...nextLinkStatus === void 0 ? {} : { linkStatus: nextLinkStatus }
+     }
+   };
+ }

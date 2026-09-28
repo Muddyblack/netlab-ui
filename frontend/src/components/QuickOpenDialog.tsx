@@ -6,23 +6,58 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ViewModuleIcon from "@mui/icons-material/ViewModule";
 import { Box, Chip, Dialog, DialogContent, InputAdornment, List, ListItemButton, ListItemIcon, ListItemText, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import TravelExploreIcon from "@mui/icons-material/TravelExplore";
 import { useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import { getApiBase } from "../api/endpoint";
-import type { LabFileEntry } from "../api/client";
+import { api, type LabFileEntry, type LabSearchHit } from "../api/client";
+import { setSpotlight } from "../host/canvasSpotlight";
 import type { UnitInfo } from "../panels/UnitsDock";
 
 type QuickItem = {
   id: string;
   label: string;
   detail: string;
-  kind: "Lab" | "Unit" | "Node" | "Action";
+  kind: "Lab" | "Unit" | "Node" | "Action" | "Found";
   run: () => void;
+  /** Instead of running: stay open with this query (e.g. "module:"). */
+  nextQuery?: string;
+  /** Higher = listed first while nothing is typed (context actions). */
+  priority?: number;
 };
+
+const SPOTLIGHT_PREFIX: Record<string, string> = { module: "module ", group: "group ", device: "device ", role: "role " };
+
+/** Lab facts (addresses, AS, VLANs, modules…) from the backend search; picking
+ * one spotlights its nodes on the canvas. */
+function useLabSearch(open: boolean, sessionId: string | null, query: string, selectNode: (id: string) => void): QuickItem[] {
+  const [hits, setHits] = useState<LabSearchHit[]>([]);
+  useEffect(() => {
+    const text = query.trim();
+    if (!open || !sessionId || !text) { setHits([]); return; }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void api.searchLab(sessionId, text).then((result) => { if (!cancelled) setHits(result.results); }).catch(() => undefined);
+    }, 180);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [open, sessionId, query]);
+  return useMemo(() => hits.map((hit) => ({
+    id: `found:${hit.kind}:${hit.title}:${hit.detail}`,
+    label: hit.title,
+    detail: `${hit.kind} · ${hit.detail}`,
+    kind: "Found" as const,
+    run: () => {
+      const nodes = hit.nodes ?? [];
+      setSpotlight({ label: `${SPOTLIGHT_PREFIX[hit.kind] ?? ""}${hit.title}`, nodes });
+      if (nodes.length === 1) selectNode(nodes[0]);
+    },
+  })), [hits, selectNode]);
+}
 
 function quickItemIcon(item: QuickItem) {
   if (item.kind === "Lab") return <FolderOpenIcon fontSize="small" />;
   if (item.kind === "Unit") return <ViewModuleIcon fontSize="small" />;
   if (item.kind === "Node") return <DeviceHubIcon fontSize="small" />;
+  if (item.kind === "Found") return <TravelExploreIcon fontSize="small" />;
   if (item.id.includes("group")) return <AccountTreeIcon fontSize="small" />;
   return <BoltIcon fontSize="small" />;
 }
@@ -53,7 +88,7 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
   onOpenLab: (topologyRef: LabFileEntry["topologyRef"]) => void;
   onOpenUnit: (unit: UnitInfo) => void;
   onInstantiateUnit: (unit: UnitInfo) => void;
-  actions: Array<{ id: string; label: string; detail: string; run: () => void }>;
+  actions: Array<{ id: string; label: string; detail: string; run: () => void; nextQuery?: string; priority?: number }>;
 }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -80,15 +115,26 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
     ...nodes.map((node) => ({ id: `node:${node.id}`, label: node.id, detail: String(node.data?.device ?? node.data?.kind ?? "node"), kind: "Node" as const, run: () => { topoActions.selectNode(node.id); topoActions.editNode(node.id); } }))
   ], [actions, isLocked, labs, nodes, onInstantiateUnit, onOpenLab, onOpenUnit, topoActions, units]);
 
-  const filtered = useMemo(() => items
-    .map((item) => ({ item, score: fuzzyScore(`${item.label} ${item.detail} ${item.kind}`, query) }))
-    .filter(({ score }) => score >= 0)
-    .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
-    .slice(0, 40)
-    .map(({ item }) => item), [items, query]);
+  const found = useLabSearch(open, sessionId, query, topoActions.selectNode);
+  const filtered = useMemo(() => [
+    // Precise lab facts first — the fuzzy matcher would bury "10.1.0.2".
+    // A hit that is just a node by name is already listed as that Node.
+    ...found.filter((hit) => !(hit.detail.startsWith("node ·") && nodes.some((node) => node.id === hit.label))).slice(0, 15),
+    ...items
+      .map((item) => ({ item, score: fuzzyScore(`${item.label} ${item.detail} ${item.kind}`, query) + (query.trim() ? 0 : item.priority ?? 0) }))
+      .filter(({ score }) => score >= 0)
+      .sort((a, b) => b.score - a.score || a.item.label.localeCompare(b.item.label))
+      .slice(0, 40)
+      .map(({ item }) => item),
+  ], [found, items, nodes, query]);
 
   useEffect(() => setActiveIndex(0), [query]);
-  const choose = (item: QuickItem | undefined) => { if (!item) return; onClose(); item.run(); };
+  const choose = (item: QuickItem | undefined) => {
+    if (!item) return;
+    if (item.nextQuery !== undefined) { setQuery(item.nextQuery); return; }
+    onClose();
+    item.run();
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { position: "fixed", top: "12vh", m: 0, maxHeight: "70vh" } }}>
@@ -96,7 +142,7 @@ export function QuickOpenDialog({ open, onClose, sessionId, isLocked, labs, onOp
         <TextField
           autoFocus
           fullWidth
-          placeholder="Quick open labs, units, nodes, and actions…"
+          placeholder="Open labs, units, nodes, actions — or find 10.1.0.2, as 65001, vlan:, module:ospf"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {

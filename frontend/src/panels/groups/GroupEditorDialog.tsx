@@ -135,7 +135,7 @@ export function GroupEditorDialog({
               Use canvas selection{selectedNodes.length ? ` (${selectedNodes.length})` : ""}
             </Button>
             <Button size="small" onClick={() => setDraft((current) => ({ ...current, members: [...nodes] }))}>All nodes</Button>
-            <Button size="small" color="inherit" disabled={draft.members.length === 0} onClick={() => setDraft((current) => ({ ...current, members: [] }))}>Clear</Button>
+            <Button size="small" variant="text" disabled={draft.members.length === 0} onClick={() => setDraft((current) => ({ ...current, members: [] }))}>Clear</Button>
           </Stack>
           <Autocomplete
             multiple
@@ -206,7 +206,7 @@ export function GroupEditorDialog({
         </PanelSection>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5 }}>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={saving}>Cancel</Button>
         <Button variant="contained" disabled={!canSave} onClick={() => onSave({ ...draft, name: draft.name.trim() })}>
           {saving ? <CircularProgress size={18} color="inherit" /> : saveButtonLabel}
         </Button>

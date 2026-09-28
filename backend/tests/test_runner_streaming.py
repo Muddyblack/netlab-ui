@@ -167,6 +167,26 @@ def test_status_treats_no_tracked_labs_as_empty(monkeypatch):
     assert asyncio.run(runner.status()) == {}
 
 
+def test_status_started_before_destroy_is_not_cached(monkeypatch):
+    """A status poll in flight while `netlab down` finishes must not write the
+    pre-destroy result back: the lab would stay "running" for the full TTL."""
+    before = {"lab": {"dir": "/labs/lab", "status": "started"}}
+
+    async def slow_full_status():
+        runner._clear_status_cache()  # destroy finishes while the CLI runs
+        return before
+
+    async def no_docker():
+        return None
+
+    runner._clear_status_cache()
+    monkeypatch.setattr(runner, "_full_status", slow_full_status)
+    monkeypatch.setattr(runner, "_container_states", no_docker)
+    assert asyncio.run(runner.status()) == before
+    assert runner._status_cache is None
+    assert runner._status_base is None
+
+
 def test_force_cleanup_recovers_orphaned_containerlab_instance(monkeypatch):
     calls = []
 
@@ -307,3 +327,44 @@ def test_status_reuses_cli_output_and_refreshes_container_states(monkeypatch, tm
     asyncio.run(runner.status())
     assert calls["full"] == 2
     runner._clear_status_cache()
+
+
+def _node_action_env(monkeypatch, tmp_path, *, native: bool):
+    """A lab dir with clab.yml and a recorder for external commands."""
+    (tmp_path / "clab.yml").write_text("name: lab\n")
+    calls: list[tuple[str, list[str]]] = []
+
+    async def fake_external(program, args):
+        calls.append((program, args))
+        if args[:2] == ["stop", "--help"]:
+            return runner.CommandResult(0 if native else 1, "  -n --node   Node(S) to stop" if native else "", "")
+        if args[:2] == ["apply", "--help"]:
+            return runner.CommandResult(1, "", "unknown command")
+        return runner.CommandResult(0, "", "")
+
+    monkeypatch.setattr(runner, "_run_external", fake_external)
+    monkeypatch.setattr(runner, "_clab_node_lifecycle_supported", None)
+    monkeypatch.setattr(runner, "_clab_apply_supported", None)
+    monkeypatch.setattr(runner, "container_runtime_binary", lambda _preferred="": "docker")
+    return calls
+
+
+@pytest.mark.parametrize("action", ["start", "stop", "restart"])
+def test_node_action_uses_containerlab_node_lifecycle(monkeypatch, tmp_path, action):
+    """containerlab 0.77+: start/stop/restart park and restore the node's links."""
+    calls = _node_action_env(monkeypatch, tmp_path, native=True)
+    result = asyncio.run(runner.container_action("clab-lab-r1", action, "docker", tmp_path, node_name="r1"))
+    assert result.code == 0
+    clab_yml = str(tmp_path / "clab.yml")
+    assert calls[-1] == ("containerlab", [action, "-t", clab_yml, "--node", "r1", "--runtime", "docker"])
+    assert not any(program == "docker" for program, _ in calls)
+
+
+def test_node_action_pause_and_old_containerlab_use_the_runtime(monkeypatch, tmp_path):
+    calls = _node_action_env(monkeypatch, tmp_path, native=True)
+    asyncio.run(runner.container_action("clab-lab-r1", "pause", "docker", tmp_path, node_name="r1"))
+    assert calls[-1] == ("docker", ["pause", "clab-lab-r1"])
+
+    calls = _node_action_env(monkeypatch, tmp_path, native=False)
+    asyncio.run(runner.container_action("clab-lab-r1", "stop", "docker", tmp_path, node_name="r1"))
+    assert calls[-1] == ("docker", ["stop", "clab-lab-r1"])

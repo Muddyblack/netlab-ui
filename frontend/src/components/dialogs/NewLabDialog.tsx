@@ -59,7 +59,7 @@ export function NewLabDialog({ open, onClose, onCreate }: Props) {
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={loading}>Cancel</Button>
         <Button variant="contained" onClick={handleConfirm} disabled={loading || !name.trim()}>
           {loading ? "Creating..." : "Create"}
         </Button>

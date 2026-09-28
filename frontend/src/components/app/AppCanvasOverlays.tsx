@@ -11,6 +11,8 @@ import { CanvasDeploymentProgress, type DeploymentProgress } from "../CanvasDepl
 import { UnitsDock } from "../../panels/UnitsDock";
 import { NetlabLenses } from "../lenses/NetlabLenses";
 import type { UnitInfo } from "../../panels/units-dock/types";
+import { LabToolDialogs } from "../dialogs/LabToolDialogs";
+import { CanvasLabOverlays } from "./CanvasLabOverlays";
 
 const FileEditorTabPanel = lazy(() =>
   import("../FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
@@ -62,6 +64,7 @@ export function AppCanvasOverlays({
 }: AppCanvasOverlaysProps) {
   return (
     <>
+      {!DEMO_MODE && <LabToolDialogs />}
       {portalContainer && activeFileTab && createPortal(
         <Suspense fallback={null}>
           <FileEditorTabPanel tab={activeFileTab} themeMode={themeMode} onChange={handleFileTabChange} onClose={(id) => void handleCloseLab(id)} onSave={(id) => void handleFileTabSave(id)} onReload={handleFileTabReload} />
@@ -92,6 +95,7 @@ export function AppCanvasOverlays({
               )
             }
           />
+          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} />
           <NetlabLenses
             sessionId={sessionId}
             container={portalContainer as HTMLElement}
@@ -117,6 +121,7 @@ export function AppCanvasOverlays({
             onClose={sessionDock.closeTab}
             onToggleOpen={() => sessionDock.setOpen((value) => !value)}
             onOpenShell={openShell}
+            onOpenMulti={() => sessionDock.openTab("multi", "nodes")}
             onPopOut={handleSessionPopOut}
           />
         </Suspense>,

@@ -12,6 +12,11 @@
 # no version skew against the netlab the user actually runs, and it is what
 # lets this ship as a netlab *tool* rather than a parallel install of one.
 
+# containerlab version for the `full` target. COPY --from can't expand a
+# variable, so the image is pulled in as its own stage from this global ARG.
+ARG CLAB_VERSION=0.79.0
+FROM ghcr.io/srl-labs/clab:${CLAB_VERSION} AS clab
+
 # ---- frontend build stage ----
 # Pinned to the *build* platform: the frontend output is arch-independent, so
 # building it under QEMU for the arm64 variant would cost minutes for nothing.
@@ -29,30 +34,25 @@ RUN npm run build
 # ---- backend runtime base (shared by both images) ----
 FROM python:3.11-slim AS runtime
 # git — lab file history/diffs (app/lab/files.py) and the version string in
-# app/main.py. docker.io — the backend enumerates and cleans up lab containers
-# through the Docker CLI. curl is gone with the containerlab installer that
-# was its only user.
-RUN apt-get update && apt-get install -y --no-install-recommends git docker.io \
+# app/main.py. docker-cli — the backend (and netlab) talk to the host's Docker
+# daemon through the mounted socket. Debian's docker.io is only the daemon
+# since trixie; the CLI is its own package (a mere Recommends of docker.io).
+# curl is gone with the containerlab installer that was its only user.
+RUN apt-get update && apt-get install -y --no-install-recommends git docker-cli \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 COPY backend/services ./services
-# `[assistant]` ships the AI assistant's SDKs, so the API-key providers
-# (OpenAI, Gemini, OpenAI-compatible) work in the container once the user
-# supplies a key. The feature still stays off until NETLAB_APP_ASSISTANT is
-# set — this means "available without rebuilding", not "on by default".
-#
-# The CLI-driven providers (Claude Code, Codex, Antigravity) are a different
-# story: they drive an already-logged-in CLI on the host, so they stay
-# unavailable here unless that CLI and its credentials are mounted in. The
-# provider probes report exactly that in Settings, so nothing breaks silently.
+# The base install includes the MCP server that the user's own AI agent
+# (Claude Code, Codex, Gemini CLI, Cursor, …) connects to; it is served on the
+# same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.
 #
 # setuptools-scm has no .git here; the version comes from the build arg below.
 ARG NETLAB_GUI_VERSION=0.0+container
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${NETLAB_GUI_VERSION}
-RUN pip install --no-cache-dir ".[assistant]"
+RUN pip install --no-cache-dir .
 
 COPY --from=frontend-build /app/dist ./frontend_dist
 ENV FRONTEND_DIST_DIR=/app/frontend_dist
@@ -61,6 +61,11 @@ ENV NETLAB_GUI_VERSION=${NETLAB_GUI_VERSION}
 # Enables the container self-checks (Settings → Environment → Container
 # Setup) even where /.dockerenv is missing (podman, some runtimes).
 ENV NETLAB_GUI_IN_CONTAINER=1
+# The image runs as root with the privileges described below. netlab's default
+# clab commands prepend sudo, which this image neither needs nor installs.
+# These defaults also cover `docker exec ... netlab up`, outside the UI.
+ENV NETLAB_PROVIDERS_CLAB_START="containerlab deploy --reconfigure -t clab.yml" \
+    NETLAB_PROVIDERS_CLAB_STOP="containerlab destroy --cleanup -t clab.yml"
 
 # The backend drives the *host's* Docker daemon through the mounted socket, so
 # how the container is started decides whether labs can deploy at all. The
@@ -97,7 +102,6 @@ LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" 
 # Everything runs against the host's Docker daemon exactly like the UI-only
 # image; the difference is only where the netlab/containerlab binaries live.
 FROM runtime AS full
-ARG CLAB_VERSION=0.79.0
 # openssh-client/sshpass: Ansible's network_cli for SSH-managed devices.
 # iproute2: containerlab and netlab's link/bridge helpers.
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -105,7 +109,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir ".[netlab]"
 # The official containerlab image ships the static binary at this path.
-COPY --from=ghcr.io/srl-labs/clab:${CLAB_VERSION} /usr/bin/containerlab /usr/bin/containerlab
+COPY --from=clab /usr/bin/containerlab /usr/bin/containerlab
 LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab bundled — topology editor, lab lifecycle and device consoles in one container."
 
 # ---- default image: the UI only ----

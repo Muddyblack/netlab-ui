@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
+import SyncAltIcon from "@mui/icons-material/SyncAlt";
 import { getApiWsBase } from "../api/endpoint";
+import { broadcastShellInput, joinShellSync, leaveShellSync, useShellSyncMembers } from "./shellSync";
 
 const FONT_SIZE_KEY = "netlab.terminal.fontSize";
 const MIN_FONT_SIZE = 11;
@@ -26,6 +28,9 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
   const wsRef = useRef<WebSocket | null>(null);
   const theme = useTheme();
   const [fontSize, setFontSize] = useState(loadFontSize);
+  const syncId = useId();
+  const [synced, setSynced] = useState(false);
+  const syncMembers = useShellSyncMembers();
 
   // Keep the latest setter reachable from the (once-per-connection) key handler.
   const adjustFont = (delta: number) =>
@@ -80,7 +85,13 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
     ws.onmessage = (e) => term.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
     ws.onopen = () => ws.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
 
-    term.onData((d) => ws.readyState === ws.OPEN && ws.send(new TextEncoder().encode(d)));
+    term.onData((d) => {
+      const bytes = new TextEncoder().encode(d);
+      // A synced shell fans its keystrokes out to every synced shell
+      // (itself included) instead of only its own socket.
+      if (broadcastShellInput(syncId, bytes)) return;
+      if (ws.readyState === ws.OPEN) ws.send(bytes);
+    });
 
     const handleResize = () => {
       safeFit();
@@ -107,7 +118,16 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
       fitRef.current = null;
       wsRef.current = null;
     };
-  }, [node, sessionId, theme.palette.mode]);
+  }, [node, sessionId, theme.palette.mode, syncId]);
+
+  useEffect(() => {
+    if (!synced) return;
+    joinShellSync(syncId, node, (bytes) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === ws.OPEN) ws.send(bytes);
+    });
+    return () => leaveShellSync(syncId);
+  }, [synced, syncId, node]);
 
   // Apply font changes live without tearing down the connection.
   useEffect(() => {
@@ -139,6 +159,27 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
           node connect: {node}
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Tooltip
+            title={synced
+              ? `Input is sent to all synced shells (${syncMembers.join(", ")}) — click to stop`
+              : "Sync input: type into every shell that has this switched on"}
+          >
+            <IconButton
+              size="small"
+              aria-label={synced ? "Stop syncing input" : "Sync input with other shells"}
+              aria-pressed={synced}
+              onClick={() => setSynced((value) => !value)}
+              color={synced ? "warning" : "default"}
+              sx={{ width: 24, height: 24 }}
+            >
+              <SyncAltIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
+          {synced && (
+            <Typography variant="caption" color="warning.main" sx={{ mr: 0.5 }}>
+              sync ×{syncMembers.length}
+            </Typography>
+          )}
           <Tooltip title="Decrease font size (Alt+Down)">
             <span>
               <IconButton

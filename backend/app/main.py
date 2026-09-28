@@ -29,7 +29,7 @@ from app.lenses.router import router as lenses_router
 from app.plugins.router import router as plugins_router
 from app.schema.router import router as schema_router
 from app.shell.ws import router as shell_router
-from services import assistant, events
+from services import assistant, events, lab_limits
 from services.netlab import runner
 
 logger = logging.getLogger(__name__)
@@ -63,8 +63,8 @@ def _app_version() -> str:
 APP_VERSION = _app_version()
 
 
-# Optional AI assistant (see services/assistant/). Absent dependencies or
-# NETLAB_APP_ASSISTANT=off must leave the rest of the backend untouched, so the
+# Optional MCP server for AI agents (see services/assistant/). Absent dependencies
+# or NETLAB_APP_ASSISTANT=off must leave the rest of the backend untouched, so the
 # import is guarded exactly like watchfiles in services/events.py.
 _assistant_router = None
 _assistant_mcp = None
@@ -73,7 +73,7 @@ if assistant.assistant_enabled():
         from app.assistant.router import router as _assistant_router
         from services.assistant import mcp_server as _assistant_mcp
     except ImportError:  # pragma: no cover - depends on the install extra
-        logging.getLogger(__name__).warning("assistant enabled but its dependencies are missing", exc_info=True)
+        logging.getLogger(__name__).warning("MCP server enabled but its dependencies are missing", exc_info=True)
         _assistant_router = None
         _assistant_mcp = None
 
@@ -91,6 +91,8 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Warm the tool-version cache so the first /api/health (the startup
     # splash) doesn't wait on `containerlab version`.
     warmup = asyncio.create_task(asyncio.to_thread(_warm_tool_versions))
+    # Shut down labs whose lease ran out (only when NETLAB_UI_LAB_HOURS is set).
+    reaper = asyncio.create_task(lab_limits.reap_forever())
     try:
         if _assistant_mcp is not None:
             # A mounted sub-app's lifespan is not run by Starlette, so the MCP
@@ -100,18 +102,11 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         else:
             yield
     finally:
-        if _assistant_router is not None:
-            await _assistant_router_shutdown()
         watcher.cancel()
         warmup.cancel()
+        reaper.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await watcher
-
-
-async def _assistant_router_shutdown() -> None:
-    from app.assistant.router import shutdown
-
-    await shutdown()
 
 
 # No custom default_response_class: this FastAPI version serializes routes

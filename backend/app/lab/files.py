@@ -137,7 +137,7 @@ async def list_files():
 
 @router.get("/events/stream")
 async def lab_events_stream():
-    """SSE stream of backend push events (``{"type": "files" | "workspaces"}``).
+    """SSE stream of backend push events (``{"type": "files" | "workspaces" | "proposals" …}``).
 
     Fed by the watchfiles workspace watcher and by mutating endpoints; the
     frontend refreshes its file/workspace lists on each event instead of

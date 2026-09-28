@@ -1,0 +1,9 @@
+{
+  "name": "netlab-ui-showcase",
+  "private": true,
+  "type": "module",
+  "description": "Generates the screenshots, clips and gallery in docs/showcase (see README.md). run.sh installs this on first use.",
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

@@ -4,6 +4,8 @@ import type { DeploymentProgress } from "../components/CanvasDeploymentProgress"
 import { setLifecycleContext, type DeployDecision, type LifecycleCompletion } from "../hooks/useLabLifecycle";
 import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
+import { postLinkCommand } from "../api/linkCommands";
+import { requestCapture } from "./captureStore";
 import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
 import { runningLabMatches } from "./runningMatch";
@@ -21,6 +23,8 @@ export interface AppClabUiHost extends ClabUiHost {
   listLabFiles?: () => Promise<LabFileEntry[]>;
   sessionId: string | null;
   onNodeAction?: (action: string, nodeName: string) => void;
+  /** Outcome of a link fault action (down/up, impairment) for a toast. */
+  onLinkResult?: (message: string, severity: "success" | "error" | "info") => void;
   onBeforeDeploy?: (sessionId: string) => Promise<DeployDecision>;
   onDeploymentProgress?: (progress: DeploymentProgress) => void;
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
@@ -224,16 +228,29 @@ export function createApiClabUiHost(options?: {
       return;
     }
 
-    // Default flow: the backend starts a Wireshark-in-the-browser (noVNC)
-    // container wired to edgeshark's packetflix service. Open the tab
-    // synchronously (popup blockers only allow window.open inside the click)
-    // and point it at the capture UI once the backend reports it ready.
-    const view = window.open("", "_blank");
-    if (view) {
-      view.document.title = "Wireshark";
-      view.document.body.textContent = `Starting Wireshark capture on ${nodeName}:${interfaceName}…`;
-    }
-    void startVncCapture({ safeFetch, BASE, containerName: container.name, interfaceName, view, onError: options?.onError });
+    // Wireshark in the browser: the backend starts a noVNC container wired to
+    // edgeshark's packetflix service. Open the tab synchronously (popup
+    // blockers only allow window.open inside the click) and point it at the
+    // capture UI once the backend reports it ready.
+    const openInBrowserWireshark = () => {
+      const view = window.open("", "_blank");
+      if (view) {
+        view.document.title = "Wireshark";
+        view.document.body.textContent = `Starting Wireshark capture on ${nodeName}:${interfaceName}…`;
+      }
+      void startVncCapture({ safeFetch, BASE, containerName: container.name, interfaceName, view, onError: options?.onError });
+    };
+    // The capture chooser (pcap download, live stream, browser Wireshark)
+    // when the app mounted one; straight to browser Wireshark otherwise.
+    const handled = requestCapture({
+      node: container.nodeName,
+      container: container.name,
+      interface: interfaceName,
+      sessionId: currentSessionId,
+      topologyPath: currentSessionId ? sessionPaths.get(currentSessionId) : undefined,
+      openInBrowserWireshark,
+    });
+    if (!handled) openInBrowserWireshark();
   };
 
   const emitIconList = (icons: CustomIconListItem[]) => {
@@ -318,6 +335,7 @@ export function createApiClabUiHost(options?: {
           restart: "netlab restart",
         }[backendAction];
         let suggestedMultilabId: number | undefined;
+        let hasValidationTests: boolean | undefined;
         const finish = (success: boolean, errorMessage?: string) => {
           if (completionSent) return;
           completionSent = true;
@@ -328,6 +346,7 @@ export function createApiClabUiHost(options?: {
             errorMessage,
             sessionId: sessionId ?? undefined,
             suggestedMultilabId,
+            hasValidationTests,
           });
         };
         // Canvas commands target the canvas lab: drop any name a previous
@@ -375,7 +394,7 @@ export function createApiClabUiHost(options?: {
             if (!trimmed.startsWith("data:")) return;
             const payload = trimmed.slice(trimmed.indexOf(":") + 1).trim();
             if (!payload) return;
-            let frame: { stream?: string; line?: string; done?: boolean; code?: number; error?: string; hint?: string; progress?: DeploymentProgress; suggestedMultilabId?: number };
+            let frame: { stream?: string; line?: string; done?: boolean; code?: number; error?: string; hint?: string; progress?: DeploymentProgress; suggestedMultilabId?: number; hasValidationTests?: boolean };
             try {
               frame = JSON.parse(payload);
             } catch {
@@ -389,6 +408,7 @@ export function createApiClabUiHost(options?: {
             } else if (frame.done) {
               settled = true;
               if (typeof frame.suggestedMultilabId === "number") suggestedMultilabId = frame.suggestedMultilabId;
+              if (typeof frame.hasValidationTests === "boolean") hasValidationTests = frame.hasValidationTests;
               if (frame.code === 0) {
                 emitStatus({ type: "lifecycleStatus", status: "success" });
                 finish(true);
@@ -448,11 +468,32 @@ export function createApiClabUiHost(options?: {
     setLinkImpairment(nodeName: string, interfaceName: string, data: unknown) {
       if (!currentSessionId) return;
       const fields = typeof data === "object" && data !== null ? data : {};
-      void safeFetch(`${BASE}/api/lab/link-impairment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: currentSessionId, node: nodeName, interface: interfaceName, ...fields }),
-      });
+      void postLinkCommand("link-impairment", { sessionId: currentSessionId, node: nodeName, interface: interfaceName, ...fields })
+        .then((error) => {
+          if (error) resultHost.onLinkResult?.(`Impairment on ${nodeName}:${interfaceName} failed — ${error}`, "error");
+          else resultHost.onLinkResult?.(`Impairment on ${nodeName}:${interfaceName} applied`, "success");
+        });
+    },
+    runLinkAction(action: "down" | "up", endpoints: { sourceNode?: string; sourceEndpoint?: string; targetNode?: string; targetEndpoint?: string }) {
+      const sessionId = currentSessionId;
+      if (!sessionId) return;
+      const ends = [[endpoints.sourceNode, endpoints.sourceEndpoint], [endpoints.targetNode, endpoints.targetEndpoint]]
+        .filter((end): end is [string, string] => Boolean(end[0] && end[1]));
+      const label = ends.map(([node, iface]) => `${node}:${iface}`).join(" ↔ ");
+      void (async () => {
+        // Down: one end is enough (the peer loses carrier); try the other if
+        // the first isn't a container (a bridge, a VM). Up: restore both.
+        const errors: string[] = [];
+        let changed = 0;
+        for (const [node, iface] of ends) {
+          const error = await postLinkCommand("link-state", { sessionId, node, interface: iface, up: action === "up" });
+          if (error) errors.push(`${node}:${iface}: ${error}`);
+          else changed += 1;
+          if (action === "down" && changed) break;
+        }
+        if (changed) resultHost.onLinkResult?.(`Link ${label} ${action === "down" ? "taken down" : "brought up"}`, "success");
+        else resultHost.onLinkResult?.(`Link ${label}: ${errors.join("; ")}`, "error");
+      })();
     },
     saveCustomNode(data: Record<string, unknown>) {
       if (!currentSessionId) return;

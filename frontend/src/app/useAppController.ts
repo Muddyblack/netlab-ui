@@ -20,7 +20,7 @@ import { type DeploymentProgress } from "../components/CanvasDeploymentProgress"
 import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
-import { persistAssistantOpen, readAssistantOpen } from "../panels/assistant/preferences";
+import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
 import type { TopologyRef } from "../hooks/useTabManager";
 import { runningLabMatches } from "../host/runningMatch";
@@ -44,12 +44,32 @@ import {
   useNetlabLenses,
   useRightPanelTabMemory,
   useAutoOpenComposerTab,
+  useSelectPanelTabOnOpen,
   netlabNodeEditorTabs,
   useCustomPaletteTabs,
   useRenderDeployMenuItems,
+  publishRuntimeContainers,
+  openConfigsDialog,
+  openToolsDialog,
+  registerFileOpener,
+  openPanelTab,
+  requestCopyLab,
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
+
+/** App-wide keyboard shortcuts. Ctrl/Cmd+I stays out of the way while the
+ * user is typing so it never fights a text field's own shortcuts. */
+function globalShortcut(event: KeyboardEvent): "run-on-nodes" | "quick-open" | "assistant" | null {
+  if (!(event.ctrlKey || event.metaKey)) return null;
+  if (event.key === "`") return "run-on-nodes";
+  const key = event.key.toLowerCase();
+  if (key === "p") return "quick-open";
+  if (key !== "i" || event.altKey) return null;
+  const target = event.target as HTMLElement | null;
+  const editable = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+  return editable ? null : "assistant";
+}
 
 async function openLabGraphPopup(sid: string, layout: "interactive" | "horizontal" | "vertical", addToast: Toast) {
   const popup = window.open("", "_blank");
@@ -149,6 +169,12 @@ function firstLine(error: string): string {
   return lines.length > 1 ? `${lines[0]} (+${lines.length - 1} more)` : lines[0];
 }
 
+/** Nothing to decide before a deploy — valid, no instance conflict, and either
+ * a first deploy or YAML unchanged since the last one — so skip the review. */
+function nothingToReview(issues: ValidationIssue[], plan: DeployPlan | null, diff: DeployDiffResult): boolean {
+  return issues.length === 0 && !plan?.conflict && !(diff.baselineExists && diff.changed);
+}
+
 /** Follow-up buttons for the finished-command modal. */
 function lifecycleFollowUps(
   result: LifecycleCompletion,
@@ -160,7 +186,7 @@ function lifecycleFollowUps(
     const id = result.suggestedMultilabId;
     return [{ id: "multilab", label: `Deploy as parallel instance #${id}`, showOn: "error", onClick: () => run.deploy(sid, id) }];
   }
-  if (result.success) {
+  if (result.success && result.hasValidationTests) {
     return [{ id: "validate", label: "Run netlab validate", showOn: "success", onClick: () => run.validate(sid) }];
   }
   return [];
@@ -185,14 +211,12 @@ export function useAppController() {
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const [newLabDialogOpen, setNewLabDialogOpen] = useState(false);
   const [multiserverEnabled, setMultiserverEnabled] = useState(false);
-  // Null until probed, and stays null when the optional assistant backend
-  // isn't installed — which is what keeps the Chat button out of the toolbar.
+  // Null until probed, and stays null when the optional MCP backend isn't
+  // installed — which is what keeps the AI agents button out of the toolbar.
   const [assistantCapabilities, setAssistantCapabilities] = useState<AssistantCapabilities | null>(null);
-  // The assistant is a floating overlay toggled from the toolbar, not a tab
-  // in the Nodes/Groups/Plugins strip — a conversation shouldn't get swapped
-  // out just because the user switches what they're looking at on the canvas.
-  const [assistantOpen, setAssistantOpen] = useState(() => readAssistantOpen());
-  const [assistantSettingsProviderId, setAssistantSettingsProviderId] = useState<string>();
+  // Whether the AI agents panel (MCP setup + proposals) is open; toggled from
+  // the toolbar and remembered per browser.
+  const [assistantOpen, setAssistantOpen] = useState(() => readAgentsPanelOpen());
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
   const [quickOpen, setQuickOpen] = useState(false);
   const [deploymentProgress, setDeploymentProgress] = useState<DeploymentProgress | null>(null);
@@ -204,7 +228,7 @@ export function useAppController() {
   const [deployPlan, setDeployPlan] = useState<DeployPlan | null>(null);
 
   useEffect(() => {
-    persistAssistantOpen(assistantOpen);
+    persistAgentsPanelOpen(assistantOpen);
   }, [assistantOpen]);
 
   // ── Left sidebar toggle ──────────────────────────────────────────────────────
@@ -338,6 +362,16 @@ export function useAppController() {
       openShell: async (n, ref) => openShellRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       showLogs: async (n, ref) => openLogsRef.current(n, ref ? await ensureLabActiveRef.current(ref) : undefined),
       openDrawioWizard: () => openDrawioWizardRef.current(),
+      openMultiExec: async (ref) => openMultiExecRef.current(await ensureLabActiveRef.current(ref)),
+      openRunningConfigs: async (ref) => openConfigsDialog(await ensureLabActiveRef.current(ref)),
+      exportClabTarball: async (ref) => {
+        const sid = await ensureLabActiveRef.current(ref);
+        if (sid) await exportClabTarballRef.current(sid);
+      },
+      openTools: async (ref) => {
+        const sid = await ensureLabActiveRef.current(ref);
+        if (sid) openToolsDialog({ sessionId: sid, openShell: (name) => openShellRef.current(name, sid) });
+      },
       nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
       uninstallEdgeshark: () => uninstallEdgesharkAction(addToast),
@@ -498,16 +532,6 @@ export function useAppController() {
     sessionDock.closeTab(tab.key);
   }, [sessionId, sessionDock, addToast]);
 
-  // A conversation outlives the side panel, which gets swapped for
-  // Nodes/Groups/Plugins as you work — so it can move to its own window.
-  const handleAssistantPopOut = useCallback(() => {
-    if (!sessionId) return;
-    const params = new URLSearchParams({ popout: "assistant", sessionId });
-    const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-    const win = window.open(url, "netlab-assistant", "width=560,height=820,menubar=no,toolbar=no,location=no,status=no,resizable=yes");
-    if (!win) addToast("The browser blocked the pop-out window — allow pop-ups for this site.", "warning");
-  }, [sessionId, addToast]);
-
   // Owned here (not inside the palette tab) so lens/inspector state survives
   // switching to another dock tab and back.
   const netlabLenses = useNetlabLenses(sessionId ?? "", activeTabId ?? undefined);
@@ -525,6 +549,7 @@ export function useAppController() {
     return path && /(^|\/)units\/[^/]+\.ya?ml$/i.test(path) ? path : null;
   }, [openTabs, activeTabId]);
   useAutoOpenComposerTab(activeUnitPath);
+  useSelectPanelTabOnOpen("AI agents", assistantOpen);
 
   const labNameForSession = useCallback((sid: string): string | null => {
     const path = topologyPathForSession(sid);
@@ -573,6 +598,10 @@ export function useAppController() {
         setValidationIssues(issues);
         refreshCanvas();
       }
+      if (nothingToReview(issues, plan, diff)) {
+        topoViewerActions.setProcessing(true, "deploy");
+        return { proceed: true };
+      }
       setDeployValidationIssues(issues);
       setDeployTargetLab(targetLab);
       setDeployPlan(plan);
@@ -607,22 +636,13 @@ export function useAppController() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
-        event.preventDefault();
-        setQuickOpen(true);
-        return;
-      }
-      // Ctrl/Cmd+I toggles the AI assistant. Skip it while the user is typing
-      // so it never fights a text field's own shortcuts.
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "i") {
-        const target = event.target as HTMLElement | null;
-        const editable =
-          target?.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
-        if (editable) return;
-        event.preventDefault();
-        setAssistantOpen((open) => !open);
-      }
+      const shortcut = globalShortcut(event);
+      if (!shortcut) return;
+      event.preventDefault();
+      // Ctrl+` — the VS Code terminal key — opens "run on nodes".
+      if (shortcut === "run-on-nodes") openMultiExecRef.current();
+      if (shortcut === "quick-open") setQuickOpen(true);
+      if (shortcut === "assistant") setAssistantOpen((open) => !open);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -655,8 +675,23 @@ export function useAppController() {
     else addToast(`Cannot rerun unsupported deployment action: ${action}`, "warning");
   }, [addToast, handleDeployLab, handleDestroyLab, handleNetlabCreateConfigs, handleNetlabInitial, handleNetlabRestart, sessionId]);
 
+  // The active lab is "running" when it matches an instance in the live
+  // `netlab status` snapshot (same matcher the explorer tree uses).
+  const activeLabRunning = useMemo(() => {
+    const activeLab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
+    if (activeLab?.kind !== "topology") return false;
+    const labName = activeLab.topologyRef?.labName;
+    const yamlPath = activeLab.topologyRef?.yamlPath;
+    return Object.values(runningLabsStatus).some((info) => runningLabMatches(info, yamlPath, labName));
+  }, [openTabs, activeTabId, runningLabsStatus]);
+
+  const activeTopologyRef = useMemo(() => {
+    const tab = openTabs.find((candidate) => candidate.id === activeTabId && candidate.kind === "topology");
+    return tab?.kind === "topology" ? tab.topologyRef : undefined;
+  }, [openTabs, activeTabId]);
+
   const quickActions = useMemo(() => [
-    { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI assistant" : "Open AI assistant", detail: "Toggle the assistant panel · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
+    { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Gemini CLI, Cursor · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
     { id: "action:new-lab", label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
     { id: "action:image-manager", label: "Manage container images", detail: "Open the image manager", run: () => setImageManagerOpen(true) },
     { id: "action:fit", label: "Fit topology to canvas", detail: "Center and zoom to all nodes", run: () => host.emitTopoViewerEvent?.({ type: "fitViewport" }) },
@@ -678,11 +713,28 @@ export function useAppController() {
           });
       }
     }] : []),
+    ...(sessionId && activeLabRunning ? [
+      { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, one answer per node · Ctrl+`", run: () => sessionDock.openTab("multi", "nodes") },
+      { id: "action:traffic", priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
+      { id: "action:running-configs", priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
+      { id: "action:clab-tarball", label: "Export as containerlab tarball", detail: "clab.yml + the devices' current configs (netlab clab tarball)", run: () => void exportClabTarballRef.current(sessionId) },
+      { id: "action:config-snapshot", label: "Take a config snapshot", detail: "Save every node's running config now", run: () => void api.takeConfigSnapshot(sessionId).then((snap) => addToast(`Snapshot of ${snap.nodes?.length ?? 0} nodes saved`, "success"), (err: unknown) => addToast(`Snapshot failed: ${String(err)}`, "error")) },
+    ] : []),
     ...(sessionId ? [
+      { id: "action:reports", label: "Reports…", detail: "netlab reports: addressing, BGP, OSPF, wiring — as tables, HTML or text", run: () => { openPanelTab("Lenses"); netlabLenses.setReportOpen(true); } },
+      { id: "action:tools", label: "External tools…", detail: "Graphite, SuzieQ, NUTS, NSO, Edgeshark next to the lab", run: () => openToolsDialog({ sessionId, openShell: (name) => openShellRef.current(name, sessionId) }) },
       { id: "action:validate", label: "Validate topology", detail: "Run netlab validate", run: () => void handleNetlabValidate(sessionId) },
-      { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) }
+      { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) },
+      { id: "action:module-filter", label: "Filter canvas by module…", detail: "Spotlight the nodes running OSPF, BGP, VLANs…", nextQuery: "module:", run: () => undefined },
+      { id: "action:tour", label: "Guided tour & exercises", detail: "Open the tour editor in the Lenses panel", run: () => { openPanelTab("Lenses"); netlabLenses.setTeachingOpen(true); } },
+      ...(activeTopologyRef ? [{
+        id: "action:copy-lab",
+        label: "Copy this lab to a workspace…",
+        detail: "Fork, publish to the shared folder, or duplicate",
+        run: () => requestCopyLab({ topologyPath: activeTopologyRef.yamlPath, labName: activeTopologyRef.labName, onCopied: (ref) => void handleOpenLab(ref as TopologyRef) }),
+      }] : []),
     ] : [])
-  ], [assistantOpen, canvasNodes, handleNetlabCreateConfigs, handleNetlabValidate, host, isTopologyLocked, runtime.session, sessionId, topoViewerActions]);
+  ], [activeLabRunning, activeTopologyRef, addToast, assistantOpen, canvasNodes, handleNetlabCreateConfigs, handleNetlabValidate, handleOpenLab, host, isTopologyLocked, netlabLenses, runtime.session, sessionDock, sessionId, topoViewerActions]);
 
   useEffect(() => {
     setValidationIssues([]);
@@ -720,8 +772,9 @@ export function useAppController() {
         handleNodeLifecycle(nodeName, action);
       }
     };
-    return () => { host.onNodeAction = undefined; };
-  }, [host, sessionDock, handleNodeLifecycle]);
+    host.onLinkResult = (message, severity) => addToast(message, severity);
+    return () => { host.onNodeAction = undefined; host.onLinkResult = undefined; };
+  }, [host, sessionDock, handleNodeLifecycle, addToast]);
 
   useEffect(() => {
     host.onBeforeDeploy = requestDeployApproval;
@@ -749,9 +802,11 @@ export function useAppController() {
       if (running) return;
       running = true;
       try {
-        const containers = await api.getRuntime(sessionId) as HostRuntimeContainer[];
+        const sample = await api.getRuntime(sessionId);
+        const containers = sample as HostRuntimeContainer[];
         if (cancelled) return;
         host.setRuntimeContainers(containers);
+        publishRuntimeContainers(sample);
         runtime.session.setContext({ runtimeContainers: containers });
         // clab-ui only assigns the link-up/link-down edge classes when it can
         // consult the topology node map (to special-case bridges/host/mgmt-net
@@ -795,6 +850,7 @@ export function useAppController() {
     return () => {
       cancelled = true;
       host.setRuntimeContainers([]);
+      publishRuntimeContainers([]);
       window.clearInterval(timer);
     };
   }, [activateLabTab, activeTabId, host, openTabs, runtime, sessionId]);
@@ -828,13 +884,36 @@ export function useAppController() {
     return getOrCreateSession(ref);
   }, [getOrCreateSession, handleOpenLab]);
   const ensureLabActiveRef = useRef(ensureLabActive); ensureLabActiveRef.current = ensureLabActive;
+  const openMultiExec = useCallback((sid?: string | null) => sessionDock.openTab("multi", "nodes", sid ?? undefined), [sessionDock]);
+  const openAgentTerminal = useCallback((agentId: string) => sessionDock.openTab("agent", agentId), [sessionDock]);
+  const openMultiExecRef = useRef(openMultiExec); openMultiExecRef.current = openMultiExec;
   const openDrawioWizard = useCallback(() => sessionDock.openTab("drawio", "diagram"), [sessionDock]);
   const openShellRef = useRef(openShell); openShellRef.current = openShell;
+  const exportClabTarball = useCallback(async (sid: string) => {
+    addToast("Collecting the devices' configs for the tarball…", "info");
+    try {
+      const { blob, filename } = await api.downloadClabTarball(sid);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      addToast(`${filename} downloaded — run it with containerlab deploy -t clab.config.yml`, "success");
+    } catch (err) {
+      addToast(`Tarball export failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, [addToast]);
+  const exportClabTarballRef = useRef(exportClabTarball); exportClabTarballRef.current = exportClabTarball;
   const openLogsRef = useRef(openLogs); openLogsRef.current = openLogs;
   const openDrawioWizardRef = useRef(openDrawioWizard); openDrawioWizardRef.current = openDrawioWizard;
   const handleNodeLifecycleRef = useRef(handleNodeLifecycle); handleNodeLifecycleRef.current = handleNodeLifecycle;
   const handleOpenLabRef = useRef(handleOpenLab); handleOpenLabRef.current = handleOpenLab;
   const handleOpenFileTabRef = useRef(handleOpenFileTab); handleOpenFileTabRef.current = handleOpenFileTab;
+  useEffect(() => {
+    registerFileOpener((path) => void handleOpenFileTabRef.current({ endpointId: "local", path }));
+    return () => registerFileOpener(null);
+  }, []);
   const getOrCreateSessionRef = useRef(getOrCreateSession); getOrCreateSessionRef.current = getOrCreateSession;
   const handleDeployLabRef = useRef(handleDeployLab); handleDeployLabRef.current = handleDeployLab;
   const handleDestroyLabRef = useRef(handleDestroyLab); handleDestroyLabRef.current = handleDestroyLab;
@@ -899,6 +978,35 @@ export function useAppController() {
     refreshAssistantCapabilities();
   }, [refreshAssistantCapabilities]);
 
+  // Agents' get_selection_context tool reads what is selected on the canvas.
+  const selectedNodeIds = useMemo(
+    () => canvasNodes.filter((node) => node.selected).map((node) => node.id).sort().join(","),
+    [canvasNodes]
+  );
+  useEffect(() => {
+    if (!assistantCapabilities || !sessionId) return;
+    const timer = window.setTimeout(() => {
+      void api.setAssistantSelection(sessionId, selectedNodeIds ? selectedNodeIds.split(",") : []).catch(() => undefined);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [assistantCapabilities, sessionId, selectedNodeIds]);
+
+  // A change an agent proposes must not go unnoticed while the panel is closed.
+  const assistantOpenRef = useRef(assistantOpen);
+  assistantOpenRef.current = assistantOpen;
+  useEffect(() => {
+    if (!assistantCapabilities || !sessionId) return;
+    return api.subscribeEvents((event) => {
+      if (event.type !== "proposals" || assistantOpenRef.current) return;
+      if (event.sessionId && event.sessionId !== sessionId) return;
+      void api.listAssistantProposals(sessionId).then(({ proposals }) => {
+        if (proposals?.some((proposal) => proposal.status === "pending")) {
+          addToast("Your AI agent proposed a change: open AI agents (Ctrl+I) to review it", "info");
+        }
+      }, () => undefined);
+    });
+  }, [assistantCapabilities, sessionId, addToast]);
+
   const handlePluginPanelChanged = useCallback(async () => {
     if (runtime?.session) {
       await refreshTopologySnapshot({ externalChange: true }, runtime.session);
@@ -939,29 +1047,14 @@ export function useAppController() {
     multiserverEnabled,
     assistantCapabilities,
     assistantOpen,
-    handleAssistantPopOut,
     handlePluginPanelChanged,
     refreshCanvas,
     netlabLenses,
     validationIssues,
     addToast,
     handleRerunDeployment,
-    refreshAssistantCapabilities,
-    setAssistantOpen,
-    setAssistantSettingsProviderId,
-    setSettingsTab,
-    setSettingsOpen,
+    openAgentTerminal,
   });
-
-  // The active lab is "running" when it matches an instance in the live
-  // `netlab status` snapshot (same matcher the explorer tree uses).
-  const activeLabRunning = useMemo(() => {
-    const activeLab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
-    if (activeLab?.kind !== "topology") return false;
-    const labName = activeLab.topologyRef?.labName;
-    const yamlPath = activeLab.topologyRef?.yamlPath;
-    return Object.values(runningLabsStatus).some((info) => runningLabMatches(info, yamlPath, labName));
-  }, [openTabs, activeTabId, runningLabsStatus]);
 
   // null until the lens bundle loads; then reflects whether the topology
   // defines any `validate:` tests.
@@ -1011,8 +1104,7 @@ export function useAppController() {
     netlabLenses, sessionDock, openShell, handleSessionPopOut,
     settingsOpen, setSettingsOpen, settingsTab, setSettingsTab,
     notificationsSupported, notificationsEnabled, notificationPermission, toggleNotifications,
-    assistantCapabilities, assistantOpen, setAssistantOpen, assistantSettingsProviderId,
-    refreshAssistantCapabilities,
+    assistantCapabilities, assistantOpen, setAssistantOpen,
     deployDiff, deployValidationIssues, deployTargetLab, deployPlan, setDeployDiff, setDeployValidationIssues, deployDecisionRef,
     quickOpen, setQuickOpen,
     isTopologyLocked, quickActions,

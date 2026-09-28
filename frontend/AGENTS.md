@@ -76,6 +76,10 @@ a candidate for an upstream feature request.
   `extraData.hostFields` object — loaded into the form, dirty-checked, saved
   with `editNode`. The netlab editor tabs edit it through
   `components/node-editor/NetlabAttrsTab.tsx`.
+- **004 link-actions** (~80 lines): an optional `topoViewer.runLinkAction(action,
+  endpoints)` host method; when a host provides it, the link context menu of
+  a deployed lab gets "Take Link Down" / "Bring Link Up" (picked from the
+  endpoints' interface state). Implemented in `host/createHost.ts`.
 
 After changing a patch, restart Vite with `--force`: its dependency
 pre-bundle cache keeps serving the old clab-ui code otherwise.

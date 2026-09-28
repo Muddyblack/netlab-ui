@@ -1,5 +1,5 @@
 import type { MutableRefObject } from "react";
-import { api, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type LabFileEntry } from "../../api/client";
+import { api, type DeployDiffResult, type DeployPlan, type LabFileEntry } from "../../api/client";
 import type { RuntimeSnackbarState, StartupState, WorkspaceEntry } from "../../lifecycle/types";
 import type { AppThemeMode } from "../../theme";
 import type { createClabUiRuntime, ClabUiRuntime } from "@containerlab/clab-ui/host";
@@ -31,9 +31,6 @@ interface AppDialogsProps {
   setWorkspaces: (workspaces: WorkspaceEntry[]) => void;
   fetchFiles: () => Promise<void>;
   checkStartup: () => Promise<void> | void;
-  assistantCapabilities: AssistantCapabilities | null;
-  assistantSettingsProviderId: string | undefined;
-  refreshAssistantCapabilities: () => void;
   startup: StartupState;
 
   // Deploy diff
@@ -81,9 +78,6 @@ export function AppDialogs({
   setWorkspaces,
   fetchFiles,
   checkStartup,
-  assistantCapabilities,
-  assistantSettingsProviderId,
-  refreshAssistantCapabilities,
   startup,
   deployDiff,
   deployValidationIssues,
@@ -132,9 +126,6 @@ export function AppDialogs({
           void fetchFiles();
         }}
         onEnvironmentChanged={() => void checkStartup()}
-        assistantProviders={assistantCapabilities?.providers ?? []}
-        assistantInitialProviderId={assistantSettingsProviderId}
-        onAssistantChanged={refreshAssistantCapabilities}
         health={startup.health}
       />
 

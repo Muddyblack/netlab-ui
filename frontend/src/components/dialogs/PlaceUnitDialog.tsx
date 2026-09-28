@@ -117,7 +117,7 @@ export function PlaceUnitDialog({ open, sessionId, unitName, onClose, onPlaced, 
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={saving}>Cancel</Button>
         <Button variant="contained" onClick={() => void place()} disabled={saving}>Place</Button>
       </DialogActions>
     </Dialog>

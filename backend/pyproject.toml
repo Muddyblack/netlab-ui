@@ -10,6 +10,9 @@ dependencies = [
     "ptyprocess>=0.7",
     # Guarded import; without it the frontend falls back to interval polling.
     "watchfiles>=0.21",
+    # MCP server for the user's own AI agent (services/assistant; NETLAB_APP_ASSISTANT=off
+    # disables it). mcp 2.x API (MCPServer); 1.x no longer works.
+    "mcp>=2.2,<3",
 ]
 
 [project.optional-dependencies]
@@ -22,14 +25,6 @@ netlab = [
     # imported directly by the adapter.
     "ansible>=9",
     "ansible-pylibssh>=1.2",
-]
-# See NETLAB_APP_ASSISTANT in services/assistant — feature is absent without this.
-assistant = [
-    # mcp 2.x renamed FastMCP → MCPServer; services/assistant/mcp_server.py targets 1.x.
-    "mcp>=1.9,<2",
-    "claude-agent-sdk>=0.1",
-    "google-genai>=1.0",
-    "openai>=1.99",
 ]
 dev = [
     "pytest>=8.0",

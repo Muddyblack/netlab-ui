@@ -9,6 +9,7 @@ import { PluginSection } from "./plugins/PluginSection";
 import { PluginSearchField } from "./plugins/PluginSearchField";
 import { PluginCatalogStatus } from "./plugins/PluginCatalogStatus";
 import { PluginListEmptyState } from "./plugins/PluginListEmptyState";
+import { GeneratorsSection } from "./plugins/GeneratorsSection";
 import { usePluginDocs } from "./plugins/usePluginDocs";
 import { usePluginsData } from "./plugins/usePluginsData";
 
@@ -36,6 +37,8 @@ export function PluginsPanel({
     customPlugins,
     builtinPlugins,
     loadPlugins,
+    reloadYaml,
+    yaml,
     handleTogglePlugin,
   } = usePluginsData(sessionId, BASE, onChanged, searchQuery);
 
@@ -66,6 +69,16 @@ export function PluginsPanel({
       <Divider />
 
       {pipeline && <PluginPipelineStrip pipeline={pipeline} />}
+
+      <GeneratorsSection
+        sessionId={sessionId}
+        topologyKey={yaml}
+        onApplied={(message) => {
+          setImportNotice(message);
+          void reloadYaml();
+          onChanged();
+        }}
+      />
 
       {/* netlab has always supported user-written plugins; without a visible
           entry point nobody discovers that the built-in list isn't the limit. */}

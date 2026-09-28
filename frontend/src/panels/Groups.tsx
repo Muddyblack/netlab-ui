@@ -190,7 +190,7 @@ function DeleteGroupDialog({ deleteTarget, deleteReferences, saving, onCancel, o
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} disabled={saving}>Cancel</Button>
+        <Button variant="text" onClick={onCancel} disabled={saving}>Cancel</Button>
         <Button color="error" variant="contained" onClick={onConfirm} disabled={saving}>
           Delete group
         </Button>

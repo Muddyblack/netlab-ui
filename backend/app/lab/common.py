@@ -119,7 +119,9 @@ def topology_candidates(workspace_path: Path) -> list[Path]:
         # they are YAML but not lab topologies, and listing them as
         # "Undeployed Labs" bloats the explorer. They remain reachable under
         # the file explorer's per-directory "generated" group.
-        parts = path.parts
+        # Only the part inside the workspace counts: a workspace that itself
+        # lives under a hidden or "dist" directory still has labs.
+        parts = path.relative_to(workspace_path).parts
         if is_generated(path, is_dir=False) or any(p in GENERATED_DIRS for p in parts):
             continue
         if any(p.startswith(".") for p in parts):
@@ -128,7 +130,7 @@ def topology_candidates(workspace_path: Path) -> list[Path]:
             continue
         # Workspace unit library: real topologies, but they belong to the Units
         # panel (which opens them on demand), not the "Undeployed Labs" list.
-        if "units" in path.relative_to(workspace_path).parts[:-1]:
+        if "units" in parts[:-1]:
             continue
         resolved = path.resolve()
         if resolved not in seen:

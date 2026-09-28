@@ -10,6 +10,7 @@ the file (and negative-caches failed fetches for the process lifetime).
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import urllib.request
@@ -20,6 +21,7 @@ from urllib.parse import quote
 from services.netlab import location
 
 _RAW_BASE = "https://raw.githubusercontent.com/ipspace/netlab"
+_TREE_API = "https://api.github.com/repos/ipspace/netlab/git/trees"
 
 # url -> cleaned markdown, or None when the fetch failed (negative-cached so we
 # don't retry a missing/offline doc on every dialog open).
@@ -67,29 +69,72 @@ def clean_markdown(md: str) -> str:
     return md.strip()
 
 
+def _fetch_cached(version: str, cache_key: str, url: str, transform=lambda text: text) -> str | None:
+    """Memory cache → disk cache → network, for one text resource at ``url``."""
+    if url in _cache:
+        return _cache[url]
+    result = _read_disk_cache(version, cache_key)
+    if result is None:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "netlab-gui"})
+            with urllib.request.urlopen(request, timeout=10) as resp:
+                result = transform(resp.read().decode("utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            result = None
+        if result is not None:
+            _write_disk_cache(version, cache_key, result)
+    _cache[url] = result
+    return result
+
+
+def _safe_path(path: str) -> str | None:
+    clean_path = path.lstrip("/")
+    if not clean_path or ".." in Path(clean_path).parts:
+        return None
+    return clean_path
+
+
+def _tag(version: str) -> str:
+    return f"release_{quote(version, safe='._-')}"
+
+
 def fetch_doc(rel_path: str) -> str | None:
     """Fetch ``docs/<rel_path>`` from the netlab repo at the installed version's
     tag, cleaned for rendering. Successful fetches are persisted to a disk cache
     so the doc stays available offline afterwards. Returns None when netlab is
     absent or the doc has never been fetched and the network is unavailable."""
     version = netsim_version()
+    clean_path = _safe_path(rel_path)
+    if not version or not clean_path:
+        return None
+    url = f"{_RAW_BASE}/{_tag(version)}/docs/{quote(clean_path, safe='/._-')}"
+    return _fetch_cached(version, rel_path, url, clean_markdown)
+
+
+def fetch_repo_file(repo_path: str) -> str | None:
+    """Fetch any file (e.g. ``tests/integration/ospf/01-areas.yml``) from the
+    netlab repo at the installed version's tag, unmodified. Cached like
+    :func:`fetch_doc`."""
+    version = netsim_version()
+    clean_path = _safe_path(repo_path)
+    if not version or not clean_path:
+        return None
+    url = f"{_RAW_BASE}/{_tag(version)}/{quote(clean_path, safe='/._-')}"
+    return _fetch_cached(version, "repo:" + clean_path, url)
+
+
+def repo_paths() -> list[str] | None:
+    """Every file path in the netlab repo at the installed version's tag (one
+    GitHub API call, then cached per version). None when offline or netlab is
+    absent."""
+    version = netsim_version()
     if not version:
         return None
-    clean_path = rel_path.lstrip("/")
-    if not clean_path or ".." in Path(clean_path).parts:
-        return None
-    url = f"{_RAW_BASE}/release_{quote(version, safe='._-')}/docs/{quote(clean_path, safe='/._-')}"
-    if url in _cache:
-        return _cache[url]
+    url = f"{_TREE_API}/{_tag(version)}?recursive=1"
 
-    result = _read_disk_cache(version, rel_path)
-    if result is None:
-        try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                result = clean_markdown(resp.read().decode("utf-8"))
-        except (OSError, UnicodeError):
-            result = None
-        if result is not None:
-            _write_disk_cache(version, rel_path, result)
-    _cache[url] = result
-    return result
+    def paths(text: str) -> str:
+        tree = json.loads(text).get("tree") or []
+        return "\n".join(entry["path"] for entry in tree if entry.get("type") == "blob")
+
+    listing = _fetch_cached(version, "repo-tree", url, paths)
+    return listing.splitlines() if listing else None

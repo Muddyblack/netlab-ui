@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, Divider, Stack, TextField, Typography } from "@mui/material";
 import { api, HttpError, type HealthStatus, type NetlabEnvironment } from "../../api/client";
 import { RuntimeInfo } from "../NetlabAboutModal";
+import { NetlabSetupHelpers } from "../NetlabSetupHelpers";
+import { ProviderSupportTable } from "../ProviderSupportTable";
 import { ContainerSetupPanel } from "../ContainerSetup";
 
 const TEXT_SECONDARY = "text.secondary";
@@ -131,6 +133,14 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
       <Divider />
 
       <RuntimeInfo health={health} />
+
+      <Divider />
+
+      <ProviderSupportTable />
+
+      <Divider />
+
+      <NetlabSetupHelpers />
     </Stack>
   );
 }

@@ -6,18 +6,19 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HistoryIcon from "@mui/icons-material/History";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import SubjectIcon from "@mui/icons-material/Subject";
-import TerminalIcon from "@mui/icons-material/Terminal";
+import DynamicFeedIcon from "@mui/icons-material/DynamicFeed";
 import { Box, IconButton, Menu, MenuItem, Paper, Tab, Tabs, Tooltip, Typography } from "@mui/material";
 
 import { usePanelInsets } from "../panels/units-dock/usePanelInsets";
 import { loadRecentShellNodes, type SessionTab } from "../hooks/useSessionDock";
+import { tabCloseLabel, tabIcon, tabLabel } from "./sessionTabLabels";
 
 // xterm only loads once a shell tab actually opens — log tabs shouldn't pay for it.
 const Shell = lazy(() => import("./Shell").then((m) => ({ default: m.Shell })));
 const NodeLogsPanel = lazy(() => import("./NodeLogsPanel").then((m) => ({ default: m.NodeLogsPanel })));
+const MultiExecPanel = lazy(() => import("./multi-exec/MultiExecPanel").then((m) => ({ default: m.MultiExecPanel })));
 const DrawioWizard = lazy(() => import("./DrawioWizard").then((m) => ({ default: m.DrawioWizard })));
+const AgentTerminal = lazy(() => import("../components/agents/AgentTerminal").then((m) => ({ default: m.AgentTerminal })));
 
 const HEIGHT_KEY = "netlab.sessionDock.height";
 const MIN_HEIGHT = 140;
@@ -26,21 +27,6 @@ const DEFAULT_HEIGHT = 320;
 function loadHeight(): number {
   const raw = Number(localStorage.getItem(HEIGHT_KEY));
   return Number.isFinite(raw) && raw >= MIN_HEIGHT ? Math.round(raw) : DEFAULT_HEIGHT;
-}
-
-function tabIcon(kind: SessionTab["kind"]) {
-  if (kind === "shell") return <TerminalIcon sx={{ fontSize: 14 }} />;
-  if (kind === "drawio") return <AccountTreeIcon sx={{ fontSize: 14 }} />;
-  return <SubjectIcon sx={{ fontSize: 14 }} />;
-}
-
-function tabLabel(tab: SessionTab): string {
-  return tab.kind === "drawio" ? "draw.io wizard" : tab.node;
-}
-
-function tabCloseLabel(tab: SessionTab): string {
-  if (tab.kind === "drawio") return "Close draw.io wizard";
-  return `Close ${tab.node} ${tab.kind === "shell" ? "terminal" : "logs"}`;
 }
 
 function SessionDockTabStrip({ tabs, activeTab, onSelect, onClose }: {
@@ -100,7 +86,7 @@ function RecentConnectionsMenu({ anchorEl, onClose, recentOutsideTabs, onOpenShe
 }
 
 function SessionDockHeader({
-  tabs, activeTab, open, maximized, onSelect, onClose, onToggleOpen, onOpenShell, onPopOut,
+  tabs, activeTab, open, maximized, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onPopOut,
   historyAnchor, setHistoryAnchor, recentOutsideTabs, setRecentNodes, setMaximized,
 }: {
   tabs: SessionTab[];
@@ -111,6 +97,7 @@ function SessionDockHeader({
   onClose: (key: string) => void;
   onToggleOpen: () => void;
   onOpenShell: (node: string) => void;
+  onOpenMulti: () => void;
   onPopOut: (tab: SessionTab) => void;
   historyAnchor: HTMLElement | null;
   setHistoryAnchor: (el: HTMLElement | null) => void;
@@ -122,6 +109,11 @@ function SessionDockHeader({
     <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, pr: 0.5, ...(open ? { borderBottom: 1, borderColor: "divider" } : {}) }}>
       <SessionDockTabStrip tabs={tabs} activeTab={activeTab} onSelect={onSelect} onClose={onClose} />
 
+      <Tooltip title="Run a command on several nodes">
+        <IconButton size="small" aria-label="Run a command on several nodes" onClick={onOpenMulti}>
+          <DynamicFeedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
       <Tooltip title="Recent node connections">
         <IconButton
           size="small"
@@ -159,6 +151,8 @@ function SessionDockHeader({
 function sessionTabContent(tab: SessionTab, sessionId: string, onClose: (key: string) => void) {
   if (tab.kind === "shell") return <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
   if (tab.kind === "drawio") return <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+  if (tab.kind === "multi") return <MultiExecPanel sessionId={sessionId} />;
+  if (tab.kind === "agent") return <AgentTerminal agentId={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
   return <NodeLogsPanel node={tab.node} sessionId={sessionId} />;
 }
 
@@ -189,6 +183,7 @@ interface SessionDockProps {
   onClose: (key: string) => void;
   onToggleOpen: () => void;
   onOpenShell: (node: string) => void;
+  onOpenMulti: () => void;
   onPopOut: (tab: SessionTab) => void;
 }
 
@@ -196,7 +191,7 @@ interface SessionDockProps {
  * sibling tabs. Collapsible to a header strip, drag-resizable, maximizable —
  * never a modal, so the canvas stays interactive. All tabs stay mounted (even
  * collapsed) to keep their WebSockets alive. */
-export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClose, onToggleOpen, onOpenShell, onPopOut }: SessionDockProps) {
+export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onPopOut }: SessionDockProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const insets = usePanelInsets(rootRef);
   const [height, setHeight] = useState(loadHeight);
@@ -275,6 +270,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
           onClose={onClose}
           onToggleOpen={onToggleOpen}
           onOpenShell={onOpenShell}
+          onOpenMulti={onOpenMulti}
           onPopOut={onPopOut}
           historyAnchor={historyAnchor}
           setHistoryAnchor={setHistoryAnchor}

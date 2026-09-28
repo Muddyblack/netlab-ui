@@ -24,6 +24,8 @@ export interface RunningLabInfo {
   /** netlab-ui user who deployed it (multi-user installs, see services/owners.py). */
   owner?: string;
   ownerSince?: string;
+  /** Shutdown time when the server limits lab time (NETLAB_UI_LAB_HOURS). */
+  expiresAt?: string;
   status?: string;
   providers?: string[];
   nodes?: Record<
@@ -232,7 +234,7 @@ export function useAppData({ hostRef, onFilesChanged, onTransformDone }: Options
     const sig = JSON.stringify(Object.fromEntries(
       Object.entries(next).map(([key, lab]) => [
         key,
-        { name: lab?.name, path: lab?.path, dir: lab?.dir, status: lab?.status, providers: lab?.providers, nodes: Object.fromEntries(Object.entries(lab?.nodes ?? {}).map(([n, info]) => [n, info?.status])) }
+        { name: lab?.name, path: lab?.path, dir: lab?.dir, status: lab?.status, providers: lab?.providers, owner: lab?.owner, expiresAt: lab?.expiresAt, nodes: Object.fromEntries(Object.entries(lab?.nodes ?? {}).map(([n, info]) => [n, info?.status])) }
       ])
     ));
     if (sig === lastStatusSigRef.current) return;

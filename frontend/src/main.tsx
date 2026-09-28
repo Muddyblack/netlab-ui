@@ -56,39 +56,21 @@ if (typeof window !== "undefined") {
   }
 }
 
-// ?popout=shell|logs renders a single session in its own window instead of the
+// ?popout=shell|logs|multi|agent renders a single session in its own window instead of the
 // full app — the session dock's "move to its own window" target.
-function resolvePopout(): { kind: "shell" | "logs"; node: string; sessionId: string } | null {
+function resolvePopout(): { kind: "shell" | "logs" | "multi" | "agent"; node: string; sessionId: string } | null {
   const params = new URLSearchParams(window.location.search);
   const kind = params.get("popout");
   const node = params.get("node");
   const sessionId = params.get("sessionId");
-  if ((kind !== "shell" && kind !== "logs") || !node || !sessionId) return null;
+  if ((kind !== "shell" && kind !== "logs" && kind !== "multi" && kind !== "agent") || !node || !sessionId) return null;
   return { kind, node, sessionId };
 }
 
-// ?popout=assistant needs no node — the conversation is about the whole lab.
-function resolveAssistantPopout(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("popout") !== "assistant") return null;
-  return params.get("sessionId");
-}
-
 const popout = resolvePopout();
-const assistantPopout = resolveAssistantPopout();
 const SessionPopout = lazy(() => import("./terminal/SessionPopout").then((m) => ({ default: m.SessionPopout })));
-const AssistantPopout = lazy(() =>
-  import("./panels/assistant/AssistantPopout").then((m) => ({ default: m.AssistantPopout }))
-);
 
 let rootContent = <App />;
-if (assistantPopout) {
-  rootContent = (
-    <Suspense fallback={null}>
-      <AssistantPopout sessionId={assistantPopout} />
-    </Suspense>
-  );
-}
 if (popout) {
   rootContent = (
     <Suspense fallback={null}>

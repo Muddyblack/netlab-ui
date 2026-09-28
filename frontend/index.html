@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>netlab web</title>
+  <title>netlab-ui — netlab GUI and visual topology editor</title>
+  <meta name="description" content="Build, edit, and deploy netlab network labs in your browser. A visual topology editor and web UI with support for containerlab and libvirt." />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="alternate icon" type="image/png" href="/favicon.png" />
   <style>
@@ -40,6 +41,17 @@
       --vscode-textLink-activeForeground: #ffc247 !important;
       --vscode-progressBar-background: #ff9800 !important;
       --vscode-list-focusOutline: #ff9800 !important;
+    }
+
+    /* clab-ui switches CSS variables, while MUI's palette.mode stays light.
+       Neutral filled buttons must not use MUI's fixed light grey background. */
+    .MuiButton-root.MuiButton-containedInherit:not(.Mui-disabled) {
+      background-color: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+
+    .MuiButton-root.MuiButton-containedInherit:not(.Mui-disabled):hover {
+      background-color: var(--vscode-button-secondaryHoverBackground);
     }
   </style>
   <!-- Override clab-ui's default node icon color (read by DEFAULT_ICON_COLOR before the bundle loads). -->

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { NetlabLensesState } from "../../hooks/useNetlabLenses";
 import { LensBodyContainer } from "./LensBody";
+import { openConfigsDialog } from "../../host/configsDialogStore";
 import { LensErrorBanner, LensesPanelHeader, TourPanel } from "./lensViews";
 
 interface LensesPanelProps {
@@ -81,6 +82,7 @@ export function LensesPanel({ state, validationIssues, onToast, onRerunDeploymen
         refresh={refresh}
         onOpenReport={() => setReportOpen(true)}
         onOpenConfigDiff={() => setConfigDiffOpen(true)}
+        onOpenRunningConfigs={() => openConfigsDialog(sessionId)}
       />
 
       {showErrorBanner && <LensErrorBanner error={error!} onOpenReadiness={() => setLens("readiness")} />}

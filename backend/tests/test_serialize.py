@@ -152,3 +152,20 @@ def test_added_and_removed_list_items_keep_the_rest_intact():
 def test_model_built_topology_still_serializes_fresh():
     topo = serialize.from_dict({"name": "t", "nodes": {"r1": None}})
     assert serialize.to_yaml(topo) == "name: t\nnodes:\n  r1:\n"
+
+
+def test_short_form_groups_keep_their_members_and_form():
+    topo = serialize.from_yaml("nodes: [r1, r2, r3]\ngroups:\n  core: [r1, r2]\n")
+    assert topo.groups[0].members == ["r1", "r2"]
+    assert "core: [r1, r2]" in serialize.to_yaml(topo)
+    topo.groups[0].module = ["ospf"]
+    assert serialize.from_yaml(serialize.to_yaml(topo)).groups[0].members == ["r1", "r2"]
+
+
+def test_topologies_load_safely_from_many_threads_at_once():
+    from concurrent.futures import ThreadPoolExecutor
+
+    text = "name: t\nnodes: [r1, r2, r3]\nlinks: [r1-r2, r2-r3]\ngroups:\n  g: [r1, r2]\n" * 1
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(lambda _: serialize.from_yaml(text), range(400)))
+    assert all([n.name for n in topo.nodes] == ["r1", "r2", "r3"] for topo in results)
