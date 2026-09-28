@@ -17,10 +17,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from app.auth import request_user
 from app.contract.responses import (
     CommandResult,
     DeployDiffResult,
@@ -35,6 +36,7 @@ from app.contract.responses import (
     VersionResult,
 )
 from app.lab import common
+from services import owners
 from services.netlab import deploy_diff, deployment, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
@@ -120,7 +122,7 @@ async def lab_instance_force_cleanup_stream(instance_id: str):
 
 
 @router.post("/up", response_model=CommandResult)
-async def lab_up(body: LabAction):
+async def lab_up(body: LabAction, request: Request):
     path = common.session_path(body.sessionId)
     try:
         res = await runner.up(path)
@@ -128,6 +130,7 @@ async def lab_up(body: LabAction):
         raise HTTPException(503, str(exc)) from exc
     if res.code == 0:
         deploy_diff.record(path)
+        owners.record(Path(path).parent, request_user(request))
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
 
 
@@ -274,7 +277,7 @@ async def lab_deploy_plan(sessionId: str):
 
 
 @router.post("/lifecycle/stream")
-async def lab_lifecycle_stream(body: LifecycleStreamAction):
+async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
     """Run a netlab lifecycle command and stream its output live as SSE.
 
     Frames: ``{stream, line}`` per output line, then ``{done: true, code}``
@@ -283,7 +286,19 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
     if body.action not in runner.LIFECYCLE_ACTIONS:
         raise HTTPException(400, f"unknown lifecycle action {body.action!r}")
     path = common.session_path(body.sessionId)
-    args, cwd = runner.lifecycle_argv(body.action, path, multilab_id=body.multilabId)
+    user = request_user(request)
+    steps = [runner.lifecycle_argv(body.action, path, multilab_id=body.multilabId)]
+    if body.action == "restart":
+        # `netlab restart` is down + a fresh `up` that re-reads the topology, so
+        # a lab started as a parallel instance (-s defaults.multilab.id=N)
+        # would come back as instance "default" and collide. Keep its id.
+        instance = await _registered_multilab_id(path)
+        if instance is not None:
+            steps = [
+                runner.lifecycle_argv("down", path),
+                runner.lifecycle_argv("up", path, multilab_id=instance),
+            ]
+    args = steps[0][0]
 
     async def gen():
         # Clean raw netlab output for the plain-text modal: strip ANSI, fold
@@ -303,22 +318,31 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
             yield f"data: {json.dumps({'progress': tracker.payload(delta=True)})}\n\n"
         try:
             yield f"data: {json.dumps({'stream': 'stdout', 'line': f'Running netlab {args[0]}…'})}\n\n"
-            async for stream, line in runner.run_streaming(args, cwd=cwd):
+            async for stream, line in _run_sequence(steps):
                 if stream == "exit":
                     for out_stream, out_line in fmt.flush():
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
                     done_payload: dict[str, Any] = {"done": True, "code": int(line)}
+                    # Labs were started/stopped: the next status read must be fresh.
+                    runner._clear_status_cache()
                     transcript = "".join(captured)
                     if body.action == "up" and "already running in directory" in transcript:
                         done_payload["hint"] = (
                             "Another netlab instance owns this instance ID. "
                             "Open Explorer → Running Labs → Manage running labs."
                         )
+                        with contextlib.suppress(runner.NetlabError, runner.NetlabNotInstalled, ValueError):
+                            plan = multilab.plan(path, await runner.status_cached(max_age=0))
+                            if plan["suggestedMultilabId"] is not None:
+                                done_payload["suggestedMultilabId"] = plan["suggestedMultilabId"]
                     if tracker:
                         tracker.finish(int(line))
                         done_payload["progress"] = tracker.payload(delta=True)
-                    if body.action == "up" and int(line) == 0:
+                    if body.action in {"up", "restart"} and int(line) == 0:
                         deploy_diff.record(path)
+                        owners.record(Path(path).parent, user)
+                    if body.action == "down" and int(line) == 0:
+                        owners.forget(Path(path).parent)
                     if body.action == "validate":
                         issues = _store_validation(path, transcript)
                         done_payload["issues"] = [issue.as_dict() for issue in issues]
@@ -352,6 +376,37 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction):
     return StreamingResponse(gen(), media_type="text/event-stream", headers=common.SSE_HEADERS)
 
 
+async def _run_sequence(steps: list[tuple[list[str], Path]]) -> Any:
+    """Stream several netlab commands as one: lines of each, then a single
+    ("exit", code) — stopping at the first command that fails."""
+    for index, (args, cwd) in enumerate(steps):
+        if index:
+            yield "stdout", f"Running netlab {' '.join(args[:1])}…"
+        async for stream, line in runner.run_streaming(args, cwd=cwd):
+            if stream != "exit":
+                yield stream, line
+            elif line != "0" or index == len(steps) - 1:
+                yield stream, line
+                return
+
+
+async def _registered_multilab_id(path: str) -> int | None:
+    """The numeric multilab id this lab directory is running under, unless the
+    topology sets its own (then netlab picks it up by itself)."""
+    if multilab.configured_instance_id(path) is not None:
+        return None
+    try:
+        status = await runner.status_cached(max_age=2.0)
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return None
+    lab_dir = Path(path).resolve().parent
+    for key, info in (status if isinstance(status, dict) else {}).items():
+        registered_here = isinstance(info, dict) and info.get("dir") and Path(str(info["dir"])).resolve() == lab_dir
+        if registered_here and str(key).isdigit():
+            return int(key)
+    return None
+
+
 @router.post("/down", response_model=CommandResult)
 async def lab_down(body: LabAction):
     path = common.session_path(body.sessionId)
@@ -359,6 +414,8 @@ async def lab_down(body: LabAction):
         res = await runner.down(path)
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
+    if res.code == 0:
+        owners.forget(Path(path).parent)
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
 
 
@@ -367,7 +424,9 @@ async def lab_status():
     if not runner.is_installed():
         return {}
     try:
-        return await runner.status()
+        # Coalesce with the SSE poller: `netlab status --all` costs ~1 s and
+        # the UI refreshes this after every lifecycle action.
+        return owners.annotate(await runner.status_cached(max_age=2.0))
     except runner.NetlabError as exc:
         raise HTTPException(500, str(exc)) from exc
 
@@ -403,7 +462,7 @@ class _StatusBroadcaster:
                 payload: object = {}
                 if runner.is_installed():
                     try:
-                        payload = await runner.status()
+                        payload = owners.annotate(await runner.status())
                     except (runner.NetlabError, runner.NetlabNotInstalled):
                         # Transient `netlab status` failure: re-emit the last
                         # known state instead of {} so running labs don't

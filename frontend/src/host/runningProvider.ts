@@ -72,6 +72,24 @@ function buildEndpointSections(status: RunningLabsStatus, files: LabFileEntry[])
   ];
 }
 
+/** Multi-user installs: who deployed a lab, and whether it lives in the
+ * shared workspace (everyone can open, edit and destroy those). */
+function ownershipText(
+  labInfo: RunningLabsStatus[string],
+  file: LabFileEntry | undefined,
+  label: string
+): { badges: string; ownerLine: string; label: string } {
+  const badges = [labInfo.owner ? `by ${labInfo.owner}` : "", file?.shared ? "shared" : ""].filter(Boolean).join(" · ");
+  const since = labInfo.ownerSince ? ` (${labInfo.ownerSince})` : "";
+  return {
+    badges,
+    ownerLine: labInfo.owner ? `\nDeployed by ${labInfo.owner}${since}` : "",
+    // clab-ui's explorer shows no description on lab rows, so the badges
+    // ride in the label.
+    label: badges ? `${label} · ${badges}` : label,
+  };
+}
+
 function buildRunningLabNode(
   labKey: string,
   labInfo: RunningLabsStatus[string],
@@ -119,11 +137,13 @@ function buildRunningLabNode(
   // status instead of the directory so the lab doesn't read as healthy.
   const noContainers = nodes.length === 0;
   const labStatus = labInfo.status || "Unknown status";
+  const ownership = ownershipText(labInfo, knownFile, label);
+  const { badges, ownerLine } = ownership;
   return {
     id: `running-lab:local:${labName}`,
-    label,
-    description: noContainers ? `no containers — ${labStatus}` : directory,
-    tooltip: `${labStatus}\n${directory}`,
+    label: ownership.label,
+    description: [badges, noContainers ? `no containers — ${labStatus}` : directory].filter(Boolean).join(" · "),
+    tooltip: `${labStatus}\n${directory}${ownerLine}`,
     contextValue: "containerlabLabDeployed",
     endpointId: "local",
     collapsibleState: nodes.length > 0 ? 1 : 0,
@@ -149,7 +169,7 @@ function buildUndeployedLabNode(file: LabFileEntry): ExplorerTreeNode {
     // Prefer the topology's own `name:` (e.g. "tofh3t31bd") over the bare
     // filename — every lab folder holds a `topology.yml`, so filenames
     // collide and read as identical siblings in the tree.
-    label: file.labName || file.filename,
+    label: file.shared ? `${file.labName || file.filename} · shared` : file.labName || file.filename,
     description: labParentDir(file.path),
     contextValue: "containerlabLabUndeployed",
     endpointId: "local",

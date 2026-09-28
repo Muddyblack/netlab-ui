@@ -34,7 +34,7 @@ export interface OpenFileTab {
 
 export type OpenTab = OpenLabTab | OpenFileTab;
 
-export type WorkspaceEntry = { path: string; exists: boolean; labCount?: number };
+export type WorkspaceEntry = { path: string; exists: boolean; labCount?: number; shared?: boolean };
 
 export type StartupState =
   | { status: "checking"; health: null; error: null }

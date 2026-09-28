@@ -1,0 +1,67 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/LifecycleProgressModal-EVWIOMS5.js b/node_modules/@containerlab/clab-ui/dist/chunks/LifecycleProgressModal-EVWIOMS5.js
+index c97b30e..85a4ede 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/LifecycleProgressModal-EVWIOMS5.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/LifecycleProgressModal-EVWIOMS5.js
+@@ -98,6 +98,7 @@ var LifecycleProgressModal = ({
+   statusMessage,
+   labName,
+   logs,
++  actions,
+   onClose,
+   onCancel
+ }) => {
+@@ -257,7 +258,25 @@ var LifecycleProgressModal = ({
+             "data-testid": "lifecycle-cancel-btn",
+             children: "Cancel"
+           }
+-        ) : /* @__PURE__ */ jsx(Button, { size: "small", variant: "contained", onClick: onClose, "data-testid": "lifecycle-ok-btn", children: "OK" }) })
++        ) : /* @__PURE__ */ jsxs(React.Fragment, { children: [
++          ...(Array.isArray(actions) ? actions : []).filter((action) => !action.showOn || action.showOn === status).map(
++            (action) => /* @__PURE__ */ jsx(
++              Button,
++              {
++                size: "small",
++                variant: "outlined",
++                onClick: () => {
++                  onClose();
++                  action.onClick();
++                },
++                "data-testid": `lifecycle-action-${action.id}`,
++                children: action.label
++              },
++              action.id
++            )
++          ),
++          /* @__PURE__ */ jsx(Button, { size: "small", variant: "contained", onClick: onClose, "data-testid": "lifecycle-ok-btn", children: "OK" })
++        ] }) })
+       ]
+     }
+   );
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index 53e9e21..9453f6f 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -21590,7 +21590,9 @@ function selectLifecycleModalState(state) {
+     lifecycleStatus: state.lifecycleStatus,
+     lifecycleStatusMessage: state.lifecycleStatusMessage,
+     labName: state.labName,
+-    lifecycleLogs: state.lifecycleLogs
++    lifecycleLogs: state.lifecycleLogs,
++    lifecycleLabName: state.lifecycleLabName,
++    lifecycleActions: state.lifecycleActions
+   };
+ }
+ var LifecycleModalHost = React44.memo(
+@@ -21607,7 +21609,11 @@ var LifecycleModalHost = React44.memo(
+         mode: state.processingMode,
+         status: state.lifecycleStatus,
+         statusMessage: state.lifecycleStatusMessage,
+-        labName: state.labName,
++        // Host-provided (useTopoViewerStore.setState): the lab the running
++        // command targets when it is not the canvas lab, and extra footer
++        // actions offered once the command has finished.
++        labName: state.lifecycleLabName || state.labName,
++        actions: state.lifecycleActions,
+         logs: state.lifecycleLogs,
+         onClose,
+         onCancel

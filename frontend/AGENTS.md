@@ -48,7 +48,7 @@ The underlying code is still bundled in `dist/` — only the barrel `export`
 statements were removed. Still true in `0.3.2` (the first release under the
 `@containerlab` npm scope), so the patch was carried over unchanged.
 
-`frontend/patches/@containerlab+clab-ui+0.3.2.patch` (applied automatically via
+`frontend/patches/@containerlab+clab-ui+0.3.2+001+initial.patch` (applied automatically via
 `npm install`'s `postinstall` → `patch-package`) restores those exports by
 re-adding the missing `export` lines in `dist/index.js`/`dist/index.d.ts`. It
 does not fork or reimplement anything from clab-ui.
@@ -57,9 +57,28 @@ does not fork or reimplement anything from clab-ui.
   `patch-package` refuses to apply against a different version, so a version
   bump fails the install loudly instead of silently losing the patch.
 - Once upstream republishes a version with these exports restored for real,
-  bump the pin and delete `frontend/patches/@containerlab+clab-ui+0.3.2.patch`,
-  the `patch-package` devDependency, and the `postinstall` script.
+  bump the pin and delete `frontend/patches/@containerlab+clab-ui+0.3.2+001+initial.patch`
+  (and the patch-package devDependency / postinstall once no patch is left).
 - Track/link the upstream fix here once filed: (no issue filed yet).
+
+## clab-ui@0.3.2 extension patches (small, generic, no netlab text)
+
+Applied in sequence after 001 by patch-package (`+NNN+name` file names; add
+one with `npx patch-package @containerlab/clab-ui --append <name>`). Each is
+a candidate for an upstream feature request.
+
+- **002 lifecycle-context** (~70 lines): the lifecycle progress modal reads two
+  optional store fields a host sets via `useTopoViewerStore.setState` —
+  `lifecycleLabName` (the lab a command runs for when it is not the canvas
+  lab) and `lifecycleActions` (`{id, label, showOn?, onClick}` footer buttons
+  shown once the command finished). Used by `hooks/useLabLifecycle.ts`.
+- **003 editor-host-fields** (~30 lines): the node editor carries an opaque
+  `extraData.hostFields` object — loaded into the form, dirty-checked, saved
+  with `editNode`. The netlab editor tabs edit it through
+  `components/node-editor/NetlabAttrsTab.tsx`.
+
+After changing a patch, restart Vite with `--force`: its dependency
+pre-bundle cache keeps serving the old clab-ui code otherwise.
 
 ## @redocly/openapi-core minimatch patch (permanent, not temporary)
 

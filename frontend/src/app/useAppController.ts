@@ -33,6 +33,9 @@ import {
   useLabLifecycle,
   type ValidationIssue,
   type DeployDecision,
+  type LifecycleCompletion,
+  type LifecycleModalAction,
+  setLifecycleActions,
   useExplorerController,
   type ExplorerIncomingMessage,
   useSessionDock,
@@ -144,6 +147,23 @@ function firstLine(error: string): string {
     .filter((line) => !/^errors? encountered\b/i.test(line) && !/^fatal error in netlab\b/i.test(line));
   if (lines.length === 0) return error.trim().split("\n")[0] ?? "";
   return lines.length > 1 ? `${lines[0]} (+${lines.length - 1} more)` : lines[0];
+}
+
+/** Follow-up buttons for the finished-command modal. */
+function lifecycleFollowUps(
+  result: LifecycleCompletion,
+  run: { deploy: (sid: string, multilabId: number) => void; validate: (sid: string) => void }
+): LifecycleModalAction[] {
+  const sid = result.sessionId;
+  if (!sid || result.action !== "up") return [];
+  if (!result.success && result.suggestedMultilabId !== undefined) {
+    const id = result.suggestedMultilabId;
+    return [{ id: "multilab", label: `Deploy as parallel instance #${id}`, showOn: "error", onClick: () => run.deploy(sid, id) }];
+  }
+  if (result.success) {
+    return [{ id: "validate", label: "Run netlab validate", showOn: "success", onClick: () => run.validate(sid) }];
+  }
+  return [];
 }
 
 export function useAppController() {
@@ -506,13 +526,21 @@ export function useAppController() {
   }, [openTabs, activeTabId]);
   useAutoOpenComposerTab(activeUnitPath);
 
-  const handleLifecycleFinished = useCallback((result: {
-    label: string;
-    success: boolean;
-    errorMessage?: string;
-  }) => {
+  const labNameForSession = useCallback((sid: string): string | null => {
+    const path = topologyPathForSession(sid);
+    if (!path) return null;
+    return labFilesRef.current.find((file) => file.path === path)?.labName ?? path.split("/").slice(-2, -1)[0] ?? null;
+  }, [topologyPathForSession]);
+
+  const handleLifecycleFinished = useCallback((result: LifecycleCompletion) => {
     const activeTab = openTabs.find((tab) => tab.id === activeTabId && tab.kind === "topology");
-    const labName = activeTab?.kind === "topology" ? activeTab.topologyRef?.labName : undefined;
+    // The command may have run for a lab that is not on the canvas (explorer).
+    const labName = (result.sessionId ? labNameForSession(result.sessionId) : null)
+      ?? (activeTab?.kind === "topology" ? activeTab.topologyRef?.labName : undefined);
+    setLifecycleActions(lifecycleFollowUps(result, {
+      deploy: (sid, multilabId) => void handleDeployLabRef.current(sid, multilabId),
+      validate: (sid) => void handleNetlabValidateRef.current(sid),
+    }));
     const subject = labName ? `${result.label} · ${labName}` : result.label;
     if (result.success) {
       addToast(`${subject} completed`, "success");
@@ -522,7 +550,7 @@ export function useAppController() {
       addToast(`${subject} failed: ${detail}`, "error");
       sendSystemNotification("netlab job failed", `${subject}\n${detail}`, `netlab-job-${result.label}`);
     }
-  }, [activeTabId, addToast, openTabs, sendSystemNotification]);
+  }, [activeTabId, addToast, labNameForSession, openTabs, sendSystemNotification]);
 
   const requestDeployApproval = useCallback(async (targetSid?: string): Promise<DeployDecision> => {
     // Review the lab that is being deployed — an explorer "Deploy" on another
@@ -613,7 +641,8 @@ export function useAppController() {
     onValidationIssues: setValidationIssues,
     beforeDeploy: requestDeployApproval,
     onDeploymentProgress: handleDeploymentProgress,
-    onLifecycleFinished: handleLifecycleFinished
+    onLifecycleFinished: handleLifecycleFinished,
+    labNameForSession
   });
 
   const handleRerunDeployment = useCallback((action: string) => {

@@ -185,10 +185,10 @@ nix develop        # Drop into the dev shell (or run `direnv allow`)
 The frontend imports `@containerlab/clab-ui` directly wherever it's needed (see `frontend/src/App.tsx`, `frontend/src/host/`, etc.) — there is no local checkout, stub, or swap-point to configure.
 
 > **Note:** `@containerlab/clab-ui` is currently pinned to an exact version (`0.3.2`)
-> with a `patch-package` patch applied on install (`frontend/patches/`) to
-> restore exports an upstream cleanup accidentally dropped. This is temporary —
-> see `frontend/AGENTS.md` for details and the removal plan once upstream
-> republishes a fixed version.
+> with small `patch-package` patches applied on install (`frontend/patches/`):
+> one restores exports an upstream cleanup accidentally dropped (temporary),
+> two add generic host hooks (lifecycle-modal lab name/actions, host-owned
+> node-editor fields). See `frontend/AGENTS.md` for what each does.
 
 ---
 
@@ -365,6 +365,12 @@ Why each flag matters — each one fails late and cryptically when missing:
 - **Labs directory at the *same path* as on the host** — containerlab asks the host daemon to bind-mount node config files by their in-container path. Mounting `./labs` at `/work` (as older docs suggested) makes every node fail to start.
 - **`~/.netlab`** — netlab's running-lab registry. Shared with `netlab status` on the host and kept across container re-creation; without it labs started from the UI turn into orphans.
 - **`UVICORN_HOST=127.0.0.1`** — the UI can deploy labs and open root shells, so it listens on loopback unless you set `0.0.0.0` on purpose. When you do, also set **`NETLAB_UI_AUTH=user:password`**: every page, API call, live stream and terminal then requires that login (HTTP Basic — the browser asks once).
+
+### Several users on one lab server
+
+- **`NETLAB_UI_AUTH=alice:pw1,bob:pw2`** (or one `user:password` per line in the file named by **`NETLAB_UI_AUTH_FILE`**) — each person logs in as themselves.
+- **`NETLAB_UI_SHARED_WORKSPACE=/srv/labs`** — a folder everyone works in. It is always listed (as *name (shared)*), cannot be removed from the UI, and its labs carry a *shared* badge.
+- Running labs show who deployed them (*team-lab (7) · by alice · shared*). The owner is recorded next to netlab's own registry in `~/.netlab/netlab-ui-owners.json` and cleared on `netlab down`.
 
 You don't have to remember any of this: the backend inspects its own container and lists anything missing — with the exact flag to add — under **Settings → Environment → Container Setup**, plus a banner at startup when a deployment would fail.
 

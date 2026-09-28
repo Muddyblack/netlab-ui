@@ -21,6 +21,9 @@ export interface RunningLabInfo {
   dir?: string;
   /** Topology file the instance was started from, relative to `dir`. */
   topology?: string;
+  /** netlab-ui user who deployed it (multi-user installs, see services/owners.py). */
+  owner?: string;
+  ownerSince?: string;
   status?: string;
   providers?: string[];
   nodes?: Record<
