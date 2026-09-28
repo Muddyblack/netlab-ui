@@ -12,6 +12,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pre-commit
+        run: pip install pre-commit==4.3.0
+      - name: Check changed files
+        env:
+          SKIP: gitleaks
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+            pre-commit run --from-ref "$base" --to-ref "$HEAD_SHA" --show-diff-on-failure
+          else
+            pre-commit run --all-files --show-diff-on-failure
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Install Gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+      - name: Scan every PR commit for secrets
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            gitleaks git --redact --no-banner --log-opts="$BASE_SHA..$HEAD_SHA"
+          else
+            gitleaks git --redact --no-banner
+          fi
+
   # Decide which halves of the repo the PR actually touches, so a
   # frontend-only PR doesn't pay for a backend run (and vice versa).
   changes:
@@ -34,9 +83,11 @@ jobs:
 
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             # Manual runs have no diff to inspect — exercise everything.
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "docker=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "backend=true"
+              echo "frontend=true"
+              echo "docker=true"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 

@@ -267,7 +267,7 @@ export function NetlabMascot({
       {/* ── Local Router ("us") — Takes up over 60% of canvas width ── */}
       <g className="bg-local">
         <rect x="3" y="4" width="22" height="22" rx="4" fill={`url(#${ids.localGrad})`} />
-        
+
         {/* Front Panel Ports */}
         <g fill="#000" opacity="0.18">
           <rect x="6" y="8" width="3" height="3" rx="0.6" />

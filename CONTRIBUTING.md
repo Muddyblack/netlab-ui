@@ -40,6 +40,27 @@ nix develop        # the dev shell (or `direnv allow`)
 
 The first run executes `npm install` for the frontend.
 
+## Local commit checks
+
+Install the lightweight hooks once per clone:
+
+```bash
+pipx install pre-commit==4.3.0   # or install it in a separate Python virtualenv
+pre-commit install
+```
+
+The first run downloads isolated hook dependencies, including Go for Gitleaks
+when needed. Commits check staged changes for secrets, private keys, conflict
+markers, YAML/JSON syntax and trailing whitespace. Whitespace fixes leave files
+unstaged for review; stage the fixes and retry. Markdown hard breaks, SVG artwork
+and third-party patch whitespace are preserved.
+
+CI runs the same file checks on PR changes, scans every PR commit for secrets,
+and keeps the existing backend lint/tests and frontend lint/build jobs. Manual
+CI runs check all files and scan the full history. Hooks can be bypassed locally;
+configure the CI jobs as required checks in GitHub branch protection to enforce
+them before merging. Showcase capture stays manual.
+
 ## Before you open a pull request
 
 CI runs these; run them locally first:
