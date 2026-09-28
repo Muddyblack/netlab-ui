@@ -27,7 +27,7 @@ function picture(prefix, files, alt, width) {
  * `details: false` leaves out the per-feature sections; thumbnails then link
  * to `linkBase` (the GALLERY.md holding them).
  */
-export function galleryMarkdown(manifest, prefix, { columns = 3, details = true, linkBase = "", excludeFeatureIds = [] } = {}) {
+export function galleryMarkdown(manifest, prefix, { columns = 2, details = true, linkBase = "", excludeFeatureIds = [] } = {}) {
   const features = manifest.features.filter((feature) =>
     !excludeFeatureIds.includes(feature.id) && feature.shots.some((shot) => Object.keys(shot.files).length),
   );
@@ -44,7 +44,7 @@ export function galleryMarkdown(manifest, prefix, { columns = 3, details = true,
         `<a href="${linkBase}#showcase-${feature.id}">`,
         picture(prefix, hero.files, hero.alt),
         "</a>",
-        `<br /><sub><b>${feature.title}</b></sub>`,
+        `<p><b>${feature.title}</b><br />${feature.summary}</p>`,
         "</td>",
       );
     }

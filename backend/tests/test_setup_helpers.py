@@ -104,3 +104,16 @@ def test_setup_endpoints(catalog, monkeypatch):
     assert frames[0] == {"stream": "stdout", "line": "Installing Ansible"}
     assert frames[-1] == {"done": True, "code": 0}
     assert client.get("/api/environment/setup/box-recipe", params={"device": "nope"}).status_code == 404
+
+
+def test_setup_stream_does_not_expose_exception_details(catalog, monkeypatch):
+    async def unavailable(*args, **kwargs):
+        raise runner.NetlabNotInstalled("private path /home/operator/secret/tool")
+        yield  # make this an async generator
+
+    monkeypatch.setattr(setup, "stream", unavailable)
+    res = TestClient(app).post("/api/environment/setup/stream", json={"action": "install", "target": "ansible"})
+    assert res.status_code == 200
+    assert "Settings" in res.text
+    assert "private" not in res.text
+    assert "/home/operator" not in res.text

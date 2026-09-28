@@ -150,7 +150,7 @@ async def get_setup_catalog() -> dict:
     return await setup.catalog()
 
 
-@router.post("/setup/stream")
+@router.post("/setup/stream", response_model=None)
 async def run_setup(body: SetupRun):
     """Run ``netlab test|install|clab build`` and stream its output. Frames:
     ``{stream, line}`` then ``{done, code}`` (or ``{error}``), like the
@@ -171,8 +171,9 @@ async def run_setup(body: SetupRun):
                 else:
                     for out_stream, out_line in fmt.feed(stream, line):
                         yield f"data: {json.dumps({'stream': out_stream, 'line': out_line})}\n\n"
-        except runner.NetlabNotInstalled as exc:
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        except runner.NetlabNotInstalled:
+            message = "netlab is not installed or could not be started. Check Settings → Environment."
+            yield f"data: {json.dumps({'error': message})}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
 

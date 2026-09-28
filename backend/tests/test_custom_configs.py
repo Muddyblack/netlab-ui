@@ -51,3 +51,22 @@ def test_endpoints_create_a_starter_for_the_labs_default_device(tmp_path):
     assert bad.status_code == 400
     reserved = client.post("/api/lab/custom-configs", json={"sessionId": sid, "name": "host_vars", "device": "frr"})
     assert reserved.status_code == 400
+
+
+def test_create_rejects_symlinks_outside_lab(tmp_path):
+    import pytest
+
+    lab = tmp_path / "lab"
+    outside = tmp_path / "lab-other"
+    lab.mkdir()
+    outside.mkdir()
+    (lab / "escape").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="inside the lab"):
+        custom_configs.create(lab, "escape", "frr")
+    assert not (outside / "frr.j2").exists()
+
+    (lab / "banner").mkdir()
+    (lab / "banner" / "frr.j2").symlink_to(outside / "missing.j2")
+    with pytest.raises(ValueError, match="inside the lab"):
+        custom_configs.create(lab, "banner", "frr")
+    assert not (outside / "missing.j2").exists()

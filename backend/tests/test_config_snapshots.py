@@ -44,3 +44,24 @@ def test_snapshot_round_trip_drift_and_retention(tmp_path, monkeypatch):
         asyncio.run(snapshots.take_snapshot(topology, "manual"))
     listed = snapshots.list_snapshots(topology)
     assert len(listed) == 2 and first["id"] not in {s["id"] for s in listed}
+
+
+def test_snapshot_read_rejects_symlink_escape_and_invalid_ids(tmp_path):
+    topology = tmp_path / "lab.yml"
+    topology.touch()
+    root = snapshots.snapshots_root(topology)
+    snapshot_id = "20260929-120000"
+    directory = root / snapshot_id
+    directory.mkdir(parents=True)
+    outside = tmp_path / "private.cfg"
+    outside.write_text("private")
+    (directory / "r1.cfg").symlink_to(outside)
+    assert snapshots.read_snapshot(topology, snapshot_id, "r1") is None
+    assert snapshots.read_snapshot(topology, snapshot_id + "\n", "r1") is None
+    assert snapshots.read_snapshot(topology, snapshot_id, "../../private") is None
+
+    (directory / "r1.cfg").unlink()
+    directory.rmdir()
+    directory.symlink_to(tmp_path, target_is_directory=True)
+    (tmp_path / "r1.cfg").write_text("private")
+    assert snapshots.read_snapshot(topology, snapshot_id, "r1") is None

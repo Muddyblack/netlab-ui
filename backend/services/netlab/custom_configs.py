@@ -12,6 +12,7 @@ instead of a blank text field.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -87,8 +88,13 @@ def create(lab_dir: Path, name: str, device: str) -> Path:
         raise ValueError("Pick the device the template is for (frr, eos, …).")
     if name in _NOT_CUSTOM:
         raise ValueError(f"{name!r} is a directory netlab uses for something else.")
-    target = lab_dir / name / f"{device}.j2"
-    if not target.exists():
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(STARTER.format(name=name, device=device))
-    return target
+    root = os.path.realpath(lab_dir)
+    target = os.path.realpath(os.path.join(root, name, f"{device}.j2"))
+    # Validate the resolved path: valid names can still traverse a symlink.
+    if not target.startswith(root + os.sep):
+        raise ValueError("Template must stay inside the lab directory.")
+    if not os.path.exists(target):
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        with open(target, "x") as template:
+            template.write(STARTER.format(name=name, device=device))
+    return Path(target)

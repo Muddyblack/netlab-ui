@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import difflib
 import json
+import os
 import re
 import shutil
 import time
@@ -133,11 +134,18 @@ async def take_snapshot(topology_path: str | Path, reason: str) -> dict[str, Any
 
 
 def read_snapshot(topology_path: str | Path, snapshot_id: str, node: str) -> str | None:
-    if not _ID_RE.match(snapshot_id) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", node):
+    if not _ID_RE.fullmatch(snapshot_id) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", node):
         return None
-    path = snapshots_root(topology_path) / snapshot_id / f"{node}.cfg"
+    # Keep the anchor lexical beneath the canonical lab directory, so symlinks
+    # in .netlab-ui/configs cannot redefine the allowed snapshot root.
+    topology = Path(topology_path).resolve()
+    root = str(snapshots_root(topology))
+    path = os.path.realpath(os.path.join(root, snapshot_id, f"{node}.cfg"))
+    if not path.startswith(root + os.sep):
+        return None
     try:
-        return path.read_text()
+        with open(path) as config:
+            return config.read()
     except OSError:
         return None
 
