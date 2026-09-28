@@ -36,27 +36,52 @@ def _key(lab_dir: str | Path) -> str:
     return str(Path(lab_dir).expanduser().resolve())
 
 
-def record(lab_dir: str | Path, user: str | None) -> None:
-    if not user:
+def _save(data: dict[str, Any]) -> None:
+    path = _registry()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2))
+
+
+def record(lab_dir: str | Path, user: str | None, expires_at: str | None = None) -> None:
+    """Remember who deployed the lab in ``lab_dir`` (and, with a lease
+    configured, when it expires — see services/lab_limits.py)."""
+    if not user and not expires_at:
         return
+    entry: dict[str, Any] = {"user": user, "since": datetime.now(UTC).isoformat(timespec="seconds")}
+    if expires_at:
+        entry["expiresAt"] = expires_at
     with _lock:
         data = _load()
-        data[_key(lab_dir)] = {"user": user, "since": datetime.now(UTC).isoformat(timespec="seconds")}
-        path = _registry()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2))
+        data[_key(lab_dir)] = entry
+        _save(data)
+
+
+def update(lab_dir: str | Path, **fields: Any) -> bool:
+    """Change fields of a recorded lab; False when the lab isn't recorded."""
+    with _lock:
+        data = _load()
+        entry = data.get(_key(lab_dir))
+        if not isinstance(entry, dict):
+            return False
+        entry.update(fields)
+        _save(data)
+        return True
+
+
+def entries() -> dict[str, Any]:
+    return _load()
 
 
 def forget(lab_dir: str | Path) -> None:
     with _lock:
         data = _load()
         if data.pop(_key(lab_dir), None) is not None:
-            _registry().write_text(json.dumps(data, indent=2))
+            _save(data)
 
 
 def annotate(status: Any) -> Any:
-    """Add ``owner`` / ``ownerSince`` to every running lab of a
-    ``netlab status --all`` dict whose directory has a recorded owner."""
+    """Add ``owner`` / ``ownerSince`` / ``expiresAt`` to every running lab of
+    a ``netlab status --all`` dict whose directory is recorded."""
     if not isinstance(status, dict):
         return status
     data = _load()
@@ -65,5 +90,9 @@ def annotate(status: Any) -> Any:
     out: dict[str, Any] = {}
     for key, lab in status.items():
         entry = data.get(_key(lab["dir"])) if isinstance(lab, dict) and lab.get("dir") else None
-        out[key] = {**lab, "owner": entry.get("user"), "ownerSince": entry.get("since")} if entry else lab
+        if entry:
+            extra = {"owner": entry.get("user"), "ownerSince": entry.get("since"), "expiresAt": entry.get("expiresAt")}
+            out[key] = {**lab, **{name: value for name, value in extra.items() if value}}
+        else:
+            out[key] = lab
     return out

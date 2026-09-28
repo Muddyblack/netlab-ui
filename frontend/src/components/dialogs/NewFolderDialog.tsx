@@ -66,7 +66,7 @@ export function NewFolderDialog({ open, parentPath, onClose, onCreate }: Props) 
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={loading}>Cancel</Button>
         <Button variant="contained" onClick={() => void handleCreate()} disabled={loading || !name.trim()}>
           Create
         </Button>

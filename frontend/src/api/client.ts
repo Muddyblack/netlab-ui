@@ -27,7 +27,41 @@ export type PluginPipeline = Schemas["PluginPipeline"];
 export type PluginTemplate = Schemas["PluginTemplate"];
 export type PluginImportRequest = Schemas["PluginImportRequest"];
 export type PluginImportResult = Schemas["PluginImportResult"];
+export type Generator = Schemas["Generator"];
+export type GeneratorParam = Schemas["GeneratorParam"];
+export type GeneratorApplyRequest = Schemas["GeneratorApplyRequest"];
+export type GeneratorPreview = Schemas["GeneratorPreview"];
+export type TopologyPattern = Schemas["TopologyPattern"];
 export type VersionResult = Schemas["VersionResult"];
+export type ExecTargets = Schemas["ExecTargets"];
+export type LabSearchHit = Schemas["LabSearchHit"];
+export type ConfigSnapshot = Schemas["ConfigSnapshot"];
+export type LabTools = Schemas["LabTools"];
+export type LabTool = Schemas["LabTool"];
+export type ToolActionResult = Schemas["ToolActionResult"];
+export type SetupCatalog = Schemas["SetupCatalog"];
+export type BoxRecipe = Schemas["BoxRecipe"];
+export type CustomConfigs = Schemas["CustomConfigs"];
+export type ConfigDrift = Schemas["ConfigDrift"];
+export type RunningConfigDiff = Schemas["RunningConfigDiff"];
+export type LabSearchResult = Schemas["LabSearchResult"];
+export type ExecScript = Schemas["ExecScript"];
+export type ExecMode = Schemas["ExecRequest"]["mode"];
+
+/** One node's result from `POST /api/lab/exec/stream`. */
+export interface ExecResult {
+  node: string;
+  command: string;
+  mode: ExecMode;
+  /** Real exit status when the node could report one (shell on containers). */
+  exitCode: number | null;
+  timedOut?: boolean;
+  /** Non-zero exit, timeout, or a CLI error reply ("% Unknown command"). */
+  failed?: boolean;
+  output: string;
+  stderr: string;
+  durationMs?: number;
+}
 // Mirrors the generated backend response. Keep this local until API generation
 // is run in the full optional-assistant environment (otherwise generation
 // incorrectly removes the assistant schemas from this shared client).
@@ -63,7 +97,7 @@ export interface NetlabProjection {
    * projection to blend onto. The *-preview values are approximations, and say
    * why the real transform could not run.
    */
-  source: "clab" | "blended" | "model" | "locked-preview" | "failed-preview";
+  source: "clab" | "blended" | "model" | "locked-preview" | "failed-preview" | "transform";
   /** A background `netlab create` is running; its result arrives via SSE. */
   pending: boolean;
   /** The last `netlab create` failure for the YAML currently on disk. */
@@ -103,16 +137,14 @@ export type ConfigDiffFile = Schemas["ConfigDiffFile"];
 export type ReportCatalogResult = Schemas["ReportCatalogResult"];
 export type ReportRunResult = Schemas["ReportRunResult"];
 export type AssistantCapabilities = Schemas["AssistantCapabilities"];
-export type AssistantProvider = Schemas["AssistantProvider"];
-export type AssistantChatInfo = Schemas["AssistantChatInfo"];
-export type AssistantChatList = Schemas["AssistantChatList"];
-export type AssistantHistory = Schemas["AssistantHistory"];
 export type AssistantProposal = Schemas["AssistantProposal"];
-export type AssistantProviderSettings = Schemas["AssistantProviderSettings"];
+export type AssistantProposalList = Schemas["AssistantProposalList"];
 export type AssistantProposalResult = Schemas["AssistantProposalResult"];
-export type TeachingDocument = Schemas["TeachingDocument"];
-export type TeachingDocumentInput = Schemas["TeachingDocument"];
+export type TeachingDocument = Schemas["TeachingDocument-Output"];
+export type TeachingDocumentInput = Schemas["TeachingDocument-Input"];
 export type TeachingStep = Schemas["TeachingStep"];
+export type ValidationTestInfo = Schemas["ValidationTestInfo"];
+export type TeachingCheckResult = Schemas["TeachingCheckResult"];
 export type TourView = Schemas["TourView"];
 export type DocsDocument = {
   title: string;
@@ -167,6 +199,40 @@ async function http<T>(path: string, init?: RequestInit, retries = 3, timeoutMs 
   throw lastErr;
 }
 
+/** POST `body` as JSON and hand each SSE `data:` frame to `onFrame`. */
+async function postEventStream(
+  path: string,
+  body: unknown,
+  onFrame: (frame: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${getApiBase()}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    let detail = `HTTP ${res.status}`;
+    try { detail = ((await res.json()) as { detail?: string }).detail ?? detail; } catch { /* not JSON */ }
+    throw new HttpError(res.status, detail);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+    for (const part of parts) {
+      const line = part.split("\n").find((l) => l.startsWith("data: "));
+      if (line) onFrame(JSON.parse(line.slice(6)) as Record<string, unknown>);
+    }
+  }
+}
+
 export const api = {
   // Startup owns the retry button. Keep each health probe bounded so a click
   // cannot leave the gate apparently frozen behind the generic 3-attempt
@@ -217,6 +283,10 @@ export const api = {
       30000
     ),
 
+  /** A report in one of its netlab formats (report.exports), to download or open. */
+  reportExportUrl: (sessionId: string, name: string, download = true) =>
+    `${getApiBase()}/api/topology/reports/export?${new URLSearchParams({ sessionId, name, download: String(download) }).toString()}`,
+
   runReport: (sessionId: string, reportId: string) =>
     http<ReportRunResult>("/api/topology/reports/run", {
       method: "POST",
@@ -228,6 +298,12 @@ export const api = {
       `/api/topology/teaching?sessionId=${encodeURIComponent(sessionId)}`,
       { cache: "no-store" }
     ),
+
+  getTeachingTests: (sessionId: string) =>
+    http<{ tests: ValidationTestInfo[] }>(`/api/topology/teaching/tests?sessionId=${encodeURIComponent(sessionId)}`, undefined, 1, 60000),
+
+  checkTeachingStep: (sessionId: string, tests: string[]) =>
+    http<TeachingCheckResult>("/api/topology/teaching/check", { method: "POST", body: JSON.stringify({ sessionId, tests }) }, 1, 330000),
 
   saveTeaching: (sessionId: string, document: TeachingDocumentInput) =>
     http<Schemas["TeachingSaveResult"]>("/api/topology/teaching", {
@@ -306,6 +382,87 @@ export const api = {
       body: JSON.stringify({ action }),
     }, 1, 120000),
 
+  copyLab: (topologyPath: string, name: string, targetWorkspace: string) =>
+    http<Schemas["CopyLabResult"]>("/api/lab/copy", { method: "POST", body: JSON.stringify({ topologyPath, name, targetWorkspace }) }, 1, 60000),
+
+  getLease: (sessionId: string) =>
+    http<{ expiresAt?: string | null }>(`/api/lab/lease?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1),
+
+  extendLease: (sessionId: string) =>
+    http<{ expiresAt?: string | null }>("/api/lab/lease/extend", { method: "POST", body: JSON.stringify({ sessionId }) }, 1),
+
+  listConfigSnapshots: (sessionId: string) =>
+    http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  getSetupCatalog: () => http<SetupCatalog>("/api/environment/setup", { cache: "no-store" }, 1, 30000),
+
+  getBoxRecipe: (device: string) =>
+    http<BoxRecipe>(`/api/environment/setup/box-recipe?device=${encodeURIComponent(device)}`, undefined, 1, 30000),
+
+  /** The deployed lab as a containerlab tarball (runs Ansible to collect configs). */
+  downloadClabTarball: async (sessionId: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await fetch(`${getApiBase()}/api/lab/clab-tarball?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!res.ok) {
+      const detail = await res.json().then((data: { detail?: string }) => data.detail, () => undefined);
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "lab.tar.gz";
+    return { blob: await res.blob(), filename: name };
+  },
+
+  getCustomConfigs: (sessionId: string) =>
+    http<CustomConfigs>(`/api/lab/custom-configs?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  createCustomConfig: (sessionId: string, name: string, device: string) =>
+    http<{ path: string }>("/api/lab/custom-configs", { method: "POST", body: JSON.stringify({ sessionId, name, device }) }, 1),
+
+  getLabTools: (sessionId: string) =>
+    http<LabTools>(`/api/lab/tools?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  setLabTool: (sessionId: string, tool: string, enabled: boolean) =>
+    http<LabTools>("/api/lab/tools", { method: "PUT", body: JSON.stringify({ sessionId, tool, enabled }) }, 1, 30000),
+
+  labToolAction: (sessionId: string, tool: string, action: "up" | "down") =>
+    http<ToolActionResult>("/api/lab/tools/action", { method: "POST", body: JSON.stringify({ sessionId, tool, action }) }, 1, 330000),
+
+  takeConfigSnapshot: (sessionId: string, reason = "manual snapshot") =>
+    http<ConfigSnapshot>("/api/lab/configs/snapshots", { method: "POST", body: JSON.stringify({ sessionId, reason }) }, 1, 120000),
+
+  getConfigDrift: (sessionId: string, snapshot: string) =>
+    http<ConfigDrift>(`/api/lab/configs/drift?sessionId=${encodeURIComponent(sessionId)}&snapshot=${encodeURIComponent(snapshot)}`, { cache: "no-store" }, 1, 120000),
+
+  getRunningConfigDiff: (sessionId: string, node: string, left: string, right = "live") =>
+    http<RunningConfigDiff>(
+      `/api/lab/configs/diff?sessionId=${encodeURIComponent(sessionId)}&node=${encodeURIComponent(node)}&left=${encodeURIComponent(left)}&right=${encodeURIComponent(right)}`,
+      { cache: "no-store" }, 1, 60000),
+
+  searchLab: (sessionId: string, query: string) =>
+    http<LabSearchResult>(`/api/topology/search?sessionId=${encodeURIComponent(sessionId)}&q=${encodeURIComponent(query)}`, undefined, 1, 30000),
+
+  getExecTargets: (sessionId: string) =>
+    http<ExecTargets>(`/api/lab/exec/targets?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 15000),
+
+  getExecScripts: (sessionId: string) =>
+    http<{ scripts: ExecScript[] }>(`/api/lab/exec/scripts?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  saveExecScripts: (sessionId: string, scripts: ExecScript[]) =>
+    http<{ scripts: ExecScript[] }>("/api/lab/exec/scripts", {
+      method: "PUT",
+      body: JSON.stringify({ sessionId, scripts }),
+    }),
+
+  /** Run one command on several nodes; `onResult` fires per node as it finishes. */
+  async execOnNodes(
+    request: { sessionId: string; nodes: string[]; command: string; mode: ExecMode; timeoutS?: number },
+    handlers: { onTargets?: (nodes: string[]) => void; onResult: (result: ExecResult) => void },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await postEventStream("/api/lab/exec/stream", request, (frame) => {
+      if (Array.isArray(frame.targets)) handlers.onTargets?.(frame.targets as string[]);
+      if (frame.result) handlers.onResult(frame.result as ExecResult);
+    }, signal);
+  },
+
   getEdgesharkStatus: () =>
     http<{ installed: boolean; running: boolean }>("/api/lab/capture/edgeshark", { cache: "no-store" }, 1, 15000),
 
@@ -367,8 +524,8 @@ export const api = {
   },
 
   /** Scaffold for a user's own plugin — a documented stub, not a blank file. */
-  getPluginTemplate: (name: string) =>
-    http<PluginTemplate>(`/api/plugins/template?name=${encodeURIComponent(name)}`),
+  getPluginTemplate: (name: string, kind: "plugin" | "generator" = "plugin") =>
+    http<PluginTemplate>(`/api/plugins/template?name=${encodeURIComponent(name)}&kind=${kind}`),
 
   /**
    * Install a user-written plugin onto netlab's plugin search path. Either
@@ -380,6 +537,30 @@ export const api = {
     http<PluginImportResult>("/api/plugins/import", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  /** Plugins that build topology (fabric, node.clone, the user's own) and their parameters. */
+  getGenerators: (sessionId?: string) =>
+    http<Generator[]>(
+      `/api/plugins/generators${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ""}`,
+      { cache: "no-store" }
+    ),
+
+  /** Shapes in the hand-built topology a generator could produce instead. */
+  getTopologyPatterns: (sessionId: string) =>
+    http<TopologyPattern[]>(`/api/plugins/generators/patterns?sessionId=${encodeURIComponent(sessionId)}`, {
+      cache: "no-store",
+    }),
+
+  /** Diff + netlab expansion for a generator; nothing is written. */
+  previewGenerator: (body: GeneratorApplyRequest) =>
+    http<GeneratorPreview>("/api/plugins/generators/preview", { method: "POST", body: JSON.stringify(body) }, 1, 60000),
+
+  /** Apply a previewed generator through the session host, as one undoable step. */
+  applyTopologyCommand: (sessionId: string, command: Record<string, unknown>) =>
+    http<Schemas["CommandAck"]>("/api/topology/command", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, command }),
     }),
 
   /** Subscribe to the SSE status stream; returns an unsubscribe fn. */
@@ -401,7 +582,7 @@ export const api = {
    * should keep a slow polling fallback — the stream is best-effort (the
    * watcher is disabled when watchfiles isn't installed on the backend).
    */
-  subscribeEvents(onEvent: (event: { type?: string }) => void): () => void {
+  subscribeEvents(onEvent: (event: { type?: string; sessionId?: string }) => void): () => void {
     const es = new EventSource(`${getApiBase()}/api/lab/events/stream`);
     es.onmessage = (e) => {
       try {
@@ -546,44 +727,17 @@ export const api = {
       `/api/fs/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`
     ),
 
-  // --- AI assistant (optional backend feature; every call 404s when it is
-  // not installed, which is how the UI decides to hide the panel) ---
+  // --- AI agents over MCP (optional backend feature; every call 404s when it
+  // is not installed, which is how the UI decides to hide the panel) ---
 
   assistantCapabilities: () =>
     http<AssistantCapabilities>("/api/assistant/capabilities", undefined, 1, 4000),
 
-  listAssistantChats: (sessionId: string) =>
-    http<AssistantChatList>(
-      `/api/assistant/chats?sessionId=${encodeURIComponent(sessionId)}`,
+  listAssistantProposals: (sessionId: string) =>
+    http<AssistantProposalList>(
+      `/api/assistant/proposals?sessionId=${encodeURIComponent(sessionId)}`,
       { cache: "no-store" }
     ),
-
-  createAssistantChat: (providerId: string, sessionId: string, mode: string, model: string) =>
-    http<AssistantChatInfo>("/api/assistant/chats", {
-      method: "POST",
-      body: JSON.stringify({ providerId, sessionId, mode, model }),
-    }),
-
-  getAssistantChat: (chatId: string) => http<AssistantHistory>(`/api/assistant/chats/${chatId}`),
-
-  sendAssistantMessage: (chatId: string, text: string, selection: string[]) =>
-    http<{ ok: boolean }>(`/api/assistant/chats/${chatId}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ text, selection }),
-    }),
-
-  cancelAssistantTurn: (chatId: string) =>
-    http<{ ok: boolean }>(`/api/assistant/chats/${chatId}/cancel`, { method: "POST" }),
-
-  /** Point an existing chat at a different provider/model, keeping its transcript. */
-  switchAssistantChatProvider: (chatId: string, providerId: string, model: string) =>
-    http<AssistantChatInfo>(`/api/assistant/chats/${chatId}/provider`, {
-      method: "POST",
-      body: JSON.stringify({ providerId, model }),
-    }),
-
-  deleteAssistantChat: (chatId: string) =>
-    http<{ ok: boolean }>(`/api/assistant/chats/${chatId}`, { method: "DELETE" }),
 
   applyAssistantProposal: (proposalId: string) =>
     http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/apply`, { method: "POST" }, 1, 20000),
@@ -591,37 +745,10 @@ export const api = {
   rejectAssistantProposal: (proposalId: string) =>
     http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/reject`, { method: "POST" }),
 
-  getAssistantProviderSettings: (providerId: string) =>
-    http<AssistantProviderSettings>(`/api/assistant/providers/${providerId}/settings`),
-
-  putAssistantProviderSettings: (providerId: string, values: { apiKey?: string; model?: string; baseUrl?: string }) =>
-    http<AssistantProviderSettings>(`/api/assistant/providers/${providerId}/settings`, {
-      method: "PUT",
-      body: JSON.stringify(values),
+  /** What is selected on the canvas, for agents' get_selection_context tool. */
+  setAssistantSelection: (sessionId: string, nodes: string[]) =>
+    http<{ ok: boolean }>("/api/assistant/selection", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, nodes }),
     }),
-
-  deleteAssistantProviderSettings: (providerId: string) =>
-    http<{ ok: boolean }>(`/api/assistant/providers/${providerId}/settings`, { method: "DELETE" }),
-
-  /** Models the provider advertises (best-effort — empty if it can't enumerate). */
-  getAssistantProviderModels: (providerId: string) =>
-    http<{ models: string[] }>(`/api/assistant/providers/${providerId}/models`),
-
-  /** Subscribe to one chat's event stream; returns an unsubscribe fn. */
-  subscribeAssistantChat(
-    chatId: string,
-    onFrame: (frame: Record<string, unknown>) => void,
-    opts?: { replay?: boolean }
-  ): () => void {
-    const query = opts?.replay ? "?replay=1" : "";
-    const es = new EventSource(`${getApiBase()}/api/assistant/chats/${chatId}/events${query}`);
-    es.onmessage = (e) => {
-      try {
-        onFrame(JSON.parse(e.data));
-      } catch {
-        /* ignore malformed frames */
-      }
-    };
-    return () => es.close();
-  },
 };

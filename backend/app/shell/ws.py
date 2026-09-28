@@ -12,6 +12,7 @@ form ``{"resize": {"cols": C, "rows": R}}`` resizes the PTY.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,18 @@ from services.netlab import runtime as runtime_state
 router = APIRouter(tags=["shell"])
 
 
+def _logs_unavailable(node: str, provider: str) -> str | None:
+    """Why a node has no container log stream (None when it has one)."""
+    if provider == "clab":
+        return None
+    if provider == "libvirt":
+        return (
+            f"{node} is a libvirt VM — there is no container log to stream. "
+            "Open its shell (netlab connect) and read the device's own logs there."
+        )
+    return f"{node} is an external device — netlab doesn't run it, so there are no logs to stream from here."
+
+
 @router.websocket("/api/node/{node}/shell")
 async def node_shell(websocket: WebSocket, node: str, sessionId: str):
     await websocket.accept()
@@ -36,13 +49,19 @@ async def node_shell(websocket: WebSocket, node: str, sessionId: str):
         await websocket.close()
         return
 
-    # ptyprocess gives us a real PTY so interactive programs (vtysh, bash) behave.
+    await bridge_pty(websocket, argv, topology_path.parent)
+
+
+async def bridge_pty(websocket: WebSocket, argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:
+    """Run ``argv`` in a PTY and pump it to an accepted WebSocket until either
+    side goes away. A real PTY is what makes interactive programs (vtysh, bash,
+    full-screen wizards, agent CLIs) behave."""
     import ptyprocess
 
     proc = ptyprocess.PtyProcess.spawn(
         argv,
-        cwd=str(topology_path.parent),
-        env={**os.environ, "TERM": "xterm-256color"},
+        cwd=str(cwd),
+        env={**os.environ, "TERM": "xterm-256color", "PWD": str(cwd), **(env or {})},
     )
     loop = asyncio.get_event_loop()
 
@@ -53,16 +72,21 @@ async def node_shell(websocket: WebSocket, node: str, sessionId: str):
             except EOFError:
                 break
             await websocket.send_bytes(data)
+        # The program exited (e.g. the user quit the agent): end the session.
+        with contextlib.suppress(Exception):
+            await websocket.close()
 
     pty_task = asyncio.create_task(pump_pty_to_ws())
     try:
         while True:
             message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
             if "bytes" in message and message["bytes"] is not None:
                 proc.write(message["bytes"])
             elif "text" in message and message["text"] is not None:
                 _handle_text(proc, message["text"])
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         pty_task.cancel()
@@ -87,37 +111,7 @@ async def drawio_interactive(websocket: WebSocket, sessionId: str):
         await websocket.close()
         return
 
-    import ptyprocess
-
-    proc = ptyprocess.PtyProcess.spawn(
-        argv,
-        cwd=str(topology_path.parent),
-        env={**os.environ, "TERM": "xterm-256color"},
-    )
-    loop = asyncio.get_event_loop()
-
-    async def pump_pty_to_ws():
-        while proc.isalive():
-            try:
-                data = await loop.run_in_executor(None, proc.read, 1024)
-            except EOFError:
-                break
-            await websocket.send_bytes(data)
-
-    pty_task = asyncio.create_task(pump_pty_to_ws())
-    try:
-        while True:
-            message = await websocket.receive()
-            if "bytes" in message and message["bytes"] is not None:
-                proc.write(message["bytes"])
-            elif "text" in message and message["text"] is not None:
-                _handle_text(proc, message["text"])
-    except WebSocketDisconnect:
-        pass
-    finally:
-        pty_task.cancel()
-        if proc.isalive():
-            proc.terminate(force=True)
+    await bridge_pty(websocket, argv, topology_path.parent)
 
 
 def _handle_text(proc, text: str) -> None:
@@ -140,15 +134,20 @@ async def node_logs(websocket: WebSocket, node: str, sessionId: str):
         from app.contract import commands
 
         topology = commands.load_topology(topology_path)
-        runtime_bin = runner.container_runtime_binary(runtime_state.clab_runtime(topology))
-        if not runtime_bin:
-            await websocket.send_json({"stream": "stderr", "line": "docker or podman is not available on the backend"})
-            await websocket.close()
-            return
         status = await runner.status_for(topology_path, max_age=0)
         info = (status.get("nodes") or {}).get(node) if isinstance(status, dict) else None
         if not isinstance(info, dict):
             await websocket.send_json({"stream": "stderr", "line": f"No running node named {node}"})
+            await websocket.close()
+            return
+        reason = _logs_unavailable(node, str(info.get("provider") or "clab"))
+        if reason:
+            await websocket.send_json({"stream": "stderr", "line": reason})
+            await websocket.close()
+            return
+        runtime_bin = runner.container_runtime_binary(runtime_state.clab_runtime(topology))
+        if not runtime_bin:
+            await websocket.send_json({"stream": "stderr", "line": "docker or podman is not available on the backend"})
             await websocket.close()
             return
         container = str(info.get("provider_name") or node)

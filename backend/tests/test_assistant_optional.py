@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import builtins
 import importlib
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -75,3 +76,21 @@ def test_enabled_by_default(monkeypatch):
     assert client.get("/api/assistant/capabilities").status_code == 200
     # Present but guarded.
     assert client.post("/mcp", json={}).status_code == 401
+
+
+@pytest.mark.parametrize("override", [None, "https://labs.example/ui/mcp/"])
+def test_connection_details_use_request_address_unless_overridden(monkeypatch, override):
+    if override:
+        monkeypatch.setenv("NETLAB_APP_ASSISTANT_MCP_URL", override)
+    else:
+        monkeypatch.delenv("NETLAB_APP_ASSISTANT_MCP_URL", raising=False)
+    main = _reload_app(monkeypatch, mode="auto")
+    client = TestClient(main.app, base_url="http://127.0.0.1:8765")
+
+    response = client.get("/api/assistant/capabilities")
+    assert response.status_code == 200
+    mcp = response.json()["mcp"]
+    expected = override.rstrip("/") if override else "http://127.0.0.1:8765/mcp"
+    assert mcp["url"] == expected
+    config = json.loads(mcp["clientConfig"])["mcpServers"]["netlab"]
+    assert config["url"] == expected

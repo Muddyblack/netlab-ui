@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 // Persist and restore clab-ui's right-hand panel tab (Nodes / Annotations /
-// Lenses / Groups / Plugins / Workers / Composer / Assistant) across reloads.
+// Lenses / Groups / Plugins / Workers / Composer / AI agents) across reloads.
 //
 // A tab missing from PANEL_TAB_LABELS below is not merely un-remembered: the
 // observer restores the saved tab whenever the selection changes, so clicking
@@ -25,7 +25,7 @@ const PANEL_TAB_LABELS = new Set([
   "plugins",
   "workers",
   "composer",
-  "assistant",
+  "ai agents",
 ]);
 
 function tabLabel(element: Element | null): string {
@@ -54,6 +54,13 @@ const TRANSIENT_TAB_LABELS = new Set(["edit", "info"]);
 function editTabIsActive(): boolean {
   return Array.from(document.querySelectorAll<HTMLElement>('[role="tab"][aria-selected="true"]'))
     .some((tab) => TRANSIENT_TAB_LABELS.has(tabLabel(tab).toLowerCase()));
+}
+
+/** Select a right-hand panel tab by label (e.g. "Lenses"); false if absent. */
+export function openPanelTab(label: string): boolean {
+  const tab = panelTabs().find((element) => tabLabel(element).toLowerCase() === label.toLowerCase());
+  tab?.click();
+  return Boolean(tab);
 }
 
 export function useRightPanelTabMemory(): void {

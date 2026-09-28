@@ -60,6 +60,12 @@ class PluginMeta:
     hooks: list[str] = field(default_factory=list)
     readme: str | None = None
     error: str | None = None
+    # ``_config_name``: the top-level topology key (and defaults.yml section)
+    # the plugin reads its settings from.
+    config_name: str | None = None
+    # ``_generator``: an optional literal dict describing a topology generator
+    # (see services.netlab.generators).
+    generator: dict | None = None
 
 
 @dataclass
@@ -216,6 +222,24 @@ def read_metadata(entry_file: Path) -> PluginMeta:
                 meta.error = f"{target.id} must be a list of plugin names"
                 continue
             setattr(meta, target.id.lstrip("_"), values)
+
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not isinstance(target, ast.Name) or target.id not in ("_config_name", "_generator"):
+                continue
+            try:
+                value = ast.literal_eval(node.value)
+            except (ValueError, SyntaxError):
+                meta.error = f"{target.id} must be a literal"
+                continue
+            if target.id == "_config_name" and isinstance(value, str):
+                meta.config_name = value
+            elif target.id == "_generator" and isinstance(value, dict):
+                meta.generator = value
+            else:
+                meta.error = f"{target.id} has the wrong type"
 
     readme = entry_file.parent / "README.md"
     if readme.is_file():

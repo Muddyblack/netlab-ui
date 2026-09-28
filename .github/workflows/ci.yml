@@ -12,6 +12,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pre-commit
+        run: pip install pre-commit==4.3.0
+      - name: Check changed files
+        env:
+          SKIP: gitleaks
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+            pre-commit run --from-ref "$base" --to-ref "$HEAD_SHA" --show-diff-on-failure
+          else
+            pre-commit run --all-files --show-diff-on-failure
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+      - name: Install Gitleaks
+        run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+      - name: Scan every PR commit for secrets
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            gitleaks git --redact --no-banner --log-opts="$BASE_SHA..$HEAD_SHA"
+          else
+            gitleaks git --redact --no-banner
+          fi
+
   # Decide which halves of the repo the PR actually touches, so a
   # frontend-only PR doesn't pay for a backend run (and vice versa).
   changes:
@@ -34,9 +83,11 @@ jobs:
 
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             # Manual runs have no diff to inspect — exercise everything.
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "frontend=true" >> "$GITHUB_OUTPUT"
-            echo "docker=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "backend=true"
+              echo "frontend=true"
+              echo "docker=true"
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -83,7 +134,7 @@ jobs:
           cache-dependency-path: backend/pyproject.toml
 
       - name: Install dependencies
-        run: pip install -e ".[dev,netlab,assistant]"
+        run: pip install -e ".[dev,netlab]"
 
       - name: Lint (ruff check)
         run: ruff check
@@ -127,6 +178,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Both published images: the UI-only default and the bundled toolchain.
+        target: [ui, full]
     steps:
       - uses: actions/checkout@v4
 
@@ -135,11 +190,12 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: false
           # Single arch on PRs: this is a "does it build" gate, and emulating
           # arm64 here would roughly double the run for no extra signal.
           platforms: linux/amd64
-          # Shares the cache the release build populates, so tagging later is
-          # mostly cache hits.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Shares the per-target cache the release build uses (scope ui/full),
+          # so tagging later is mostly cache hits.
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}

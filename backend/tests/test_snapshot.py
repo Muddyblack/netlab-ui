@@ -476,6 +476,23 @@ def test_canvas_icon_follows_netlab_role_and_keeps_declared_role(tmp_path, monke
     assert by_id["r1"]["extraData"]["netlabAttrs"]["role"] == "host"
 
 
+def test_device_and_role_set_by_a_group_reach_the_canvas(tmp_path, monkeypatch):
+    """netlab applies group attributes to members (nested groups too): a
+    host whose `device: linux` comes from its group is a host, not a router."""
+    monkeypatch.setattr(snapshot.runner, "is_installed", lambda: False)
+    topology_path = tmp_path / "lab.yml"
+    topology_path.write_text(
+        "name: t\ndefaults.device: frr\n"
+        "groups:\n  hosts:\n    members: [h1]\n    device: linux\n"
+        "  edge:\n    members: [hosts]\n    role: host\n"
+        "nodes: [h1, r1]\n"
+    )
+    topo = serialize.from_yaml(topology_path.read_text())
+    by_id = {node["id"]: node["data"] for node in asyncio.run(snapshot.build(str(topology_path), topo, 0))["nodes"]}
+    assert by_id["h1"]["device"] == "linux" and by_id["h1"]["role"] == "client"
+    assert by_id["r1"]["device"] == "frr" and by_id["r1"]["role"] == "frr"
+
+
 def test_running_lab_uses_management_address_from_netlab_status():
     status = {"nodes": {"r1": {"mgmt": "192.168.5.101", "status": "Up 1 minute"}, "r2": {}}}
     assert snapshot._mgmt_from_status(status, "lab") == {"r1": "192.168.5.101"}

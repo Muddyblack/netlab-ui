@@ -15,9 +15,11 @@ export function usePluginsData(sessionId: string, base: string, onChanged: () =>
   const [debug, setDebug] = useState<string | null>(null);
   const [pipeline, setPipeline] = useState<PluginPipelineInfo | null>(null);
 
-  useEffect(() => {
-    if (!sessionId) return;
-    fetch(`${base}/api/topology/snapshot`, {
+  // Re-read after anything else edits the topology (a generator apply):
+  // toggling a plugin writes this copy back, and a stale one would undo that edit.
+  const reloadYaml = useCallback(() => {
+    if (!sessionId) return Promise.resolve();
+    return fetch(`${base}/api/topology/snapshot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId }),
@@ -26,6 +28,10 @@ export function usePluginsData(sessionId: string, base: string, onChanged: () =>
       .then((snap) => { if (snap?.snapshot?.yamlContent) setYaml(snap.snapshot.yamlContent); })
       .catch(() => { });
   }, [sessionId, base]);
+
+  useEffect(() => {
+    void reloadYaml();
+  }, [reloadYaml]);
 
   // Load plugins from the backend. Keyed on the session: the topology's own
   // directory is first on netlab's plugin search path, so a plugin sitting
@@ -127,6 +133,8 @@ export function usePluginsData(sessionId: string, base: string, onChanged: () =>
     customPlugins,
     builtinPlugins,
     loadPlugins,
+    reloadYaml,
+    yaml,
     handleTogglePlugin,
   };
 }

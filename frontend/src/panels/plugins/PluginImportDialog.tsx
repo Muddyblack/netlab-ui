@@ -21,11 +21,11 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { api } from "../../api/client";
 import type { PluginImportRequest, PluginImportResult } from "../../api/client";
 
-type ImportMode = "upload" | "path" | "template";
+type ImportMode = "upload" | "path" | "template" | "generator";
 
 function canSubmitImport(mode: ImportMode, busy: boolean, name: string, content: string | null, sourcePath: string): boolean {
   if (busy || name.trim() === "") return false;
-  if (mode === "template") return true;
+  if (mode === "template" || mode === "generator") return true;
   if (mode === "upload") return content !== null;
   return sourcePath.trim() !== "";
 }
@@ -181,7 +181,7 @@ export function PluginImportDialog({
   const handleModeChange = (next: ImportMode) => {
     setMode(next);
     setError(null);
-    if (next === "template") {
+    if (next === "template" || next === "generator") {
       setLink(false);
     }
   };
@@ -204,7 +204,7 @@ export function PluginImportDialog({
       } else if (mode === "path") {
         body.sourcePath = sourcePath.trim();
       } else {
-        body.content = (await api.getPluginTemplate(name.trim())).content;
+        body.content = (await api.getPluginTemplate(name.trim(), mode === "generator" ? "generator" : "plugin")).content;
       }
       const result = await api.importPlugin(body);
       onImported(result);
@@ -238,6 +238,7 @@ export function PluginImportDialog({
           <Tab value="upload" label="Upload a file" />
           <Tab value="path" label="From this machine" />
           <Tab value="template" label="Start from template" />
+          <Tab value="generator" label="Generator template" />
         </Tabs>
 
         {mode === "upload" && (
@@ -252,6 +253,14 @@ export function PluginImportDialog({
           <Typography variant="caption" color="text.secondary">
             Creates a documented starter plugin with a <code>post_transform</code>{" "}
             hook, then opens it in the file editor so you can fill it in.
+          </Typography>
+        )}
+
+        {mode === "generator" && (
+          <Typography variant="caption" color="text.secondary">
+            Creates a working generator: a <code>topology_expand</code> hook that builds a ring of N
+            routers from a parameter block, plus the <code>_generator</code> schema the Generators
+            section turns into a form. Adapt it to the shape you want to scale.
           </Typography>
         )}
 

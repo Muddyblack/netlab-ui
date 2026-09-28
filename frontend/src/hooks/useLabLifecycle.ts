@@ -41,6 +41,8 @@ export type LifecycleCompletion = {
   sessionId?: string;
   /** Set when `netlab up` failed because another lab owns the instance ID. */
   suggestedMultilabId?: number;
+  /** A successful `netlab up` of a lab that defines `validate:` tests. */
+  hasValidationTests?: boolean;
 };
 
 export type ValidationIssue = {
@@ -61,6 +63,7 @@ type LifecycleAction =
 
 interface LifecycleStreamState {
   suggestedMultilabId?: number;
+  hasValidationTests?: boolean;
   issues: ValidationIssue[];
   exitCode: number | null;
   errorMessage?: string;
@@ -74,6 +77,7 @@ interface LifecycleStreamFrame {
   code?: number;
   hint?: string;
   suggestedMultilabId?: number;
+  hasValidationTests?: boolean;
   issues?: ValidationIssue[];
   error?: string;
 }
@@ -98,6 +102,7 @@ function handleLifecycleFrame(
     state.exitCode = typeof frame.code === "number" ? frame.code : 1;
     if (frame.code !== 0 && typeof frame.hint === "string") state.errorMessage = frame.hint;
     if (typeof frame.suggestedMultilabId === "number") state.suggestedMultilabId = frame.suggestedMultilabId;
+    if (typeof frame.hasValidationTests === "boolean") state.hasValidationTests = frame.hasValidationTests;
     if (Array.isArray(frame.issues)) state.issues = frame.issues;
     host.emitTopoViewerEvent(
       frame.code === 0
@@ -130,7 +135,11 @@ async function streamLifecycleCommand(
     body: JSON.stringify({ sessionId, action, multilabId }),
     signal,
   });
-  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok || !res.body) {
+    // A refused command (quota, unknown session) explains itself in `detail`.
+    const detail = (await res.json().catch(() => null) as { detail?: unknown } | null)?.detail;
+    throw new Error(typeof detail === "string" ? detail : `HTTP ${res.status}`);
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -177,6 +186,7 @@ function reportLifecycleSuccess(
     errorMessage: result.errorMessage || (!success ? `${label} exited with code ${result.exitCode ?? "unknown"}` : undefined),
     sessionId,
     suggestedMultilabId: result.suggestedMultilabId,
+    hasValidationTests: result.hasValidationTests,
   });
 }
 

@@ -152,6 +152,21 @@ class RuntimeInterfaceStats(BaseModel):
     rxPackets: int = 0
     txPackets: int = 0
     statsIntervalSeconds: float | None = None
+    # Error/drop counters — beyond clab-ui's contract, read by the Traffic lens.
+    rxErrors: int = 0
+    txErrors: int = 0
+    rxDropped: int = 0
+    txDropped: int = 0
+    # Errors + drops added since the previous sample (None on the first one).
+    newErrors: int | None = None
+
+
+class RuntimeNetemState(BaseModel):
+    delay: str | None = None
+    jitter: str | None = None
+    loss: str | None = None
+    rate: str | None = None
+    corruption: str | None = None
 
 
 class RuntimeInterface(BaseModel):
@@ -164,6 +179,7 @@ class RuntimeInterface(BaseModel):
     type: str = ""
     ifIndex: int | None = None
     stats: RuntimeInterfaceStats | None = None
+    netemState: RuntimeNetemState | None = None
 
 
 class RuntimeContainer(BaseModel):
@@ -175,4 +191,6 @@ class RuntimeContainer(BaseModel):
     image: str = ""
     ipv4Address: str = ""
     ipv6Address: str = ""
+    # clab | libvirt | external — which runtime actions apply to the node.
+    provider: str = ""
     interfaces: list[RuntimeInterface] = []

@@ -1,4 +1,5 @@
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
+import HistoryEduOutlinedIcon from "@mui/icons-material/HistoryEduOutlined";
 import DifferenceOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -37,6 +38,7 @@ interface LensesPanelHeaderProps {
   refresh: () => Promise<unknown>;
   onOpenReport: () => void;
   onOpenConfigDiff: () => void;
+  onOpenRunningConfigs: () => void;
 }
 
 export function LensesPanelHeader({
@@ -51,6 +53,7 @@ export function LensesPanelHeader({
   refresh,
   onOpenReport,
   onOpenConfigDiff,
+  onOpenRunningConfigs,
 }: LensesPanelHeaderProps) {
   const lensBadges = computeLensBadges(bundle);
   return (
@@ -67,6 +70,7 @@ export function LensesPanelHeader({
         <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
           <Tooltip title="Interactive reports"><IconButton size="small" onClick={onOpenReport}><ArticleOutlinedIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Compare node configs"><IconButton size="small" onClick={onOpenConfigDiff}><DifferenceOutlinedIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Running configs: snapshots and what changed"><IconButton size="small" aria-label="Running configs" onClick={onOpenRunningConfigs}><HistoryEduOutlinedIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title={overlayPinned ? "Overlay pinned — stays on other tabs" : "Pin overlay to keep it when you leave Lenses"}><IconButton size="small" color={overlayPinned ? "warning" : "default"} onClick={toggleOverlayPinned}><PushPinOutlinedIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Guided tour"><IconButton size="small" color={teachingOpen ? "warning" : "default"} onClick={() => setTeachingOpen((open) => !open)}><SlideshowOutlinedIcon fontSize="small" /></IconButton></Tooltip>
           <Tooltip title="Refresh lens data"><span><IconButton size="small" disabled={loading} onClick={() => void refresh()}>{loading ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}</IconButton></span></Tooltip>

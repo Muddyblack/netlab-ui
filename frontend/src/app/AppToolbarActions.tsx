@@ -2,7 +2,7 @@ import { IconButton, Stack, Tooltip } from "@mui/material";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import SettingsIcon from "@mui/icons-material/Settings";
-import { NetlabMascot } from "../panels/assistant/NetlabMascot";
+import { NetlabMascot } from "../components/agents/NetlabMascot";
 
 import { blurTrigger } from "../utils/focus";
 
@@ -13,29 +13,14 @@ interface AppToolbarActionsProps {
   onToggleNotifications: () => void;
   onOpenSettings: () => void;
   assistantAvailable: boolean;
-  assistantHasProvider: boolean;
   assistantOpen: boolean;
   onToggleAssistant: () => void;
-  onSetupAssistant: () => void;
 }
 
 function notificationTooltipFor(notificationsEnabled: boolean, notificationPermission: NotificationPermission | "unavailable"): string {
   if (notificationPermission === "denied") return "Notifications blocked — allow them in this site's browser settings";
   if (notificationsEnabled) return "System notifications on — click to turn off";
   return "Enable system notifications for netlab jobs";
-}
-
-function assistantStatusFor(assistantAvailable: boolean, assistantHasProvider: boolean, assistantOpen: boolean): {
-  label: string;
-  state: "offline" | "idle" | "sleeping";
-} {
-  if (assistantAvailable && assistantHasProvider) {
-    return { label: assistantOpen ? "Close assistant" : "Open assistant", state: assistantOpen ? "idle" : "sleeping" };
-  }
-  if (assistantAvailable) {
-    return { label: "Set up an AI provider", state: "sleeping" };
-  }
-  return { label: "Assistant unavailable", state: "offline" };
 }
 
 export function AppToolbarActions({
@@ -45,34 +30,26 @@ export function AppToolbarActions({
   onToggleNotifications,
   onOpenSettings,
   assistantAvailable,
-  assistantHasProvider,
   assistantOpen,
-  onToggleAssistant,
-  onSetupAssistant
+  onToggleAssistant
 }: AppToolbarActionsProps) {
   const notificationTooltip = notificationTooltipFor(notificationsEnabled, notificationPermission);
-  const { label: assistantLabel, state: assistantState } = assistantStatusFor(assistantAvailable, assistantHasProvider, assistantOpen);
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
-      <Tooltip
-        title={
-          assistantAvailable && assistantHasProvider
-            ? `${assistantOpen ? "Close" : "Open"} AI assistant (Ctrl+I)`
-            : "AI assistant — set up a provider to wake Nettie"
-        }
-        arrow
-      >
-        <IconButton
-          size="small"
-          onClick={assistantHasProvider ? onToggleAssistant : onSetupAssistant}
-          color={assistantOpen ? "warning" : "default"}
-          aria-label={assistantLabel}
-          sx={{ opacity: 1, "&:hover": { opacity: 1 } }}
-        >
-          <NetlabMascot size={20} state={assistantState} />
-        </IconButton>
-      </Tooltip>
+      {assistantAvailable && (
+        <Tooltip title={`${assistantOpen ? "Close" : "Open"} AI agents: connect your own agent over MCP (Ctrl+I)`} arrow>
+          <IconButton
+            size="small"
+            onClick={onToggleAssistant}
+            color={assistantOpen ? "warning" : "default"}
+            aria-label={assistantOpen ? "Close AI agents panel" : "Open AI agents panel"}
+            sx={{ opacity: 1, "&:hover": { opacity: 1 } }}
+          >
+            <NetlabMascot size={20} state={assistantOpen ? "idle" : "sleeping"} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       {notificationsSupported && (
         <Tooltip title={notificationTooltip} arrow>

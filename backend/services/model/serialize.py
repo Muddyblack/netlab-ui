@@ -17,6 +17,7 @@ import copy
 import difflib
 import io
 import json
+import threading
 from typing import Any
 
 from ruamel.yaml import YAML
@@ -24,11 +25,29 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from .topology import Group, Link, Node, Topology
 
-_yaml = YAML()
-_yaml.preserve_quotes = True
-_yaml.indent(mapping=2, sequence=4, offset=2)
-_yaml.version = None
-_yaml.explicit_start = False
+
+def _new_yaml() -> YAML:
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.version = None
+    yaml.explicit_start = False
+    return yaml
+
+
+# ruamel's YAML() is not thread-safe, and FastAPI runs sync endpoints on a
+# thread pool: two requests loading topologies at once (the canvas and the
+# shell panel, say) corrupted each other's parser state ("IndexError: string
+# index out of range"). One configured instance per thread.
+_local = threading.local()
+
+
+def _yaml_instance() -> YAML:
+    yaml = getattr(_local, "yaml", None)
+    if yaml is None:
+        yaml = _local.yaml = _new_yaml()
+    return yaml
+
 
 # Top-level keys we model explicitly; everything else is preserved in attrs.
 _KNOWN_TOP = {"name", "provider", "defaults", "nodes", "links", "groups"}
@@ -84,6 +103,7 @@ def from_dict(data: dict[str, Any] | None) -> Topology:
 
 
 def from_yaml(text: str) -> Topology:
+    _yaml = _yaml_instance()
     data = _yaml.load(text) or {}
     # ruamel's round-trip loader remembers a document's ``%YAML`` directive on
     # the *shared* YAML() instance (``_yaml.version``), not per-document. Left
@@ -239,6 +259,10 @@ def _endpoint_name(e: Any) -> str:
 def _parse_groups(raw: Any) -> list[Group]:
     groups: list[Group] = []
     for name, body in dict(raw or {}).items():
+        if isinstance(body, list):
+            # netlab's short form: a group is just its member list.
+            groups.append(Group(name=name, members=[str(m) for m in body], short_form=True))
+            continue
         body = dict(body or {})
         groups.append(
             Group(
@@ -269,6 +293,9 @@ def to_dict(topo: Topology) -> dict[str, Any]:
 
     groups: dict[str, Any] = {}
     for g in topo.groups:
+        if g.short_form and not g.module and not g.attrs:
+            groups[g.name] = list(g.members)
+            continue
         body = {}
         if g.members:
             body["members"] = list(g.members)
@@ -342,7 +369,7 @@ def to_yaml(topo: Topology) -> str:
         _merge_map(doc, data, top_level=True)
         data = doc
     buf = io.StringIO()
-    _yaml.dump(data, buf)
+    _yaml_instance().dump(data, buf)
     return buf.getvalue()
 
 

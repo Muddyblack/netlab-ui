@@ -379,6 +379,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/exec/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exec Targets
+         * @description Nodes (with running state) and groups a command can be sent to.
+         */
+        get: operations["exec_targets_api_lab_exec_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/exec/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exec Stream
+         * @description Run ``command`` on every selected node in parallel (at most
+         *     ``MAX_PARALLEL`` at a time). SSE frames: ``{targets: [...]}`` first, one
+         *     ``{result: {...}}`` per node as it finishes, then ``{done: true}``.
+         */
+        post: operations["exec_stream_api_lab_exec_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/exec/scripts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scripts */
+        get: operations["get_scripts_api_lab_exec_scripts_get"];
+        /** Put Scripts */
+        put: operations["put_scripts_api_lab_exec_scripts_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/capture/edgeshark": {
         parameters: {
             query?: never;
@@ -464,6 +524,110 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/configs/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Config Snapshots */
+        get: operations["list_config_snapshots_api_lab_configs_snapshots_get"];
+        put?: never;
+        /** Take Config Snapshot */
+        post: operations["take_config_snapshot_api_lab_configs_snapshots_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/configs/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config Drift
+         * @description How each running node's live configuration differs from a snapshot
+         *     (the newest one when none is given).
+         */
+        get: operations["config_drift_api_lab_configs_drift_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/configs/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Running Config Diff
+         * @description One node's configuration from two sources — a snapshot id or ``live``.
+         */
+        get: operations["running_config_diff_api_lab_configs_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/custom-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Custom Configs
+         * @description Templates a node's ``config:`` can name, and the lab's devices.
+         */
+        get: operations["list_custom_configs_api_lab_custom_configs_get"];
+        put?: never;
+        /**
+         * Create Custom Config
+         * @description Create ``<lab>/<name>/<device>.j2`` (kept when it exists); ``device``
+         *     defaults to the lab's default device.
+         */
+        post: operations["create_custom_config_api_lab_custom_configs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/capture/pcap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capture Pcap
+         * @description Capture on one node interface and stream it as a pcap file.
+         */
+        get: operations["capture_pcap_api_lab_capture_pcap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/files": {
         parameters: {
             query?: never;
@@ -490,7 +654,7 @@ export interface paths {
         };
         /**
          * Lab Events Stream
-         * @description SSE stream of backend push events (``{"type": "files" | "workspaces"}``).
+         * @description SSE stream of backend push events (``{"type": "files" | "workspaces" | "proposals" …}``).
          *
          *     Fed by the watchfiles workspace watcher and by mutating endpoints; the
          *     frontend refreshes its file/workspace lists on each event instead of
@@ -765,6 +929,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy Lab Endpoint */
+        post: operations["copy_lab_endpoint_api_lab_copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/instances": {
         parameters: {
             query?: never;
@@ -943,9 +1124,9 @@ export interface paths {
          * Lab Node Action
          * @description Act on a single lab node.
          *
-         *     ``start``/``stop``/``restart``/``pause``/``unpause`` drive the node's
-         *     container via the configured runtime (with a `containerlab apply`
-         *     reconcile on containerlab 0.77+ so links come back after start/restart).
+         *     ``start``/``stop``/``restart`` use `containerlab <action> --node` on
+         *     containerlab 0.77+ (links are parked and restored, not torn down);
+         *     ``pause``/``unpause`` and older releases drive the container runtime.
          *     ``save`` collects the node's device configuration via
          *     ``netlab collect -l <node>``.
          */
@@ -968,9 +1149,89 @@ export interface paths {
         /**
          * Lab Link Impairment
          * @description Apply (or clear, when every field is empty) netem impairments on one
-         *     node interface via `containerlab tools netem set`.
+         *     node interface: `containerlab tools netem set` on containers, `netlab tc`
+         *     on libvirt VMs (LAN links only — p2p VM links have no host interface).
          */
         post: operations["lab_link_impairment_api_lab_link_impairment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/link-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lab Link State
+         * @description Take one node interface down or bring it back up — the "cable pulled"
+         *     fault. The peer sees carrier loss, so routing protocols react as they
+         *     would to a real link failure.
+         */
+        post: operations["lab_link_state_api_lab_link_state_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lab Limits Info */
+        get: operations["lab_limits_info_api_lab_limits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lease": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Lease
+         * @description When the lab behind the session will be shut down (null: never).
+         */
+        get: operations["get_lease_api_lab_lease_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/lease/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extend Lease
+         * @description Give a running lab another full lease (NETLAB_UI_LAB_HOURS).
+         */
+        post: operations["extend_lease_api_lab_lease_extend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1264,6 +1525,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Tools */
+        get: operations["get_tools_api_lab_tools_get"];
+        /**
+         * Toggle Tool
+         * @description Add the tool to the lab's ``tools:`` or remove it. Takes effect when the
+         *     lab is next deployed.
+         */
+        put: operations["toggle_tool_api_lab_tools_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/tools/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tool Action
+         * @description Start or stop one tool of the deployed lab, as ``netlab up``/``down`` do.
+         */
+        post: operations["tool_action_api_lab_tools_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/clab-tarball": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Clab Tarball
+         * @description The deployed lab as a containerlab-only ``.tar.gz`` (``netlab clab
+         *     tarball``): clab.yml plus the devices' current configs, to run with plain
+         *     containerlab elsewhere.
+         */
+        get: operations["clab_tarball_api_lab_clab_tarball_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/lenses": {
         parameters: {
             query?: never;
@@ -1273,6 +1598,27 @@ export interface paths {
         };
         /** Get Lenses */
         get: operations["get_lenses_api_topology_lenses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/topology/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Lab
+         * @description Find nodes by address, prefix, AS, VLAN, VRF, module, group, device…
+         *     in netlab's transformed topology (see services/lenses/search.py).
+         */
+        get: operations["search_lab_api_topology_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1366,6 +1712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/topology/reports/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Report
+         * @description A report in one of netlab's formats (``.md``, ``.html`` or text).
+         */
+        get: operations["export_report_api_topology_reports_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/teaching": {
         parameters: {
             query?: never;
@@ -1378,6 +1744,46 @@ export interface paths {
         /** Put Teaching */
         put: operations["put_teaching_api_topology_teaching_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/topology/teaching/tests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Teaching Tests
+         * @description The lab's netlab validate tests — what an exercise step can check.
+         */
+        get: operations["get_teaching_tests_api_topology_teaching_tests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/topology/teaching/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Teaching Step
+         * @description Run an exercise step's checks against the running lab.
+         */
+        post: operations["check_teaching_step_api_topology_teaching_check_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1520,10 +1926,77 @@ export interface paths {
          * Plugin Template
          * @description Starting point for a user's own plugin — a documented stub with the
          *     hook signature filled in, so "write your own" isn't a blank page.
+         *     ``kind=generator`` gives a ``topology_expand`` plugin with a parameter
+         *     schema the Generators form can render.
          */
         get: operations["plugin_template_api_plugins_template_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/generators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Generators
+         * @description Plugins that build topology (a ``topology_expand`` hook), with the
+         *     parameters each accepts — read from the plugin, never by running it.
+         */
+        get: operations["list_generators_api_plugins_generators_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/generators/patterns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detect Patterns
+         * @description Shapes in the lab's hand-built topology (leaf-spine, identical nodes,
+         *     rings, …) and, where an installed generator builds that shape, how to
+         *     replace them with it.
+         */
+        get: operations["detect_patterns_api_plugins_generators_patterns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/generators/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Generator
+         * @description What applying a generator would change: the YAML diff and what netlab
+         *     expands it to. Writes nothing; send the returned ``command`` to
+         *     ``/api/topology/command`` to apply it as one undoable step.
+         */
+        post: operations["preview_generator_api_plugins_generators_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1665,6 +2138,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Setup Catalog
+         * @description What netlab's setup commands offer: install scripts, buildable
+         *     routing daemons, Vagrant box recipes and self-tests.
+         */
+        get: operations["get_setup_catalog_api_environment_setup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/setup/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Setup
+         * @description Run ``netlab test|install|clab build`` and stream its output. Frames:
+         *     ``{stream, line}`` then ``{done, code}`` (or ``{error}``), like the
+         *     lifecycle streams. Closing the stream stops the command.
+         */
+        post: operations["run_setup_api_environment_setup_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/setup/box-recipe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Box Recipe
+         * @description How to build a Vagrant box for ``device`` (``netlab libvirt config``).
+         */
+        get: operations["get_box_recipe_api_environment_setup_box_recipe_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assistant/capabilities": {
         parameters: {
             query?: never;
@@ -1674,129 +2210,9 @@ export interface paths {
         };
         /**
          * Capabilities
-         * @description What the frontend needs to decide whether to show the Assistant tab.
+         * @description What the AI agents panel needs to show how to connect an agent.
          */
         get: operations["capabilities_api_assistant_capabilities_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Chats */
-        get: operations["list_chats_api_assistant_chats_get"];
-        put?: never;
-        /** Create Chat */
-        post: operations["create_chat_api_assistant_chats_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats/{chat_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Chat
-         * @description Replay a chat for a panel that mounted (or reconnected) mid-conversation.
-         */
-        get: operations["get_chat_api_assistant_chats__chat_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete Chat */
-        delete: operations["delete_chat_api_assistant_chats__chat_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats/{chat_id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Message */
-        post: operations["send_message_api_assistant_chats__chat_id__messages_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats/{chat_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Cancel Turn */
-        post: operations["cancel_turn_api_assistant_chats__chat_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats/{chat_id}/provider": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Switch Chat Provider
-         * @description Point an existing chat at a different provider/model, keeping its
-         *     transcript — the same visible thread continues under a new backend.
-         */
-        post: operations["switch_chat_provider_api_assistant_chats__chat_id__provider_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/chats/{chat_id}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Chat Events
-         * @description Live event stream for one chat.
-         *
-         *     Frames match the provider events (``text_delta``, ``tool_call``,
-         *     ``proposal``, ``turn_done``…). With ``?replay=1`` the stream first replays
-         *     the chat's history and then continues live, skipping any frame it already
-         *     replayed (matched by ``seq``) — so a panel reconnecting mid-turn loses
-         *     nothing. Without it, only live frames are sent.
-         */
-        get: operations["chat_events_api_assistant_chats__chat_id__events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1816,51 +2232,9 @@ export interface paths {
         put?: never;
         /**
          * Set Selection
-         * @description Tell the assistant what the user has selected on the canvas.
+         * @description Tell agents what the user has selected on the canvas.
          */
         post: operations["set_selection_api_assistant_selection_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/providers/{provider_id}/settings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Provider Settings */
-        get: operations["get_provider_settings_api_assistant_providers__provider_id__settings_get"];
-        /** Put Provider Settings */
-        put: operations["put_provider_settings_api_assistant_providers__provider_id__settings_put"];
-        post?: never;
-        /** Delete Provider Settings */
-        delete: operations["delete_provider_settings_api_assistant_providers__provider_id__settings_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/assistant/providers/{provider_id}/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Provider Models
-         * @description Models the provider advertises, for the settings picker.
-         *
-         *     Best-effort: an unset key or an unreachable endpoint just yields an empty
-         *     list, and the dialog falls back to a free-form model field.
-         */
-        get: operations["list_provider_models_api_assistant_providers__provider_id__models_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1895,7 +2269,7 @@ export interface paths {
         put?: never;
         /**
          * Apply Proposal
-         * @description Apply an approved proposal — the assistant's only path to a write.
+         * @description Apply an approved proposal — an agent's only path to a topology write.
          */
         post: operations["apply_proposal_api_assistant_proposals__proposal_id__apply_post"];
         delete?: never;
@@ -1997,72 +2371,34 @@ export interface components {
         AssistantCapabilities: {
             /** Enabled */
             enabled: boolean;
+            mcp?: components["schemas"]["AssistantMcpInfo"] | null;
             /**
-             * Providers
+             * Harnesses
              * @default []
              */
-            providers: components["schemas"]["AssistantProvider"][];
+            harnesses: components["schemas"]["AssistantHarness"][];
             /**
-             * Modes
-             * @default [
-             *       "ask",
-             *       "plan",
-             *       "build",
-             *       "tutor"
-             *     ]
+             * Harnessesallowed
+             * @default true
              */
-            modes: string[];
-            mcp?: components["schemas"]["AssistantMcpInfo"] | null;
+            harnessesAllowed: boolean;
         };
-        /** AssistantChatInfo */
-        AssistantChatInfo: {
-            /** Chatid */
-            chatId: string;
-            /** Providerid */
-            providerId: string;
-            /** Sessionid */
-            sessionId: string;
-            /** Mode */
-            mode: string;
+        /**
+         * AssistantHarness
+         * @description An agent CLI netlab-ui can start in a terminal tab, pre-connected over MCP.
+         */
+        AssistantHarness: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Available */
+            available: boolean;
             /**
-             * Model
+             * Homepage
              * @default
              */
-            model: string;
-            /**
-             * Busy
-             * @default false
-             */
-            busy: boolean;
-            /**
-             * Title
-             * @default New conversation
-             */
-            title: string;
-            /**
-             * Createdat
-             * @default 0
-             */
-            createdAt: number;
-        };
-        /** AssistantChatList */
-        AssistantChatList: {
-            /**
-             * Chats
-             * @default []
-             */
-            chats: components["schemas"]["AssistantChatInfo"][];
-        };
-        /** AssistantHistory */
-        AssistantHistory: {
-            chat: components["schemas"]["AssistantChatInfo"];
-            /**
-             * Events
-             * @default []
-             */
-            events: {
-                [key: string]: unknown;
-            }[];
+            homepage: string;
         };
         /**
          * AssistantMcpInfo
@@ -2083,17 +2419,6 @@ export interface components {
              * @default
              */
             clientConfig: string;
-        };
-        /**
-         * AssistantModelList
-         * @description Model ids a provider advertises, for the settings picker.
-         */
-        AssistantModelList: {
-            /**
-             * Models
-             * @default []
-             */
-            models: string[];
         };
         /** AssistantProposal */
         AssistantProposal: {
@@ -2156,61 +2481,12 @@ export interface components {
             /** Error */
             error?: string | null;
         };
-        /** AssistantProvider */
-        AssistantProvider: {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Available */
-            available: boolean;
-            /** Version */
-            version?: string | null;
-            /** Note */
-            note?: string | null;
-            /**
-             * Configurable
-             * @default false
-             */
-            configurable: boolean;
-            /**
-             * Takesmodel
-             * @default false
-             */
-            takesModel: boolean;
-            /** Apikeyurl */
-            apiKeyUrl?: string | null;
-        };
-        /**
-         * AssistantProviderSettings
-         * @description A provider's stored settings, as shown/edited in the UI.
-         *
-         *     ``hasApiKey`` says whether a key is configured without ever sending the
-         *     key itself back down; ``apiKey`` only appears in the PUT request body.
-         *     ``baseUrl`` is not a secret (it names an endpoint), so it round-trips
-         *     directly — it is only meaningful for OpenAI-compatible providers.
-         */
-        AssistantProviderSettings: {
-            /**
-             * Hasapikey
-             * @default false
-             */
-            hasApiKey: boolean;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
-            /**
-             * Baseurl
-             * @default
-             */
-            baseUrl: string;
-            /**
-             * Envlocked
-             * @default []
-             */
-            envLocked: string[];
+        /** BoxRecipe */
+        BoxRecipe: {
+            /** Device */
+            device: string;
+            /** Text */
+            text: string;
         };
         /** CaptureOpResult */
         CaptureOpResult: {
@@ -2392,6 +2668,30 @@ export interface components {
              */
             onlyRight: number;
         };
+        /** ConfigDrift */
+        ConfigDrift: {
+            /** Snapshot */
+            snapshot: string;
+            /** Nodes */
+            nodes: components["schemas"]["ConfigDriftRow"][];
+        };
+        /** ConfigDriftRow */
+        ConfigDriftRow: {
+            /** Node */
+            node: string;
+            /** Status */
+            status: string;
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+        };
         /** ConfigPreviewFile */
         ConfigPreviewFile: {
             /** Path */
@@ -2415,6 +2715,50 @@ export interface components {
             generated: boolean;
             /** Message */
             message?: string | null;
+        };
+        /** ConfigSide */
+        ConfigSide: {
+            /** Label */
+            label: string;
+            /** Text */
+            text?: string | null;
+        };
+        /** ConfigSnapshot */
+        ConfigSnapshot: {
+            /** Id */
+            id: string;
+            /** Createdat */
+            createdAt: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+            /**
+             * Skipped
+             * @default []
+             */
+            skipped: string[];
+        };
+        /** ConfigSnapshotList */
+        ConfigSnapshotList: {
+            /** Snapshots */
+            snapshots: components["schemas"]["ConfigSnapshot"][];
+        };
+        /** ConfigSnapshotRequest */
+        ConfigSnapshotRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /**
+             * Reason
+             * @default manual snapshot
+             */
+            reason: string;
         };
         /** ContainerCheck */
         ContainerCheck: {
@@ -2477,22 +2821,23 @@ export interface components {
              */
             availableLayers: ("bgp" | "ospf" | "isis" | "bfd" | "evpn")[];
         };
-        /** CreateChat */
-        CreateChat: {
-            /** Providerid */
-            providerId: string;
-            /** Sessionid */
-            sessionId: string;
-            /**
-             * Mode
-             * @default ask
-             */
-            mode: string;
-            /**
-             * Model
-             * @default
-             */
-            model: string;
+        /** CopyLabRequest */
+        CopyLabRequest: {
+            /** Topologypath */
+            topologyPath: string;
+            /** Name */
+            name: string;
+            /** Targetworkspace */
+            targetWorkspace?: string | null;
+        };
+        /** CopyLabResult */
+        CopyLabResult: {
+            /** Path */
+            path: string;
+            /** Topologyref */
+            topologyRef: {
+                [key: string]: string;
+            };
         };
         /** CreateSession */
         CreateSession: {
@@ -2512,6 +2857,48 @@ export interface components {
             topologyRef: string;
             /** Mode */
             mode: string;
+        };
+        /** CustomConfig */
+        CustomConfig: {
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Path */
+            path: string;
+            /** Variants */
+            variants: string[];
+            /** Editable */
+            editable: boolean;
+        };
+        /** CustomConfigCreate */
+        CustomConfigCreate: {
+            /** Sessionid */
+            sessionId: string;
+            /** Name */
+            name: string;
+            /**
+             * Device
+             * @default
+             */
+            device: string;
+        };
+        /** CustomConfigCreated */
+        CustomConfigCreated: {
+            /** Path */
+            path: string;
+        };
+        /** CustomConfigs */
+        CustomConfigs: {
+            /** Templates */
+            templates: components["schemas"]["CustomConfig"][];
+            /** Devices */
+            devices: string[];
+            /**
+             * Defaultdevice
+             * @default
+             */
+            defaultDevice: string;
         };
         /** CustomNodesResult */
         CustomNodesResult: {
@@ -2897,6 +3284,68 @@ export interface components {
             /** Labs */
             labs: components["schemas"]["ExampleLab"][];
         };
+        /** ExecRequest */
+        ExecRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Nodes */
+            nodes: string[];
+            /** Command */
+            command: string;
+            /**
+             * Mode
+             * @default auto
+             * @enum {string}
+             */
+            mode: "auto" | "shell" | "show";
+            /**
+             * Timeouts
+             * @default 30
+             */
+            timeoutS: number;
+        };
+        /** ExecScript */
+        ExecScript: {
+            /** Name */
+            name: string;
+            /** Steps */
+            steps?: components["schemas"]["ScriptStep"][];
+        };
+        /** ExecScripts */
+        ExecScripts: {
+            /** Scripts */
+            scripts: components["schemas"]["ExecScript"][];
+        };
+        /** ExecScriptsSave */
+        ExecScriptsSave: {
+            /** Sessionid */
+            sessionId: string;
+            /** Scripts */
+            scripts: components["schemas"]["ExecScript"][];
+        };
+        /** ExecTarget */
+        ExecTarget: {
+            /** Name */
+            name: string;
+            /** Device */
+            device?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+        };
+        /** ExecTargets */
+        ExecTargets: {
+            /** Nodes */
+            nodes: components["schemas"]["ExecTarget"][];
+            /** Groups */
+            groups: {
+                [key: string]: string[];
+            };
+        };
         /** FcliAction */
         FcliAction: {
             /** Sessionid */
@@ -2953,6 +3402,127 @@ export interface components {
             path: string;
             /** Isdir */
             isDir: boolean;
+        };
+        /**
+         * Generator
+         * @description A plugin with a ``topology_expand`` hook: it builds nodes and links
+         *     from a parameter block (``fabric: {leafs: 4}``, ``clone: {count: 8}``).
+         */
+        Generator: {
+            /** Plugin */
+            plugin: string;
+            /** Key */
+            key: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "topology" | "node";
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Origin */
+            origin: string;
+            /** Params */
+            params?: components["schemas"]["GeneratorParam"][];
+            /** Patterns */
+            patterns?: string[];
+        };
+        /** GeneratorApplyRequest */
+        GeneratorApplyRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Plugin */
+            plugin: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Node */
+            node?: string | null;
+            /** Replacenodes */
+            replaceNodes?: string[];
+        };
+        /** GeneratorLabSummary */
+        GeneratorLabSummary: {
+            /** Nodes */
+            nodes: string[];
+            /** Links */
+            links: number;
+            /** Devices */
+            devices?: {
+                [key: string]: number;
+            };
+        };
+        /** GeneratorParam */
+        GeneratorParam: {
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @default str
+             */
+            type: string;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+            /** Default */
+            default?: unknown;
+            /** Min */
+            min?: number | null;
+            /** Max */
+            max?: number | null;
+            /** Choices */
+            choices?: unknown[] | null;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /**
+         * GeneratorPreview
+         * @description What applying a generator would do. ``command`` is the topology
+         *     command to send to ``/api/topology/command`` to apply it.
+         */
+        GeneratorPreview: {
+            /** Command */
+            command: {
+                [key: string]: unknown;
+            };
+            /** Diff */
+            diff: string;
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
+            before?: components["schemas"]["GeneratorLabSummary"] | null;
+            after?: components["schemas"]["GeneratorLabSummary"] | null;
+            /** Addednodes */
+            addedNodes?: string[];
+            /** Removednodes */
+            removedNodes?: string[];
+        };
+        /** GeneratorSuggestion */
+        GeneratorSuggestion: {
+            /** Generator */
+            generator: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Node */
+            node?: string | null;
+            /** Replacenodes */
+            replaceNodes?: string[];
+            /** Notes */
+            notes?: string[];
         };
         /**
          * GroupInfo
@@ -3203,6 +3773,108 @@ export interface components {
              * @enum {string}
              */
             action: "cleanup" | "force-cleanup" | "forget";
+        };
+        /** LabLimits */
+        LabLimits: {
+            /** Labhours */
+            labHours?: number | null;
+            /** Maxlabsperuser */
+            maxLabsPerUser?: number | null;
+            /** User */
+            user?: string | null;
+            /**
+             * Admin
+             * @default false
+             */
+            admin: boolean;
+        };
+        /** LabSearchHit */
+        LabSearchHit: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+        };
+        /** LabSearchResult */
+        LabSearchResult: {
+            /** Results */
+            results: components["schemas"]["LabSearchHit"][];
+            /** Modules */
+            modules: components["schemas"]["LabSearchHit"][];
+        };
+        /** LabTool */
+        LabTool: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Runtime
+             * @default
+             */
+            runtime: string;
+            /**
+             * Docsurl
+             * @default
+             */
+            docsUrl: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Deployed
+             * @default false
+             */
+            deployed: boolean;
+            /**
+             * Running
+             * @default false
+             */
+            running: boolean;
+            /**
+             * Canconnect
+             * @default false
+             */
+            canConnect: boolean;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Urls
+             * @default []
+             */
+            urls: string[];
+        };
+        /** LabTools */
+        LabTools: {
+            /** Deployed */
+            deployed: boolean;
+            /** Tools */
+            tools: components["schemas"]["LabTool"][];
+        };
+        /** LeaseResult */
+        LeaseResult: {
+            /** Expiresat */
+            expiresAt?: string | null;
         };
         /** LensAddressAssignment */
         LensAddressAssignment: {
@@ -3541,6 +4213,17 @@ export interface components {
              * @default
              */
             corruption: string;
+        };
+        /** LinkStateRequest */
+        LinkStateRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Node */
+            node: string;
+            /** Interface */
+            interface: string;
+            /** Up */
+            up: boolean;
         };
         /** ModelPut */
         ModelPut: {
@@ -4224,6 +4907,11 @@ export interface components {
             source: "builtin" | "workspace" | "user" | "system";
             /** Structuredadapter */
             structuredAdapter?: ("addressing" | "bgp-neighbor") | null;
+            /**
+             * Exports
+             * @default []
+             */
+            exports: string[];
         };
         /** ReportRunRequest */
         ReportRunRequest: {
@@ -4281,6 +4969,13 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /** RunningConfigDiff */
+        RunningConfigDiff: {
+            /** Node */
+            node: string;
+            left: components["schemas"]["ConfigSide"];
+            right: components["schemas"]["ConfigSide"];
+        };
         /** RuntimeContainer */
         RuntimeContainer: {
             /** Name */
@@ -4311,6 +5006,11 @@ export interface components {
              * @default
              */
             ipv6Address: string;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
             /**
              * Interfaces
              * @default []
@@ -4348,6 +5048,7 @@ export interface components {
             /** Ifindex */
             ifIndex?: number | null;
             stats?: components["schemas"]["RuntimeInterfaceStats"] | null;
+            netemState?: components["schemas"]["RuntimeNetemState"] | null;
         };
         /** RuntimeInterfaceStats */
         RuntimeInterfaceStats: {
@@ -4381,6 +5082,54 @@ export interface components {
             txPackets: number;
             /** Statsintervalseconds */
             statsIntervalSeconds?: number | null;
+            /**
+             * Rxerrors
+             * @default 0
+             */
+            rxErrors: number;
+            /**
+             * Txerrors
+             * @default 0
+             */
+            txErrors: number;
+            /**
+             * Rxdropped
+             * @default 0
+             */
+            rxDropped: number;
+            /**
+             * Txdropped
+             * @default 0
+             */
+            txDropped: number;
+            /** Newerrors */
+            newErrors?: number | null;
+        };
+        /** RuntimeNetemState */
+        RuntimeNetemState: {
+            /** Delay */
+            delay?: string | null;
+            /** Jitter */
+            jitter?: string | null;
+            /** Loss */
+            loss?: string | null;
+            /** Rate */
+            rate?: string | null;
+            /** Corruption */
+            corruption?: string | null;
+        };
+        /** ScriptStep */
+        ScriptStep: {
+            /** Command */
+            command: string;
+            /**
+             * Mode
+             * @default auto
+             * @enum {string}
+             */
+            mode: "auto" | "shell" | "show";
+            /** Nodes */
+            nodes?: string[];
         };
         /** Selection */
         Selection: {
@@ -4391,13 +5140,6 @@ export interface components {
              * @default []
              */
             nodes: string[];
-        };
-        /** SendMessage */
-        SendMessage: {
-            /** Text */
-            text: string;
-            /** Selection */
-            selection?: string[] | null;
         };
         /** ServiceEvpnSummary */
         ServiceEvpnSummary: {
@@ -4620,6 +5362,37 @@ export interface components {
             /** Path */
             path?: string | null;
         };
+        /** SetupCatalog */
+        SetupCatalog: {
+            /** Install */
+            install: components["schemas"]["SetupItem"][];
+            /** Builds */
+            builds: components["schemas"]["SetupItem"][];
+            /** Boxes */
+            boxes: string[];
+            /** Tests */
+            tests: string[];
+        };
+        /** SetupItem */
+        SetupItem: {
+            /** Id */
+            id: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /** SetupRun */
+        SetupRun: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "test" | "install" | "build";
+            /** Target */
+            target: string;
+        };
         /** SnapshotRequest */
         SnapshotRequest: {
             /** Sessionid */
@@ -4636,18 +5409,67 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** SwitchProvider */
-        SwitchProvider: {
-            /** Providerid */
-            providerId: string;
+        /** TeachingCheckRequest */
+        TeachingCheckRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tests */
+            tests: string[];
+        };
+        /** TeachingCheckResult */
+        TeachingCheckResult: {
+            /** Passed */
+            passed: boolean;
+            /** Tests */
+            tests: components["schemas"]["TeachingCheckTest"][];
             /**
-             * Model
+             * Output
              * @default
              */
-            model: string;
+            output: string;
+        };
+        /** TeachingCheckTest */
+        TeachingCheckTest: {
+            /** Name */
+            name: string;
+            /** State */
+            state: string;
+            /**
+             * Evidence
+             * @default
+             */
+            evidence: string;
         };
         /** TeachingDocument */
-        TeachingDocument: {
+        "TeachingDocument-Input": {
+            /**
+             * Schemaversion
+             * @default 2
+             */
+            schemaVersion: number;
+            /**
+             * Id
+             * @default default
+             */
+            id: string;
+            /**
+             * Title
+             * @default Guided tour
+             */
+            title: string;
+            /**
+             * Revision
+             * @default
+             */
+            revision: string;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: components["schemas"]["TeachingStep"][];
+        };
+        /** TeachingDocument */
+        "TeachingDocument-Output": {
             /**
              * Schemaversion
              * @default 2
@@ -4678,13 +5500,13 @@ export interface components {
         TeachingSaveRequest: {
             /** Sessionid */
             sessionId: string;
-            document: components["schemas"]["TeachingDocument"];
+            document: components["schemas"]["TeachingDocument-Input"];
         };
         /** TeachingSaveResult */
         TeachingSaveResult: {
             /** Ok */
             ok: boolean;
-            document: components["schemas"]["TeachingDocument"];
+            document: components["schemas"]["TeachingDocument-Output"];
         };
         /** TeachingStep */
         TeachingStep: {
@@ -4710,6 +5532,21 @@ export interface components {
              *     }
              */
             view: components["schemas"]["TourView"];
+            /**
+             * Task
+             * @default
+             */
+            task: string;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
+            /**
+             * Checks
+             * @default []
+             */
+            checks: string[];
         };
         /** TemplatesResult */
         TemplatesResult: {
@@ -4717,6 +5554,46 @@ export interface components {
             templates: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ToolAction */
+        ToolAction: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tool */
+            tool: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "up" | "down";
+        };
+        /** ToolActionResult */
+        ToolActionResult: {
+            /** Code */
+            code: number;
+            /** Stdout */
+            stdout: string;
+            /** Stderr */
+            stderr: string;
+        };
+        /** ToolToggle */
+        ToolToggle: {
+            /** Sessionid */
+            sessionId: string;
+            /** Tool */
+            tool: string;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** TopologyPattern */
+        TopologyPattern: {
+            /** Kind */
+            kind: string;
+            /** Nodes */
+            nodes: string[];
+            /** Summary */
+            summary: string;
+            suggestion?: components["schemas"]["GeneratorSuggestion"] | null;
         };
         /** TopologyRef */
         TopologyRef: {
@@ -4739,7 +5616,7 @@ export interface components {
              * @default physical
              * @enum {string}
              */
-            lens: "physical" | "addressing" | "routing" | "services" | "paths" | "deployment" | "validation" | "readiness" | "changes";
+            lens: "physical" | "addressing" | "routing" | "services" | "paths" | "deployment" | "validation" | "readiness" | "changes" | "traffic";
             /**
              * Family
              * @default ipv4
@@ -4844,15 +5721,6 @@ export interface components {
              * @default []
              */
             instances: components["schemas"]["UnitInstance"][];
-        };
-        /** UpdateProviderSettings */
-        UpdateProviderSettings: {
-            /** Apikey */
-            apiKey?: string | null;
-            /** Model */
-            model?: string | null;
-            /** Baseurl */
-            baseUrl?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -5016,6 +5884,26 @@ export interface components {
             objectRefs: string[];
             /** Order */
             order: number;
+        };
+        /** ValidationTestInfo */
+        ValidationTestInfo: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: string[];
+        };
+        /** ValidationTestList */
+        ValidationTestList: {
+            /** Tests */
+            tests: components["schemas"]["ValidationTestInfo"][];
         };
         /** VersionResult */
         VersionResult: {
@@ -5951,6 +6839,134 @@ export interface operations {
             };
         };
     };
+    exec_targets_api_lab_exec_targets_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecTargets"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    exec_stream_api_lab_exec_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scripts_api_lab_exec_scripts_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecScripts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_scripts_api_lab_exec_scripts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecScriptsSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecScripts"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     edgeshark_status_api_lab_capture_edgeshark_get: {
         parameters: {
             query?: never;
@@ -6060,6 +7076,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaptureOpResult"];
+                };
+            };
+        };
+    };
+    list_config_snapshots_api_lab_configs_snapshots_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSnapshotList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    take_config_snapshot_api_lab_configs_snapshots_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfigSnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigSnapshot"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    config_drift_api_lab_configs_drift_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                snapshot?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigDrift"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    running_config_diff_api_lab_configs_diff_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                node: string;
+                left: string;
+                right?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunningConfigDiff"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_custom_configs_api_lab_custom_configs_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomConfigs"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_custom_config_api_lab_custom_configs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomConfigCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomConfigCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capture_pcap_api_lab_capture_pcap_get: {
+        parameters: {
+            query: {
+                node: string;
+                interface: string;
+                /** @description 0 = until the client disconnects */
+                seconds?: number;
+                maxPackets?: number;
+                sessionId?: string | null;
+                /** @description topology file path, instead of sessionId */
+                topology?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6539,6 +7787,39 @@ export interface operations {
             };
         };
     };
+    copy_lab_endpoint_api_lab_copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyLabRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyLabResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     lab_instances_api_lab_instances_get: {
         parameters: {
             query?: never;
@@ -6867,6 +8148,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_link_state_api_lab_link_state_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkStateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_limits_info_api_lab_limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabLimits"];
+                };
+            };
+        };
+    };
+    get_lease_api_lab_lease_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extend_lease_api_lab_lease_extend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaseResult"];
                 };
             };
             /** @description Validation Error */
@@ -7384,6 +8782,132 @@ export interface operations {
             };
         };
     };
+    get_tools_api_lab_tools_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTools"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_tool_api_lab_tools_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolToggle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabTools"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_action_api_lab_tools_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clab_tarball_api_lab_clab_tarball_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_lenses_api_topology_lenses_get: {
         parameters: {
             query: {
@@ -7402,6 +8926,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LensBundleResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_lab_api_topology_search_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabSearchResult"];
                 };
             };
             /** @description Validation Error */
@@ -7578,6 +9134,37 @@ export interface operations {
             };
         };
     };
+    export_report_api_topology_reports_export_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                name: string;
+                download?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_teaching_api_topology_teaching_get: {
         parameters: {
             query: {
@@ -7595,7 +9182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeachingDocument"];
+                    "application/json": components["schemas"]["TeachingDocument-Output"];
                 };
             };
             /** @description Validation Error */
@@ -7629,6 +9216,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeachingSaveResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_teaching_tests_api_topology_teaching_tests_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationTestList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_teaching_step_api_topology_teaching_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeachingCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeachingCheckResult"];
                 };
             };
             /** @description Validation Error */
@@ -7866,6 +9517,7 @@ export interface operations {
         parameters: {
             query?: {
                 name?: string;
+                kind?: string;
             };
             header?: never;
             path?: never;
@@ -7880,6 +9532,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginTemplate"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_generators_api_plugins_generators_get: {
+        parameters: {
+            query?: {
+                sessionId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Generator"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_patterns_api_plugins_generators_patterns_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyPattern"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_generator_api_plugins_generators_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneratorApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratorPreview"];
                 };
             };
             /** @description Validation Error */
@@ -8117,7 +9864,7 @@ export interface operations {
             };
         };
     };
-    capabilities_api_assistant_capabilities_get: {
+    get_setup_catalog_api_environment_setup_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -8132,43 +9879,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssistantCapabilities"];
+                    "application/json": components["schemas"]["SetupCatalog"];
                 };
             };
         };
     };
-    list_chats_api_assistant_chats_get: {
-        parameters: {
-            query: {
-                sessionId: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantChatList"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_chat_api_assistant_chats_post: {
+    run_setup_api_environment_setup_stream_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -8177,205 +9893,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateChat"];
+                "application/json": components["schemas"]["SetupRun"];
             };
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantChatInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_chat_api_assistant_chats__chat_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantHistory"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_chat_api_assistant_chats__chat_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantAck"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_message_api_assistant_chats__chat_id__messages_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SendMessage"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantAck"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_turn_api_assistant_chats__chat_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantAck"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    switch_chat_provider_api_assistant_chats__chat_id__provider_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SwitchProvider"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantChatInfo"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    chat_events_api_assistant_chats__chat_id__events_get: {
-        parameters: {
-            query?: {
-                replay?: boolean;
-            };
-            header?: never;
-            path: {
-                chat_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -8393,6 +9913,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_box_recipe_api_environment_setup_box_recipe_get: {
+        parameters: {
+            query: {
+                device: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoxRecipe"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capabilities_api_assistant_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantCapabilities"];
                 };
             };
         };
@@ -8417,134 +9988,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssistantAck"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_provider_settings_api_assistant_providers__provider_id__settings_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantProviderSettings"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    put_provider_settings_api_assistant_providers__provider_id__settings_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateProviderSettings"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantProviderSettings"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_provider_settings_api_assistant_providers__provider_id__settings_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantAck"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_provider_models_api_assistant_providers__provider_id__models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                provider_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssistantModelList"];
                 };
             };
             /** @description Validation Error */

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -77,3 +77,79 @@ class PluginDebug(BaseModel):
     count: int
     plugins: list[str]
     discovery: dict[str, Any]
+
+
+class GeneratorParam(BaseModel):
+    name: str
+    # int | float | bool | str | dict | list
+    type: str = "str"
+    required: bool = False
+    default: Any = None
+    min: float | None = None
+    max: float | None = None
+    choices: list[Any] | None = None
+    description: str = ""
+
+
+class Generator(BaseModel):
+    """A plugin with a ``topology_expand`` hook: it builds nodes and links
+    from a parameter block (``fabric: {leafs: 4}``, ``clone: {count: 8}``)."""
+
+    plugin: str
+    # Top-level topology key (scope=topology) or node attribute (scope=node)
+    # that holds the parameters.
+    key: str
+    scope: Literal["topology", "node"]
+    title: str
+    description: str = ""
+    origin: str
+    params: list[GeneratorParam] = Field(default_factory=list)
+    # Topology shapes it can reproduce (leaf_spine, clone, ring, …).
+    patterns: list[str] = Field(default_factory=list)
+
+
+class GeneratorSuggestion(BaseModel):
+    generator: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    node: str | None = None
+    replaceNodes: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class TopologyPattern(BaseModel):
+    # leaf_spine | clone | ring | chain | full_mesh | star
+    kind: str
+    nodes: list[str]
+    summary: str
+    suggestion: GeneratorSuggestion | None = None
+
+
+class GeneratorApplyRequest(BaseModel):
+    sessionId: str
+    plugin: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    # Required for node-scoped generators (node.clone).
+    node: str | None = None
+    # Hand-built nodes the generator replaces; removed with their links.
+    replaceNodes: list[str] = Field(default_factory=list)
+
+
+class GeneratorLabSummary(BaseModel):
+    nodes: list[str]
+    links: int
+    devices: dict[str, int] = Field(default_factory=dict)
+
+
+class GeneratorPreview(BaseModel):
+    """What applying a generator would do. ``command`` is the topology
+    command to send to ``/api/topology/command`` to apply it."""
+
+    command: dict[str, Any]
+    diff: str
+    # False when netlab rejects the result; ``error`` says why.
+    ok: bool
+    error: str | None = None
+    before: GeneratorLabSummary | None = None
+    after: GeneratorLabSummary | None = None
+    addedNodes: list[str] = Field(default_factory=list)
+    removedNodes: list[str] = Field(default_factory=list)

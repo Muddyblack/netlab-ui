@@ -130,7 +130,7 @@ export function FolderBrowserDialog({ open, onClose, onChoose }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={loading}>Cancel</Button>
         <Button variant="contained" onClick={() => void handleChoose()} disabled={loading || !cwd}>
           Add this folder
         </Button>

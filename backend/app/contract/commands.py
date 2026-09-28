@@ -496,6 +496,38 @@ def _set_lab_settings(path: str, cmd: dict[str, Any]) -> bool:
     return True
 
 
+def _apply_generator(path: str, cmd: dict[str, Any]) -> bool:
+    """Enable a generator plugin and write its parameter block (see
+    ``services.netlab.generators``). The caller resolves and validates the
+    generator: the command must replay identically against a scratch copy of
+    the topology, where the lab folder's plugins can't be rediscovered."""
+    from services.netlab import generators
+
+    plugin, key = cmd.get("plugin"), cmd.get("key")
+    if not plugin or not key:
+        raise ValueError("applyGenerator needs plugin and key")
+    params = cmd.get("params") or {}
+    if not isinstance(params, dict):
+        raise ValueError("applyGenerator params must be a mapping")
+    node = cmd.get("node")
+    # Hand-built nodes the generator now produces go the same way a delete
+    # does: links, interface references and sidecar positions included.
+    for name in cmd.get("replaceNodes") or []:
+        if name != node:
+            _remove_node(path, {"id": name})
+    topo = load_topology(path)
+    generators.apply(
+        topo,
+        plugin=plugin,
+        key=key,
+        scope="node" if cmd.get("attachTo") == "node" else "topology",
+        params=params,
+        node=node,
+    )
+    save_topology(path, topo)
+    return True
+
+
 _HANDLERS = {
     "batch": _batch,
     "n": _set_lab_settings,  # current @containerlab/clab-ui verb
@@ -525,4 +557,5 @@ _HANDLERS = {
     "setEdgeAnnotations": _set_edge_annotations,
     "setViewerSettings": _set_viewer_settings,
     "setNodeGroupMembership": _set_node_group_membership,
+    "applyGenerator": _apply_generator,
 }

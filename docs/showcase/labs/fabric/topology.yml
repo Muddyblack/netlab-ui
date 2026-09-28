@@ -1,0 +1,26 @@
+# Showcase lab for docs/showcase: a small leaf/spine fabric.
+# OSPF underlay, iBGP with the spines as route reflectors.
+name: fabric
+provider: clab
+addressing.mgmt.start: 150
+
+defaults.device: frr
+module: [ospf, bgp]
+bgp.as: 65000
+
+groups:
+  spines:
+    members: [s1, s2]
+    bgp.rr: true
+  leaves:
+    members: [l1, l2, l3]
+
+nodes: [s1, s2, l1, l2, l3]
+
+links:
+- s1-l1
+- s1-l2
+- s1-l3
+- s2-l1
+- s2-l2
+- s2-l3

@@ -8,6 +8,7 @@ import { buildRunningProvider, buildHelpProvider } from "../host/runningProvider
 import { readPersistedExplorerUiState, persistExplorerUiState, closeExplorerTransientUi } from "../lifecycle/persistence";
 import type { WorkspaceEntry } from "../lifecycle/types";
 import type { LabFileEntry } from "../api/client";
+import { requestCopyLab } from "../host/copyLabStore";
 import type { RunningLabsStatus } from "./useAppData";
 
 type ExplorerControllerOptions = Parameters<typeof createExplorerController>[0];
@@ -41,6 +42,10 @@ export interface ExplorerActionCallbacks {
    * tab (like openShell, it always targets the *currently active* lab
    * session — there's no per-tab session id, same as node shells). */
   openDrawioWizard: () => void;
+  openMultiExec: (lab: TopologyRef) => void | Promise<void>;
+  openRunningConfigs: (lab: TopologyRef) => void | Promise<void>;
+  openTools: (lab: TopologyRef) => void | Promise<void>;
+  exportClabTarball: (lab: TopologyRef) => void | Promise<void>;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
   /** `lab` is the node's own topology (Running Labs tree items carry it);
@@ -94,6 +99,8 @@ function buildExplorerDataSignature(
       path: labInfo?.path ?? "",
       dir: labInfo?.dir ?? "",
       status: labInfo?.status ?? "",
+      owner: labInfo?.owner ?? "",
+      expiresAt: labInfo?.expiresAt ?? "",
       nodes: Object.entries(labInfo?.nodes ?? {})
         .map(([nodeName, nodeInfo]) => ({
           name: nodeName,
@@ -232,6 +239,33 @@ async function handleSshToAllNodes({ cb, topoRef, runningLabsStatusRef }: Action
   } else if (sid) {
     for (const nodeName of nodeNames) await cb.openShell(nodeName, topoRef);
   }
+}
+
+async function handleRunOnNodes({ cb, topoRef }: ActionCtx) {
+  if (!topoRef) return;
+  await cb.openMultiExec(topoRef);
+}
+
+async function handleRunningConfigs({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openRunningConfigs(topoRef);
+}
+
+async function handleTools({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openTools(topoRef);
+}
+
+async function handleClabTarball({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.exportClabTarball(topoRef);
+}
+
+async function handleCopyLab({ cb, item, topoRef }: ActionCtx) {
+  const path = topoRef?.yamlPath || item?.path;
+  if (!path) return;
+  requestCopyLab({
+    topologyPath: path,
+    labName: topoRef?.labName || path.split("/").slice(-2, -1)[0] || "lab",
+    onCopied: (ref) => { void cb.openLab(ref as TopologyRef); },
+  });
 }
 
 async function handleCopyPath({ cb, item }: ActionCtx) {
@@ -379,6 +413,11 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "containerlab.lab.stop": handleDestroyLab,
   "containerlab.lab.restart": handleNetlabRestart,
   "containerlab.lab.sshToAllNodes": handleSshToAllNodes,
+  "netlab.lab.shell.runOnNodes": handleRunOnNodes,
+  "netlab.lab.inspect.runningConfigs": handleRunningConfigs,
+  "netlab.lab.shell.tools": handleTools,
+  "netlab.lab.addtoworkspace.clabTarball": handleClabTarball,
+  "netlab.lab.addtoworkspace.copyLab": handleCopyLab,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
   "containerlab.file.newFile": handleOpenNewLabDialog,
@@ -557,7 +596,15 @@ export function useExplorerController({
           contributedLabActions: [
             { commandId: "containerlab.lab.graph.netlabSvg.vertical", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Vertical)" },
             { commandId: "containerlab.lab.graph.netlabSvg.horizontal", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Horizontal)" },
-            { commandId: "containerlab.lab.graph.netlabSvg.interactive", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Interactive)" }
+            { commandId: "containerlab.lab.graph.netlabSvg.interactive", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Graph (netlab SVG, Interactive)" },
+            // ".shell." / ".inspect." in the ids file these under clab-ui's
+            // Access and Inspect groups (same substring rules as above).
+            { commandId: "netlab.lab.shell.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" },
+            { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" },
+            { commandId: "netlab.lab.shell.tools", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "External Tools (Graphite, SuzieQ…)…" },
+            // ".addtoworkspace." files it under clab-ui's Topology group.
+            { commandId: "netlab.lab.addtoworkspace.copyLab", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Copy Lab to Workspace…" },
+            { commandId: "netlab.lab.addtoworkspace.clabTarball", contextValues: ["containerlabLabDeployed"], label: "Export as Containerlab Tarball" }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -575,6 +622,11 @@ export function useExplorerController({
             ["netlab.lab.restart", "Netlab Restart"],
             ["netlab.lab.validate", "Netlab Validate (Run tests)"],
             ["netlab.lab.collect", "Netlab Collect (Gather configs)"],
+            ["netlab.lab.shell.runOnNodes", "Run Command on Nodes…"],
+            ["netlab.lab.inspect.runningConfigs", "Running Configs & Changes…"],
+            ["netlab.lab.shell.tools", "External Tools (Graphite, SuzieQ…)…"],
+            ["netlab.lab.addtoworkspace.copyLab", "Copy Lab to Workspace…"],
+            ["netlab.lab.addtoworkspace.clabTarball", "Export as Containerlab Tarball"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Any
 
 from services.model.topology import Topology
-from services.netlab import runner
+from services.netlab import libvirt, runner
 
-_counter_cache: dict[tuple[str, str], tuple[float, int, int, int, int]] = {}
+_counter_cache: dict[tuple[str, str], tuple[float, int, int, int, int, int]] = {}
 
 
 def clab_runtime(topo: Topology) -> str:
@@ -25,11 +26,19 @@ def _stats(container: str, iface: str, raw: dict[str, Any], now: float) -> dict[
     tx = counters.get("tx") or {}
     rx_bytes, tx_bytes = int(rx.get("bytes") or 0), int(tx.get("bytes") or 0)
     rx_packets, tx_packets = int(rx.get("packets") or 0), int(tx.get("packets") or 0)
+    problems = {
+        "rxErrors": int(rx.get("errors") or 0),
+        "txErrors": int(tx.get("errors") or 0),
+        "rxDropped": int(rx.get("dropped") or 0),
+        "txDropped": int(tx.get("dropped") or 0),
+    }
+    problem_total = sum(problems.values())
     result: dict[str, Any] = {
         "rxBytes": rx_bytes,
         "txBytes": tx_bytes,
         "rxPackets": rx_packets,
         "txPackets": tx_packets,
+        **problems,
     }
     previous = _counter_cache.get((container, iface))
     if previous and now > previous[0]:
@@ -41,9 +50,48 @@ def _stats(container: str, iface: str, raw: dict[str, Any], now: float) -> dict[
                 "rxPps": max(0, round((rx_packets - previous[3]) / interval)),
                 "txPps": max(0, round((tx_packets - previous[4]) / interval)),
                 "statsIntervalSeconds": interval,
+                "newErrors": max(0, problem_total - previous[5]),
             }
         )
-    _counter_cache[(container, iface)] = (now, rx_bytes, tx_bytes, rx_packets, tx_packets)
+    _counter_cache[(container, iface)] = (now, rx_bytes, tx_bytes, rx_packets, tx_packets, problem_total)
+    return result
+
+
+_NETEM_LINE = re.compile(r"^qdisc netem \S+ dev (?P<dev>\S+)(?P<rest>.*)$")
+_TIME = r"[\d.]+(?:us|ms|s)"
+_RATE_UNITS = {"bit": 0.001, "kbit": 1, "mbit": 1000, "gbit": 1_000_000}
+
+
+def _kbit(rate: str) -> str:
+    match = re.fullmatch(r"([\d.]+)([KMG]?bit)", rate, re.IGNORECASE)
+    if not match:
+        return rate
+    value = float(match.group(1)) * _RATE_UNITS[match.group(2).lower()]
+    return str(round(value))
+
+
+def parse_netem(qdisc_text: str) -> dict[str, dict[str, str]]:
+    """Per interface, the netem impairments in `tc qdisc show` output, in the
+    units `containerlab tools netem set` takes (delay/jitter with a time
+    unit, loss/corruption in percent, rate in kbit/s)."""
+    result: dict[str, dict[str, str]] = {}
+    for line in qdisc_text.splitlines():
+        match = _NETEM_LINE.match(line.strip())
+        if not match:
+            continue
+        rest = match.group("rest")
+        state: dict[str, str] = {}
+        if delay := re.search(rf"\bdelay ({_TIME})(?:\s+({_TIME}))?", rest):
+            state["delay"] = delay.group(1)
+            if delay.group(2):
+                state["jitter"] = delay.group(2)
+        if loss := re.search(r"\bloss (?:random )?([\d.]+)%", rest):
+            state["loss"] = loss.group(1)
+        if rate := re.search(r"\brate (\S+)", rest):
+            state["rate"] = _kbit(rate.group(1))
+        if corrupt := re.search(r"\bcorrupt ([\d.]+)%", rest):
+            state["corruption"] = corrupt.group(1)
+        result[match.group("dev")] = state
     return result
 
 
@@ -65,6 +113,28 @@ def _interface(container: str, raw: dict[str, Any], now: float) -> dict[str, Any
     }
 
 
+async def _transformed_vm_nodes(topology_path: str | Path, nodes_status: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Transformed nodes of the running libvirt VMs — their interface list is
+    what maps each VM NIC to a netlab interface name. Read only when the lab
+    has a running VM; ``runner.create`` is hash-cached and reads the deployed
+    snapshot while the lab is up."""
+    running_vms = [
+        name
+        for name, info in nodes_status.items()
+        if isinstance(info, dict)
+        and info.get("provider") == "libvirt"
+        and runner.normalize_node_state(info.get("status")) == "running"
+    ]
+    if not running_vms:
+        return {}
+    try:
+        transformed = (await runner.create(topology_path))["snapshot"]
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return {}
+    nodes = transformed.get("nodes") if isinstance(transformed.get("nodes"), dict) else {}
+    return {name: nodes[name] for name in running_vms if isinstance(nodes.get(name), dict)}
+
+
 async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, Any]]:
     status = await runner.status_for(topology_path)
     lab = status if isinstance(status, dict) and "nodes" in status else {}
@@ -72,6 +142,7 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
     if not isinstance(nodes_status, dict):
         return []
     preferred_runtime = clab_runtime(topo)
+    vm_nodes = await _transformed_vm_nodes(topology_path, nodes_status)
 
     async def one(node_name: str, info: dict[str, Any]) -> dict[str, Any]:
         provider_name = str(info.get("provider_name") or node_name)
@@ -79,8 +150,12 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
         # the interface probe below both compare against "running".
         state = runner.normalize_node_state(info.get("status"))
         raw_interfaces: list[dict[str, Any]] = []
+        netem: dict[str, dict[str, str]] = {}
         if info.get("provider") == "clab" and state == "running":
-            raw_interfaces = await runner.container_interfaces(provider_name, preferred_runtime)
+            raw_interfaces, qdisc_text = await runner.container_link_snapshot(provider_name, preferred_runtime)
+            netem = parse_netem(qdisc_text)
+        elif info.get("provider") == "libvirt" and state == "running" and node_name in vm_nodes:
+            raw_interfaces = await libvirt.runtime_interfaces(provider_name, vm_nodes[node_name])
         now = time.monotonic()
         source_node = topo.node(node_name)
         return {
@@ -92,7 +167,11 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
             "image": str(info.get("image") or ""),
             "ipv4Address": str(info.get("mgmt") or ""),
             "ipv6Address": "",
-            "interfaces": [_interface(provider_name, item, now) for item in raw_interfaces],
+            "provider": str(info.get("provider") or ""),
+            "interfaces": [
+                {**_interface(provider_name, item, now), "netemState": netem.get(str(item.get("ifname") or ""))}
+                for item in raw_interfaces
+            ],
         }
 
     return await asyncio.gather(

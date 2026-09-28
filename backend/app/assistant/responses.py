@@ -1,4 +1,4 @@
-"""Response models for the assistant API.
+"""Response models for the AI agents API (MCP connection + proposals).
 
 Declared as Pydantic models so they land in the OpenAPI schema and the frontend
 can consume generated types (``npm run gen:api``) instead of hand-rolled shapes.
@@ -11,17 +11,6 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-class AssistantProvider(BaseModel):
-    id: str
-    name: str
-    available: bool
-    version: str | None = None
-    note: str | None = None
-    configurable: bool = False
-    takesModel: bool = False
-    apiKeyUrl: str | None = None
-
-
 class AssistantMcpInfo(BaseModel):
     """Everything a user needs to attach their own agent to this lab."""
 
@@ -31,31 +20,21 @@ class AssistantMcpInfo(BaseModel):
     clientConfig: str = ""
 
 
+class AssistantHarness(BaseModel):
+    """An agent CLI netlab-ui can start in a terminal tab, pre-connected over MCP."""
+
+    id: str
+    name: str
+    available: bool
+    homepage: str = ""
+
+
 class AssistantCapabilities(BaseModel):
     enabled: bool
-    providers: list[AssistantProvider] = []
-    modes: list[str] = ["ask", "plan", "build", "tutor"]
     mcp: AssistantMcpInfo | None = None
-
-
-class AssistantChatInfo(BaseModel):
-    chatId: str
-    providerId: str
-    sessionId: str
-    mode: str
-    model: str = ""
-    busy: bool = False
-    title: str = "New conversation"
-    createdAt: float = 0.0
-
-
-class AssistantHistory(BaseModel):
-    chat: AssistantChatInfo
-    events: list[dict[str, Any]] = []
-
-
-class AssistantChatList(BaseModel):
-    chats: list[AssistantChatInfo] = []
+    harnesses: list[AssistantHarness] = []
+    # False when agent terminals are refused for this client (remote, no login).
+    harnessesAllowed: bool = True
 
 
 class AssistantProposal(BaseModel):
@@ -84,24 +63,3 @@ class AssistantProposalResult(BaseModel):
 
 class AssistantAck(BaseModel):
     ok: bool = True
-
-
-class AssistantModelList(BaseModel):
-    """Model ids a provider advertises, for the settings picker."""
-
-    models: list[str] = []
-
-
-class AssistantProviderSettings(BaseModel):
-    """A provider's stored settings, as shown/edited in the UI.
-
-    ``hasApiKey`` says whether a key is configured without ever sending the
-    key itself back down; ``apiKey`` only appears in the PUT request body.
-    ``baseUrl`` is not a secret (it names an endpoint), so it round-trips
-    directly — it is only meaningful for OpenAI-compatible providers.
-    """
-
-    hasApiKey: bool = False
-    model: str = ""
-    baseUrl: str = ""
-    envLocked: list[str] = []

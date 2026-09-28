@@ -1,6 +1,7 @@
 import type React from "react";
 import type { LabFileEntry } from "../api/client";
 import type { RunningLabsStatus } from "../hooks/useAppData";
+import { providerLabel } from "../netlabProviders";
 import { runningLabMatches, runningLabTopologyPath } from "./runningMatch";
 
 /** clab-ui's explorer sidebar tree node shape — a superset of fields across
@@ -79,7 +80,10 @@ function ownershipText(
   file: LabFileEntry | undefined,
   label: string
 ): { badges: string; ownerLine: string; label: string } {
-  const badges = [labInfo.owner ? `by ${labInfo.owner}` : "", file?.shared ? "shared" : ""].filter(Boolean).join(" · ");
+  const until = labInfo.expiresAt
+    ? `until ${new Date(labInfo.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  const badges = [labInfo.owner ? `by ${labInfo.owner}` : "", file?.shared ? "shared" : "", until].filter(Boolean).join(" · ");
   const since = labInfo.ownerSince ? ` (${labInfo.ownerSince})` : "";
   return {
     badges,
@@ -112,10 +116,11 @@ function buildRunningLabNode(
   };
   const nodes: ExplorerTreeNode[] = Object.entries(labInfo.nodes || {}).map(([nodeName, nodeInfo]) => {
     const nodeStatus = nodeInfo?.status || "unknown";
+    const provider = providerLabel(nodeInfo?.provider);
     return {
       id: `running-container:local:${nodeName}`,
       label: nodeName,
-      description: nodeStatus,
+      description: provider ? `${nodeStatus} · ${provider}` : nodeStatus,
       contextValue: "containerlabContainer",
       endpointId: "local",
       collapsibleState: 0,

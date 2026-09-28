@@ -118,7 +118,7 @@ export function ExampleLabsDialog({ open, onClose, onClone }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={cloning !== null}>Close</Button>
+        <Button variant="text" onClick={onClose} disabled={cloning !== null}>Close</Button>
       </DialogActions>
     </Dialog>
   );

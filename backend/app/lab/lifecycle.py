@@ -36,8 +36,8 @@ from app.contract.responses import (
     VersionResult,
 )
 from app.lab import common
-from services import owners
-from services.netlab import deploy_diff, deployment, multilab, runner
+from services import lab_limits, owners
+from services.netlab import config_snapshots, deploy_diff, deployment, libvirt, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
@@ -124,13 +124,14 @@ async def lab_instance_force_cleanup_stream(instance_id: str):
 @router.post("/up", response_model=CommandResult)
 async def lab_up(body: LabAction, request: Request):
     path = common.session_path(body.sessionId)
+    await _enforce_quota(request_user(request), path)
     try:
         res = await runner.up(path)
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
     if res.code == 0:
         deploy_diff.record(path)
-        owners.record(Path(path).parent, request_user(request))
+        owners.record(Path(path).parent, request_user(request), lab_limits.lease_expiry())
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
 
 
@@ -190,24 +191,46 @@ async def _running_node_info(session_id: str, node: str) -> tuple[str, dict[str,
     return path, info
 
 
-def _require_clab_node(node: str, info: dict[str, Any]) -> str:
+def _require_clab_node(node: str, info: dict[str, Any], what: str = "this action") -> str:
     """Container name for a clab-provided node; 409 for other providers."""
     if info.get("provider") != "clab":
-        raise HTTPException(
-            409,
-            f"Node {node!r} runs under provider {info.get('provider')!r}; "
-            "this action is only supported for containerlab nodes",
-        )
+        raise HTTPException(409, _provider_limit(node, info, what))
     return str(info.get("provider_name") or node)
+
+
+def _provider_limit(node: str, info: dict[str, Any], what: str) -> str:
+    """Why ``what`` can't be done on this node, in the user's terms."""
+    provider = str(info.get("provider") or "unknown")
+    if provider in {"external", "unmanaged"}:
+        return (
+            f"{node} is an external device: netlab configures it but doesn't control its power or links, "
+            f"so {what} isn't possible from here."
+        )
+    if provider == "libvirt":
+        return f"{node} is a libvirt VM: {what} is available for containerlab nodes only."
+    return f"{node} runs under the {provider} provider: {what} is available for containerlab nodes only."
+
+
+async def _vm_target(path: str, node: str, info: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """(libvirt domain, transformed node) for a running VM. The transformed
+    node comes from the deployed snapshot (``netlab inspect`` while locked),
+    which is what the running VM was built from."""
+    try:
+        transformed = (await runner.create(path))["snapshot"]
+    except (runner.NetlabError, runner.NetlabNotInstalled) as exc:
+        raise HTTPException(409, f"Cannot read the deployed lab: {exc}") from exc
+    lab_name = str(transformed.get("name") or Path(path).parent.name)
+    domain = str(info.get("provider_name") or libvirt.domain_name(lab_name, node))
+    return domain, dict((transformed.get("nodes") or {}).get(node) or {})
 
 
 @router.post("/node-action", response_model=CommandResult)
 async def lab_node_action(body: NodeAction):
     """Act on a single lab node.
 
-    ``start``/``stop``/``restart``/``pause``/``unpause`` drive the node's
-    container via the configured runtime (with a `containerlab apply`
-    reconcile on containerlab 0.77+ so links come back after start/restart).
+    ``start``/``stop``/``restart`` use `containerlab <action> --node` on
+    containerlab 0.77+ (links are parked and restored, not torn down);
+    ``pause``/``unpause`` and older releases drive the container runtime.
     ``save`` collects the node's device configuration via
     ``netlab collect -l <node>``."""
     if body.action != "save" and body.action not in runner.NODE_ACTIONS:
@@ -218,14 +241,31 @@ async def lab_node_action(body: NodeAction):
         return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
     from app.contract import commands
 
-    container = _require_clab_node(body.node, info)
+    if info.get("provider") == "libvirt":
+        domain, _node = await _vm_target(path, body.node, info)
+        result = await libvirt.node_action(domain, body.action)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+    container = _require_clab_node(body.node, info, f"{body.action} of a single node")
     topo = commands.load_topology(path)
     result = await runner.container_action(
         container,
         body.action,
         preferred_runtime=runtime_state.clab_runtime(topo),
         lab_dir=Path(path).parent,
+        node_name=body.node,
     )
+    if result.code == 0 and body.action in {"start", "restart"}:
+        # netlab configures devices after they boot (Ansible), and a fresh
+        # container start comes back unconfigured: push this node's config again.
+        initial = await runner.run_command(["initial", "-l", body.node], cwd=Path(path).parent)
+        if initial.code != 0:
+            return {
+                "code": initial.code,
+                "stdout": result.stdout + initial.stdout,
+                "stderr": f"{body.action} succeeded, but netlab initial -l {body.node} failed:\n"
+                + (initial.stderr or initial.stdout),
+            }
+        return {"code": 0, "stdout": result.stdout + initial.stdout, "stderr": result.stderr + initial.stderr}
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 
@@ -243,9 +283,15 @@ class LinkImpairment(BaseModel):
 @router.post("/link-impairment", response_model=CommandResult)
 async def lab_link_impairment(body: LinkImpairment):
     """Apply (or clear, when every field is empty) netem impairments on one
-    node interface via `containerlab tools netem set`."""
-    _, info = await _running_node_info(body.sessionId, body.node)
-    container = _require_clab_node(body.node, info)
+    node interface: `containerlab tools netem set` on containers, `netlab tc`
+    on libvirt VMs (LAN links only — p2p VM links have no host interface)."""
+    path, info = await _running_node_info(body.sessionId, body.node)
+    if info.get("provider") == "libvirt":
+        domain, vm_node = await _vm_target(path, body.node, info)
+        fields = body.model_dump(include={"delay", "jitter", "loss", "rate", "corruption"})
+        result = await libvirt.set_impairment(path, domain, body.node, vm_node, body.interface, **fields)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+    container = _require_clab_node(body.node, info, "link impairment")
     result = await runner.netem_set(
         container,
         body.interface,
@@ -255,7 +301,112 @@ async def lab_link_impairment(body: LinkImpairment):
         rate=body.rate,
         corruption=body.corruption,
     )
+    stderr = result.stderr
+    if result.code and "qdisc kind is unknown" in stderr:
+        stderr = (
+            "the host kernel has no netem support — load it on the lab host with "
+            "`sudo modprobe sch_netem` and try again"
+        )
+    return {"code": result.code, "stdout": result.stdout, "stderr": stderr}
+
+
+class LinkStateRequest(BaseModel):
+    sessionId: str
+    node: str
+    interface: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:/@-]*$", max_length=64)
+    up: bool
+
+
+@router.post("/link-state", response_model=CommandResult)
+async def lab_link_state(body: LinkStateRequest):
+    """Take one node interface down or bring it back up — the "cable pulled"
+    fault. The peer sees carrier loss, so routing protocols react as they
+    would to a real link failure."""
+    path, info = await _running_node_info(body.sessionId, body.node)
+    if info.get("provider") == "libvirt":
+        domain, vm_node = await _vm_target(path, body.node, info)
+        result = await libvirt.set_link(domain, vm_node, body.interface, body.up)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+    container = _require_clab_node(body.node, info, "taking a link down")
+    from app.contract import commands
+
+    result = await runner.set_interface_state(
+        container,
+        body.interface,
+        body.up,
+        preferred_runtime=runtime_state.clab_runtime(commands.load_topology(path)),
+    )
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
+
+
+async def _enforce_quota(user: str | None, path: str) -> None:
+    if lab_limits.max_labs_per_user() is None:
+        return
+    try:
+        status = await runner.status_cached(max_age=2.0)
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        return
+    try:
+        lab_limits.check_quota(user, status if isinstance(status, dict) else {}, Path(path).parent)
+    except lab_limits.QuotaExceeded as exc:
+        raise HTTPException(429, str(exc)) from exc
+
+
+class LabLimits(BaseModel):
+    labHours: float | None = None
+    maxLabsPerUser: int | None = None
+    user: str | None = None
+    admin: bool = False
+
+
+class LeaseResult(BaseModel):
+    expiresAt: str | None = None
+
+
+@router.get("/limits", response_model=LabLimits)
+def lab_limits_info(request: Request):
+    user = request_user(request)
+    return {
+        "labHours": lab_limits.lab_hours(),
+        "maxLabsPerUser": lab_limits.max_labs_per_user(),
+        "user": user,
+        "admin": bool(user and user in lab_limits.admins()),
+    }
+
+
+@router.get("/lease", response_model=LeaseResult)
+def get_lease(sessionId: str):
+    """When the lab behind the session will be shut down (null: never)."""
+    entry = owners.entries().get(str(Path(common.session_path(sessionId)).parent.resolve()))
+    return {"expiresAt": entry.get("expiresAt") if isinstance(entry, dict) else None}
+
+
+@router.post("/lease/extend", response_model=LeaseResult)
+def extend_lease(body: LabAction):
+    """Give a running lab another full lease (NETLAB_UI_LAB_HOURS)."""
+    if lab_limits.lab_hours() is None:
+        raise HTTPException(400, "labs have no time limit on this server")
+    lab_dir = Path(common.session_path(body.sessionId)).parent
+    if not owners.update(lab_dir):
+        raise HTTPException(404, "this lab was not deployed through netlab-ui, so it has no lease")
+    return {"expiresAt": lab_limits.extend(lab_dir)}
+
+
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
+def _background(coro: Any) -> None:
+    """Run ``coro`` after the response; failures are logged, never raised."""
+
+    async def guarded():
+        try:
+            await coro
+        except Exception:  # a failed snapshot must not surface anywhere
+            logger.exception("background task failed")
+
+    task = asyncio.create_task(guarded())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 class LifecycleStreamAction(BaseModel):
@@ -299,6 +450,8 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                 runner.lifecycle_argv("up", path, multilab_id=instance),
             ]
     args = steps[0][0]
+    if body.action == "up":
+        await _enforce_quota(user, path)
 
     async def gen():
         # Clean raw netlab output for the plain-text modal: strip ANSI, fold
@@ -340,7 +493,17 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                         done_payload["progress"] = tracker.payload(delta=True)
                     if body.action in {"up", "restart"} and int(line) == 0:
                         deploy_diff.record(path)
-                        owners.record(Path(path).parent, user)
+                        owners.record(Path(path).parent, user, lab_limits.lease_expiry())
+                        # The UI offers "Run netlab validate" only when there is
+                        # something to run (netlab validate exits 1 otherwise).
+                        from app.contract import commands
+
+                        with contextlib.suppress(Exception):
+                            validate = commands.load_topology(path).attrs.get("validate")
+                            done_payload["hasValidationTests"] = bool(validate)
+                    if body.action in {"up", "restart", "initial"} and int(line) == 0:
+                        # Baseline for the Configs dialog's drift view.
+                        _background(config_snapshots.take_snapshot(path, f"after netlab {body.action}"))
                     if body.action == "down" and int(line) == 0:
                         owners.forget(Path(path).parent)
                     if body.action == "validate":

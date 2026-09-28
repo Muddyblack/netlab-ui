@@ -20,7 +20,7 @@ backend/
     main.py     # FastAPI app entrypoint
   services/
     annotations/
-    assistant/  # Optional AI assistant (see below) — self-contained
+    assistant/  # MCP server for the user's own AI agent + change proposals — self-contained
     docs/
     model/
     netlab/     # Netlab-specific service logic

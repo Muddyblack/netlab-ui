@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import time
@@ -72,7 +73,7 @@ class CommandResult:
     stderr: str
 
 
-def _child_env() -> dict[str, str]:
+def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     """Environment for netlab child processes.
 
     ``PYTHONUNBUFFERED=1`` is essential for live output: netlab (and the
@@ -85,7 +86,32 @@ def _child_env() -> dict[str, str]:
     # Prepend the resolved netlab's bin/ so a netlab living in its own venv finds
     # that venv's ansible-playbook / containerlab rather than a host copy.
     env["PATH"] = location.child_path()
+    # netlab's packaged clab provider invokes `sudo -E containerlab`. The app
+    # has no terminal in which to enter a sudo password. In a privileged image
+    # (root) or with a root-owned setuid wrapper, run the provider directly.
+    # netlab maps NETLAB_* variables onto defaults.* before creating its
+    # snapshot, so both `up` and the later `down` use the same commands.
+    clab = shutil.which("containerlab", path=env["PATH"])
+    if clab and _can_use_containerlab_directly(clab):
+        env.setdefault("NETLAB_PROVIDERS_CLAB_START", "containerlab deploy --reconfigure -t clab.yml")
+        env.setdefault("NETLAB_PROVIDERS_CLAB_STOP", "containerlab destroy --cleanup -t clab.yml")
+    # netlab's Ansible playbooks locate the lab through $PWD
+    # (lookup('env','PWD'): collected configs, node_files). A shell sets PWD
+    # on cd; a subprocess cwd doesn't, so it would still name the backend's
+    # own directory.
+    if cwd is not None:
+        env["PWD"] = str(Path(cwd).resolve())
     return env
+
+
+def _can_use_containerlab_directly(path: str) -> bool:
+    if os.geteuid() == 0:
+        return True
+    try:
+        info = os.stat(path)
+    except OSError:
+        return False
+    return info.st_uid == 0 and bool(info.st_mode & stat.S_ISUID) and os.access(path, os.X_OK)
 
 
 async def _spawn(
@@ -109,7 +135,7 @@ async def _spawn(
             netlab_bin,
             *args,
             cwd=str(cwd) if cwd else None,
-            env=_child_env() | (env_extra or {}),
+            env=_child_env(cwd) | (env_extra or {}),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE if pipe_stdin else asyncio.subprocess.DEVNULL,
@@ -145,17 +171,25 @@ async def spawn_command(args: list[str], cwd: Path | None = None) -> asyncio.sub
     return await _spawn(args, cwd)
 
 
-async def run_streaming(args: list[str], cwd: Path | None = None) -> AsyncIterator[tuple[str, str]]:
+async def run_streaming(
+    args: list[str], cwd: Path | None = None, *, stdin_text: str | None = None
+) -> AsyncIterator[tuple[str, str]]:
     """Yield ``(stream, line)`` tuples in real time where stream is ``stdout``
     or ``stderr``, followed by a final ``("exit", <code>)`` tuple with the
-    process exit code as a string.
+    process exit code as a string. ``stdin_text`` answers prompts the command
+    may show (stdin is closed after it).
 
     Raises :class:`NetlabNotInstalled` if the binary can't be found.
     """
     # Lifecycle commands launch provider/Ansible children; _spawn puts every
     # command in its own session, so stream cancellation can stop the whole
     # command tree via killpg instead of orphaning those children.
-    proc = await _spawn(args, cwd)
+    proc = await _spawn(args, cwd, pipe_stdin=stdin_text is not None)
+    if stdin_text is not None and proc.stdin is not None:
+        proc.stdin.write(stdin_text.encode())
+        with contextlib.suppress(OSError):
+            await proc.stdin.drain()
+        proc.stdin.close()
 
     _SENTINEL = object()
     queue: asyncio.Queue = asyncio.Queue()
@@ -381,18 +415,29 @@ _lab_status_locks: dict[str, asyncio.Lock] = {}
 # refreshed from a single `docker ps`.
 _STATUS_FULL_TTL = 30.0
 _status_base: tuple[Any, float, Any] | None = None
+# Bumped by _clear_status_cache: a status run that started before a lifecycle
+# command finished must not write its (pre-command) result back into the cache.
+_status_generation = 0
 
 
-def _status_fingerprint(result: Any) -> Any:
-    def mtime(path: Path) -> float | None:
-        try:
-            return path.stat().st_mtime
-        except OSError:
-            return None
+def _mtime(path: Path) -> float | None:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return None
 
-    registry = mtime(Path("~/.netlab/status.yaml").expanduser())
+
+def _registry_mtime() -> float | None:
+    return _mtime(Path("~/.netlab/status.yaml").expanduser())
+
+
+def _status_fingerprint(result: Any, registry: float | None = None) -> Any:
+    """What must stay unchanged for ``result`` to be reused. Pass ``registry``
+    as read *before* the CLI ran, so a change during the run invalidates it."""
+    if registry is None:
+        registry = _registry_mtime()
     dirs = sorted(str(v.get("dir")) for v in (result or {}).values() if isinstance(v, dict) and v.get("dir"))
-    return (registry, tuple((d, mtime(Path(d) / "netlab.snapshot.pickle")) for d in dirs))
+    return (registry, tuple((d, _mtime(Path(d) / "netlab.snapshot.pickle")) for d in dirs))
 
 
 async def _container_states() -> dict[str, str] | None:
@@ -449,13 +494,16 @@ async def status() -> Any:
         result = _with_container_states(base[2], states)
         _status_cache = (time.monotonic(), result)
         return result
+    generation = _status_generation
+    registry = _registry_mtime()
     base_result = await _full_status()
-    _status_base = (_status_fingerprint(base_result), time.monotonic(), base_result)
     # Same container view on both paths (netlab omits exited containers'
     # state; docker reports it), so nodes don't flip every _STATUS_FULL_TTL.
     states = await _container_states()
     result = _with_container_states(base_result, states) if states is not None else base_result
-    _status_cache = (time.monotonic(), result)
+    if generation == _status_generation:
+        _status_base = (_status_fingerprint(base_result, registry), time.monotonic(), base_result)
+        _status_cache = (time.monotonic(), result)
     return result
 
 
@@ -493,9 +541,10 @@ async def _full_status() -> Any:
 
 
 def _clear_status_cache() -> None:
-    global _status_cache, _status_base
+    global _status_cache, _status_base, _status_generation
     _status_cache = None
     _status_base = None
+    _status_generation += 1
     _lab_status_cache.clear()
 
 
@@ -774,21 +823,50 @@ async def _clab_supports_apply() -> bool:
     return _clab_apply_supported
 
 
+_clab_node_lifecycle_supported: bool | None = None
+
+
+async def _clab_supports_node_lifecycle() -> bool:
+    """containerlab 0.77+ has `start`/`stop`/`restart --node`, which park a
+    node's dataplane interfaces while it is down and restore them on start."""
+    global _clab_node_lifecycle_supported
+    if _clab_node_lifecycle_supported is None:
+        probe = await _run_external("containerlab", ["stop", "--help"])
+        _clab_node_lifecycle_supported = probe.code == 0 and "--node" in probe.stdout + probe.stderr
+    return _clab_node_lifecycle_supported
+
+
 async def container_action(
     container_name: str,
     action: str,
     preferred_runtime: str = "",
     lab_dir: Path | None = None,
+    node_name: str = "",
 ) -> CommandResult:
-    """Start/stop/restart/pause/unpause one lab container via docker/podman.
+    """Start/stop/restart/pause/unpause one lab node.
 
-    After a start or restart, reconcile the lab with `containerlab apply`
-    (0.77+) when available so inter-node veth links are re-established; on
-    older containerlab releases the action still runs, but relinking may
-    require a redeploy.
+    start/stop/restart go through `containerlab <action> --node` (0.77+) when
+    the lab has a clab.yml, so the node's links are parked and restored
+    instead of torn down. Otherwise — pause/unpause, older containerlab, no
+    clab.yml — the container runtime acts directly, and a start/restart is
+    followed by `containerlab apply` (when available) to re-create the links.
     """
     if action not in NODE_ACTIONS:
         return CommandResult(2, "", f"Unsupported node action {action!r}")
+    clab_topology = (lab_dir / "clab.yml") if lab_dir else None
+    if (
+        node_name
+        and action in {"start", "stop", "restart"}
+        and clab_topology
+        and clab_topology.is_file()
+        and await _clab_supports_node_lifecycle()
+    ):
+        args = [action, "-t", str(clab_topology), "--node", node_name]
+        if preferred_runtime:
+            args += ["--runtime", preferred_runtime]
+        result = await _run_external("containerlab", args)
+        _clear_status_cache()
+        return result
     runtime_bin = container_runtime_binary(preferred_runtime)
     if not runtime_bin:
         return CommandResult(127, "", "No docker/podman container runtime found on PATH")
@@ -800,7 +878,6 @@ async def container_action(
     _clear_status_cache()
     if result.code != 0 or action in {"stop", "pause", "unpause"}:
         return result
-    clab_topology = (lab_dir / "clab.yml") if lab_dir else None
     if clab_topology and clab_topology.is_file():
         if await _clab_supports_apply():
             reconcile = await _run_external("containerlab", ["apply", "-t", str(clab_topology)])
@@ -848,6 +925,67 @@ async def container_interfaces(container_name: str, preferred_runtime: str = "")
         return value if isinstance(value, list) else []
     except (FileNotFoundError, json.JSONDecodeError):
         return []
+
+
+_TC_MARKER = "__netlab_ui_tc__"
+
+
+async def container_link_snapshot(container_name: str, preferred_runtime: str = "") -> tuple[list[dict[str, Any]], str]:
+    """Interfaces (as :func:`container_interfaces`) plus the ``tc qdisc show``
+    text, read with one exec. Falls back to interfaces only when the image has
+    no ``sh``; the qdisc text is empty when it has no ``tc``."""
+    runtime_bin = container_runtime_binary(preferred_runtime)
+    if not runtime_bin:
+        return [], ""
+    script = f"ip -j -s link show && echo {_TC_MARKER} && (tc qdisc show 2>/dev/null || true)"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            runtime_bin,
+            "exec",
+            container_name,
+            "sh",
+            "-c",
+            script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+    except FileNotFoundError:
+        return [], ""
+    links_text, marker, qdisc_text = stdout.decode(errors="replace").partition(_TC_MARKER)
+    if proc.returncode != 0 or not marker:
+        return await container_interfaces(container_name, preferred_runtime), ""
+    try:
+        value = json.loads(links_text)
+    except json.JSONDecodeError:
+        return [], ""
+    return (value if isinstance(value, list) else []), qdisc_text
+
+
+async def set_interface_state(
+    container_name: str, interface: str, up: bool, preferred_runtime: str = ""
+) -> CommandResult:
+    """`ip link set <interface> up|down` inside a running container."""
+    runtime_bin = container_runtime_binary(preferred_runtime)
+    if not runtime_bin:
+        return CommandResult(code=127, stdout="", stderr="no container runtime (docker/podman) found")
+    proc = await asyncio.create_subprocess_exec(
+        runtime_bin,
+        "exec",
+        container_name,
+        "ip",
+        "link",
+        "set",
+        "dev",
+        interface,
+        "up" if up else "down",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate()
+    return CommandResult(
+        code=proc.returncode or 0, stdout=out.decode(errors="replace"), stderr=err.decode(errors="replace")
+    )
 
 
 async def docker_interfaces(container_name: str) -> list[dict[str, Any]]:

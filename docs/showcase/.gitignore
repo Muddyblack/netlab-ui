@@ -1,0 +1,11 @@
+.work/
+.cache/
+# Local video outputs and verification metadata; publish together outside Git.
+media/**/*.mp4
+media/manifest.json
+media/*/timing.json
+media/intro/
+media/outro/
+node_modules/
+package-lock.json
+narration/voices

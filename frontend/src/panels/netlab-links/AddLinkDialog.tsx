@@ -64,7 +64,7 @@ export function AddLinkDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="text" onClick={onClose} disabled={saving}>Cancel</Button>
         <Button variant="contained" onClick={onSave} disabled={saving || !canSave}>
           {saving ? <CircularProgress size={18} color="inherit" /> : "Add link"}
         </Button>

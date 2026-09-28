@@ -11,7 +11,7 @@ function ValidationSummaryAlert({ validationIssues, errors, warnings }: {
   warnings: ValidationIssue[];
 }) {
   if (validationIssues.length === 0) {
-    return <Alert severity="success" sx={{ mb: 2 }}>Current topology passed netlab validation.</Alert>;
+    return <Alert severity="success" variant="outlined" sx={{ mb: 2 }}>Current topology passed netlab validation.</Alert>;
   }
   return (
     <Alert severity={errors.length ? "error" : "warning"} icon={errors.length ? <ErrorOutlineIcon /> : <WarningAmberIcon />} sx={{ mb: 2 }}>
@@ -69,17 +69,27 @@ function DeployDiffBody({ diffView, diff }: { diffView: DiffViewKind; diff: Depl
 function InstanceConflictAlert({ plan }: { plan: DeployPlan | null | undefined }) {
   const conflict = plan?.conflict;
   if (!conflict) return null;
-  const other = conflict.name ? `${conflict.name} (${conflict.directory})` : conflict.directory;
+  const id = plan?.suggestedMultilabId;
+  const mono = { fontFamily: "monospace", fontSize: "0.8rem" };
   return (
-    <Alert severity="warning" sx={{ mb: 2 }}>
-      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
-        Lab instance “{conflict.instanceId}” is already running: {other}
+    <Alert severity="warning" variant="outlined" sx={{ mb: 2, "& .MuiAlert-message": { minWidth: 0, flex: 1 } }}>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        Another lab is already running as instance “{conflict.instanceId}”
       </Typography>
-      <Typography variant="body2">
-        {plan?.suggestedMultilabId != null
-          ? <>A plain <code>netlab up</code> would stop with “already running”. Deploy as parallel instance #{plan.suggestedMultilabId} (netlab’s multilab plugin: lab name <code>ml-{plan.suggestedMultilabId}</code>, management network <code>192.168.{plan.suggestedMultilabId}.0/24</code>) to run both at once, or shut the other lab down first.</>
+      <Typography variant="caption" color="text.secondary" sx={{ ...mono, display: "block", mt: 0.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={conflict.directory}>
+        {conflict.name ? `${conflict.name} · ` : ""}{conflict.directory}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        {id != null
+          ? <>A plain <code>netlab up</code> would stop. Run both side by side as parallel instance #{id}, or shut the other lab down first.</>
           : <>This topology sets <code>defaults.multilab.id</code> itself; change it to an unused id or shut the other lab down first.</>}
       </Typography>
+      {id != null && (
+        <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: "wrap", rowGap: 0.75 }}>
+          <Chip size="small" variant="outlined" label={<>lab name <Box component="span" sx={mono}>ml-{id}</Box></>} />
+          <Chip size="small" variant="outlined" label={<>management <Box component="span" sx={mono}>192.168.{id}.0/24</Box></>} />
+        </Stack>
+      )}
     </Alert>
   );
 }
@@ -104,7 +114,7 @@ export function DeployDiffDialog({ diff, validationIssues, labName, plan, onCanc
         <DeployDiffBody diffView={diffView} diff={diff} />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel}>Cancel</Button>
+        <Button variant="text" onClick={onCancel}>Cancel</Button>
         {plan?.suggestedMultilabId != null ? (
           <Button variant="contained" color={errors.length ? "error" : "primary"} onClick={() => onDeploy(plan.suggestedMultilabId ?? undefined)}>
             Deploy as parallel instance #{plan.suggestedMultilabId}
