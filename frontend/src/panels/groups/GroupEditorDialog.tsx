@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Autocomplete,
   Avatar,
@@ -18,11 +21,13 @@ import {
   Typography
 } from "@mui/material";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
-import { KeyValueList, PanelSection } from "@containerlab/clab-ui";
+import { KeyValueList } from "@containerlab/clab-ui";
 import { ModuleAttributeForms } from "../../components/module-editor/ModuleAttributeForms";
+import { ModulePicker } from "../../components/module-editor/ModulePicker";
 import type { GroupInfo, MemberOption } from "./types";
-import { MODULE_SECTIONS, STRUCTURED_MODULES, attrsToStrings, groupContains, isStructuredAttribute, parseAttributeValue } from "./helpers";
+import { STRUCTURED_MODULES, attrsToStrings, groupContains, isStructuredAttribute, parseAttributeValue } from "./helpers";
 
 const GROUP_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
@@ -61,6 +66,31 @@ function useMemberOptions(nodes: string[], groups: GroupInfo[], draftName: strin
   return { options, optionByName };
 }
 
+/** Plugin settings and less common attributes, folded away until there are some. */
+function OtherAttributes({ attrs, onChange }: { attrs: Record<string, unknown>; onChange: (attrs: Record<string, unknown>) => void }) {
+  const items = attrsToStrings(Object.fromEntries(Object.entries(attrs).filter(([key]) => !isStructuredAttribute(key))));
+  const count = Object.keys(items).length;
+  return (
+    <Accordion disableGutters elevation={0} defaultExpanded={count > 0} sx={{ bgcolor: "transparent", "&:before": { display: "none" }, border: 1, borderColor: "divider", borderRadius: 1 }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+        <Typography variant="subtitle2">Other attributes{count ? ` · ${count}` : ""}</Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Plugin settings and less common netlab attributes.</Typography>
+        <KeyValueList
+          items={items}
+          onChange={(next) => onChange({
+            ...Object.fromEntries(Object.entries(attrs).filter(([key]) => isStructuredAttribute(key))),
+            ...Object.fromEntries(Object.entries(next).filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), parseAttributeValue(value)]))
+          })}
+          keyPlaceholder="Attribute, e.g. evpn.transit_vni"
+          valuePlaceholder="Value (text, number, true/false, or JSON)"
+        />
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
 export function GroupEditorDialog({
   open,
   original,
@@ -86,7 +116,6 @@ export function GroupEditorDialog({
   const [draft, setDraft] = useGroupDraft(open, original, selectedNodes);
   const { options, optionByName } = useMemberOptions(nodes, groups, draft.name);
   const selectedOptions = draft.members.map((name) => optionByName.get(name) ?? { name, kind: "Node" as const });
-  const attributeStrings = attrsToStrings(Object.fromEntries(Object.entries(draft.attrs).filter(([key]) => !isStructuredAttribute(key))));
   const nameTaken = !editing && groups.some((group) => group.name === draft.name.trim());
   const invalidName = isInvalidGroupName(draft.name.trim());
   const canSave = !saving && Boolean(draft.name.trim()) && !nameTaken && !invalidName;
@@ -114,7 +143,7 @@ export function GroupEditorDialog({
           </Box>
         </Stack>
       </DialogTitle>
-      <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2.25, py: 2.25 }}>
+      <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 2.25 }}>
         {error && <Alert severity="error">{error}</Alert>}
 
         <TextField
@@ -129,12 +158,13 @@ export function GroupEditorDialog({
           fullWidth
         />
 
-        <PanelSection title={`Members · ${draft.members.length}`} withTopDivider={false} bodySx={{ px: 0, pt: 1 }}>
-          <Stack direction="row" spacing={0.75} sx={{ mb: 1, flexWrap: "wrap", rowGap: 0.75 }}>
-            <Button size="small" variant="outlined" disabled={selectedNodes.length === 0} onClick={() => setDraft((current) => ({ ...current, members: [...selectedNodes] }))}>
-              Use canvas selection{selectedNodes.length ? ` (${selectedNodes.length})` : ""}
+        <Box>
+          <Stack direction="row" alignItems="center" sx={{ mb: 0.75 }}>
+            <Typography variant="subtitle2" sx={{ flex: 1 }}>Members{draft.members.length ? ` · ${draft.members.length}` : ""}</Typography>
+            <Button size="small" variant="text" disabled={selectedNodes.length === 0} onClick={() => setDraft((current) => ({ ...current, members: [...selectedNodes] }))}>
+              Canvas selection{selectedNodes.length ? ` (${selectedNodes.length})` : ""}
             </Button>
-            <Button size="small" onClick={() => setDraft((current) => ({ ...current, members: [...nodes] }))}>All nodes</Button>
+            <Button size="small" variant="text" onClick={() => setDraft((current) => ({ ...current, members: [...nodes] }))}>All</Button>
             <Button size="small" variant="text" disabled={draft.members.length === 0} onClick={() => setDraft((current) => ({ ...current, members: [] }))}>Clear</Button>
           </Stack>
           <Autocomplete
@@ -165,45 +195,22 @@ export function GroupEditorDialog({
             ))}
             renderInput={(params) => <TextField {...params} placeholder={draft.members.length ? "Add more…" : "Choose nodes or groups…"} />}
           />
-        </PanelSection>
+        </Box>
 
-        <PanelSection title={`Modules · ${draft.module.length}`} bodySx={{ px: 0, pt: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Click modules to enable them for every member.</Typography>
-          <Stack spacing={1.25}>
-            {MODULE_SECTIONS.map((section) => (
-              <Box key={section.label}>
-                <Typography variant="overline" color="text.secondary" sx={{ display: "block", lineHeight: 1.7 }}>{section.label}</Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.65 }}>
-                  {section.modules.map((module) => (
-                    <Chip key={module} size="small" clickable color={draft.module.includes(module) ? "primary" : "default"} variant={draft.module.includes(module) ? "filled" : "outlined"} label={module} onClick={() => toggleModule(module)} />
-                  ))}
-                </Box>
-              </Box>
-            ))}
-          </Stack>
-        </PanelSection>
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 0.25 }}>Modules{draft.module.length ? ` · ${draft.module.length}` : ""}</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.25 }}>Enabled for every member.</Typography>
+          <ModulePicker selected={draft.module} onToggle={toggleModule} onClear={() => setDraft((current) => ({ ...current, module: [] }))} />
+        </Box>
 
         {draft.module.some((module) => STRUCTURED_MODULES.has(module)) && (
-          <PanelSection title="Module settings" bodySx={{ px: 0, pt: 1 }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Module settings</Typography>
             <ModuleAttributeForms modules={draft.module} attrs={draft.attrs} onChange={(attrs) => setDraft((current) => ({ ...current, attrs }))} />
-          </PanelSection>
+          </Box>
         )}
 
-        <PanelSection title={`Other attributes · ${Object.keys(attributeStrings).length}`} bodySx={{ px: 0, pt: 1 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Use this for plugin settings and less common netlab attributes.</Typography>
-          <KeyValueList
-            items={attributeStrings}
-            onChange={(items) => setDraft((current) => ({
-              ...current,
-              attrs: {
-                ...Object.fromEntries(Object.entries(current.attrs).filter(([key]) => isStructuredAttribute(key))),
-                ...Object.fromEntries(Object.entries(items).filter(([key]) => key.trim()).map(([key, value]) => [key.trim(), parseAttributeValue(value)]))
-              }
-            }))}
-            keyPlaceholder="Attribute, e.g. evpn.transit_vni"
-            valuePlaceholder="Value (text, number, true/false, or JSON)"
-          />
-        </PanelSection>
+        <OtherAttributes attrs={draft.attrs} onChange={(attrs) => setDraft((current) => ({ ...current, attrs }))} />
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5 }}>
         <Button variant="text" onClick={onClose} disabled={saving}>Cancel</Button>
