@@ -159,6 +159,30 @@ def test_failed_transform_is_reported_not_silently_swapped(tmp_path, monkeypatch
     assert any(i["severity"] == "error" for i in snap["validationIssues"])
 
 
+def test_empty_lab_is_not_reported_as_a_failed_transform(tmp_path, monkeypatch):
+    """netlab refuses a topology without nodes. That is a new lab's normal
+    state, not something to toast about."""
+    topology_path = tmp_path / "lab.yml"
+    topology_path.write_text("name: t\nnodes:\nlinks:\n")
+    topo = serialize.from_yaml(topology_path.read_text())
+
+    async def _empty(*_a, **_kw):
+        raise snapshot.runner.NetlabError(
+            ["netlab", "create"], 1, "MissingValue in topology: Required topology element 'nodes' is missing or empty"
+        )
+
+    _install_fake_netlab(monkeypatch, _empty)
+
+    async def _run():
+        await snapshot.build(str(topology_path), topo, 0)
+        await asyncio.gather(*snapshot._transform_tasks.values(), return_exceptions=True)
+        return await snapshot.build(str(topology_path), topo, 0)
+
+    snap = asyncio.run(_run())
+    assert snap["projection"]["error"] is None
+    assert not any(i["severity"] == "error" for i in snap["validationIssues"])
+
+
 def test_successful_transform_clears_a_previous_error(tmp_path, monkeypatch):
     topology_path = tmp_path / "lab.yml"
     topology_path.write_text("name: t\nnodes:\n  r1:\n    device: frr\n")
