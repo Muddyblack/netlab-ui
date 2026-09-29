@@ -230,13 +230,12 @@ export function ReportGallery({ open, sessionId, onClose, onSelectObjects, theme
     <Dialog
       open={open}
       onClose={onClose}
-      aria-label="Reports"
       hideBackdrop
       disableEnforceFocus
       disableScrollLock
       // Not a modal: the canvas beside it stays live.
       sx={{ pointerEvents: "none", "& .MuiDialog-container": { justifyContent: "flex-start", alignItems: "stretch" } }}
-      slotProps={{ paper: { sx: { pointerEvents: "auto", m: 1.5, mt: 8, width: "min(680px, 52vw)", maxWidth: "none", height: "auto", maxHeight: "none", flex: "0 0 auto", boxShadow: 8 } } }}
+      slotProps={{ paper: { "aria-label": "Reports", sx: { pointerEvents: "auto", m: 1.5, mt: 8, width: "min(680px, 52vw)", maxWidth: "none", height: "auto", maxHeight: "none", flex: "0 0 auto", boxShadow: 8 } } }}
     >
       <Stack spacing={1.5} sx={{ p: 2, height: "100%", minHeight: 0 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
