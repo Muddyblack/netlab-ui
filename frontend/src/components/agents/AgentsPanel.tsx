@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Box, Button, Collapse, IconButton, Link, MenuItem, Select, Stack, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, Link, MenuItem, Select, Stack, Tooltip, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
 
 import { api, type AssistantCapabilities, type AssistantProposal } from "../../api/client";
@@ -143,40 +142,27 @@ function Proposals({ sessionId, onApplied }: { sessionId: string; onApplied: () 
   );
 }
 
-/** Setup for any MCP tool, folded away until asked for. */
+/** Setup for any MCP tool. */
 function ConnectTool({ mcp }: { mcp: McpInfo }) {
-  const [open, setOpen] = useState(true);
   const [client, setClient] = useState("claude");
   const snippets = clientSnippets(mcp);
   const snippet = snippets.find((item) => item.id === client) ?? snippets[0];
   return (
-    <Box>
-      <Button
-        variant="text"
-        size="small"
-        onClick={() => setOpen((value) => !value)}
-        endIcon={<ExpandMoreIcon sx={{ transition: "transform .15s", transform: open ? "rotate(180deg)" : "none" }} />}
-        sx={{ px: 0, color: "text.secondary", textTransform: "none", fontWeight: 600 }}
-      >
-        Connect another tool
-      </Button>
-      <Collapse in={open} unmountOnExit>
-        <Stack spacing={1} sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Select size="small" value={snippet.id} onChange={(event) => setClient(event.target.value)} sx={{ minWidth: 150, fontSize: "0.85rem" }}>
-              {snippets.map((item) => <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>)}
-            </Select>
-            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: snippet.where.includes("/") ? "monospace" : undefined }}>
-              {snippet.where}
-            </Typography>
-          </Stack>
-          <CopyBlock text={snippet.text} label={`${snippet.label} setup`} />
-          <Typography variant="caption" color="text.secondary">
-            {mcp.tools?.length ?? 0} tools · the token changes on restart unless <code>NETLAB_APP_ASSISTANT_TOKEN</code> is set
-          </Typography>
-        </Stack>
-      </Collapse>
-    </Box>
+    <Stack spacing={1}>
+      <Typography variant="subtitle2" color="text.secondary">Connect another tool</Typography>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Select size="small" value={snippet.id} onChange={(event) => setClient(event.target.value)} sx={{ minWidth: 150, fontSize: "0.85rem" }}>
+          {snippets.map((item) => <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>)}
+        </Select>
+        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: snippet.where.includes("/") ? "monospace" : undefined }}>
+          {snippet.where}
+        </Typography>
+      </Stack>
+      <CopyBlock text={snippet.text} label={`${snippet.label} setup`} />
+      <Typography variant="caption" color="text.secondary">
+        {mcp.tools?.length ?? 0} tools · the token changes on restart unless <code>NETLAB_APP_ASSISTANT_TOKEN</code> is set
+      </Typography>
+    </Stack>
   );
 }
 

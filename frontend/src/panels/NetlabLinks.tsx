@@ -158,7 +158,7 @@ export function NetlabLinks({ sessionId, onChanged, onToast }: NetlabLinksProps)
           py: 1,
         }}
       >
-        <Typography variant="subtitle2">Netlab links</Typography>
+        <Typography variant="subtitle2">Special links</Typography>
       </Box>
 
       <Stack spacing={1.25} sx={{ p: 2 }}>
