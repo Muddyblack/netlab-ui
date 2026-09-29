@@ -1,0 +1,6 @@
+# Same rules as the backend; the monitoring plugin and collector are separate
+# Python packages (the collector must stay stdlib-only).
+extend = "../backend/ruff.toml"
+
+[lint.per-file-ignores]
+"tests/*" = ["ARG001"]

@@ -1,0 +1,773 @@
+name: lab3
+provider: clab
+nodes:
+  h1:
+    _node_config:
+      initial: :ns
+      routing: :ns
+    af:
+      ipv4: true
+    box: python:3.13-alpine
+    clab:
+      binds:
+      - mode: ro
+        source: node_files/-shared-hosts
+        target: /etc/hosts
+      config_templates:
+      - mode: ns
+        source: initial
+        target: ''
+      - mode: ns
+        source: routing
+        target: ''
+      - mode: shared
+        source: hosts
+        target: /etc/hosts
+      kind: linux
+    device: linux
+    hostname: clab-lab3-h1
+    id: 4
+    interfaces:
+    - bridge: lab3_4
+      gateway:
+        ipv4: 172.16.0.1/24
+      ifindex: 1
+      ifname: eth1
+      ipv4: 172.16.0.4/24
+      linkindex: 4
+      mtu: 1500
+      name: h1 -> r1
+      neighbors:
+      - ifname: eth3
+        ipv4: 172.16.0.1/24
+        node: r1
+      role: stub
+      type: lan
+    mgmt:
+      ifname: eth0
+      ipv4: 192.168.121.104
+      mac: ca:fe:00:04:00:00
+    module:
+    - routing
+    mtu: 1500
+    name: h1
+    netlab_ansible_skip_module:
+    - initial
+    - routing
+    role: host
+    routing:
+      static:
+      - ipv4: 172.16.0.0/16
+        nexthop:
+          idx: 0
+          intf: eth1
+          ipv4: 172.16.0.1
+      - ipv4: 10.0.0.0/24
+        nexthop:
+          idx: 0
+          intf: eth1
+          ipv4: 172.16.0.1
+      - ipv4: 10.1.0.0/16
+        nexthop:
+          idx: 0
+          intf: eth1
+          ipv4: 172.16.0.1
+      - ipv4: 10.2.0.0/24
+        nexthop:
+          idx: 0
+          intf: eth1
+          ipv4: 172.16.0.1
+  r1:
+    _node_config:
+      bfd: /etc/config/04-bfd.sh:sh
+      bgp: /etc/config/05-bgp.sh:sh
+      initial: /etc/config/01-initial.sh:sh
+      isis: /etc/config/03-isis.sh:sh
+      ospf: /etc/config/02-ospf.sh:sh
+    af:
+      ipv4: true
+    bfd:
+      min_echo_rx: 0
+      multiplier: 3
+    bgp:
+      advertise:
+      - ipv4: 10.0.0.1/32
+      - ipv4: 172.16.0.0/24
+      advertise_loopback: true
+      as: 65000
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        localas_ibgp:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - _source_intf:
+          ifindex: 0
+          ifname: lo
+          ipv4: 10.0.0.1/32
+          isis:
+            passive: false
+          neighbors: []
+          ospf:
+            area: 0.0.0.0
+            passive: false
+          type: loopback
+          virtual_interface: true
+        activate:
+          ipv4: true
+        as: 65000
+        ipv4: 10.0.0.2
+        name: r2
+        next_hop_self: ebgp
+        type: ibgp
+      - activate:
+          ipv4: true
+        as: 65003
+        ifindex: 2
+        ipv4: 10.1.0.10
+        name: r3
+        type: ebgp
+      next_hop_self: true
+      router_id: 10.0.0.1
+    box: quay.io/frrouting/frr:10.4.1
+    clab:
+      binds:
+      - source: node_files/r1/initial
+        target: /etc/config/01-initial.sh
+      - source: node_files/r1/ospf
+        target: /etc/config/02-ospf.sh
+      - source: node_files/r1/isis
+        target: /etc/config/03-isis.sh
+      - source: node_files/r1/bfd
+        target: /etc/config/04-bfd.sh
+      - source: node_files/r1/bgp
+        target: /etc/config/05-bgp.sh
+      - source: node_files/r1/daemons
+        target: /etc/frr/daemons
+      - mode: ro
+        source: node_files/-shared-hosts
+        target: /etc/hosts
+      config_templates:
+      - mode: sh
+        source: initial
+        target: /etc/config/01-initial.sh
+      - mode: sh
+        source: ospf
+        target: /etc/config/02-ospf.sh
+      - mode: sh
+        source: isis
+        target: /etc/config/03-isis.sh
+      - mode: sh
+        source: bfd
+        target: /etc/config/04-bfd.sh
+      - mode: sh
+        source: bgp
+        target: /etc/config/05-bgp.sh
+      - source: daemons
+        target: /etc/frr/daemons
+      - mode: shared
+        source: hosts
+        target: /etc/hosts
+      exec:
+      - sleep 1
+      kind: linux
+    device: frr
+    hostname: clab-lab3-r1
+    id: 1
+    interfaces:
+    - ifindex: 1
+      ifname: eth1
+      ipv4: 10.1.0.1/30
+      isis:
+        network_type: point-to-point
+        passive: false
+      linkindex: 1
+      mtu: 1500
+      name: r1 -> r2
+      neighbors:
+      - ifname: eth1
+        ipv4: 10.1.0.2/30
+        node: r2
+      ospf:
+        area: 0.0.0.0
+        network_type: point-to-point
+        passive: false
+      type: p2p
+    - ifindex: 2
+      ifname: eth2
+      ipv4: 10.1.0.9/30
+      linkindex: 3
+      mtu: 1500
+      name: r1 -> r3
+      neighbors:
+      - ifname: eth2
+        ipv4: 10.1.0.10/30
+        node: r3
+      role: external
+      type: p2p
+    - bgp:
+        advertise: true
+      bridge: lab3_4
+      ifindex: 3
+      ifname: eth3
+      ipv4: 172.16.0.1/24
+      isis:
+        network_type: point-to-point
+        passive: true
+      linkindex: 4
+      mtu: 1500
+      name: r1 -> h1
+      neighbors:
+      - ifname: eth1
+        ipv4: 172.16.0.4/24
+        node: h1
+      ospf:
+        area: 0.0.0.0
+        network_type: point-to-point
+        passive: true
+      role: stub
+      type: lan
+    isis:
+      af:
+        ipv4: true
+      area: '49.0001'
+      instance: Gandalf
+      net: 49.0001.0000.0000.0001.00
+      system_id: 0000.0000.0001
+      type: level-2
+    loopback:
+      bgp:
+        advertise: true
+      ifindex: 0
+      ifname: lo
+      ipv4: 10.0.0.1/32
+      isis:
+        passive: false
+      neighbors: []
+      ospf:
+        area: 0.0.0.0
+        passive: false
+      type: loopback
+      virtual_interface: true
+    mgmt:
+      ifname: eth0
+      ipv4: 192.168.121.101
+      mac: ca:fe:00:01:00:00
+    module:
+    - ospf
+    - isis
+    - bfd
+    - bgp
+    mtu: 1500
+    name: r1
+    netlab_ansible_skip_module:
+    - initial
+    - ospf
+    - isis
+    - bfd
+    - bgp
+    ospf:
+      af:
+        ipv4: true
+      area: 0.0.0.0
+      areas:
+      - _area_int: 0
+        area: 0.0.0.0
+        kind: regular
+      router_id: 10.0.0.1
+    role: router
+  r2:
+    _node_config:
+      bfd: /etc/config/04-bfd.sh:sh
+      bgp: /etc/config/05-bgp.sh:sh
+      initial: /etc/config/01-initial.sh:sh
+      isis: /etc/config/03-isis.sh:sh
+      ospf: /etc/config/02-ospf.sh:sh
+    af:
+      ipv4: true
+    bfd:
+      min_echo_rx: 0
+      multiplier: 3
+    bgp:
+      advertise:
+      - ipv4: 10.0.0.2/32
+      advertise_loopback: true
+      as: 65000
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        localas_ibgp:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - _source_intf:
+          ifindex: 0
+          ifname: lo
+          ipv4: 10.0.0.2/32
+          isis:
+            passive: false
+          neighbors: []
+          ospf:
+            area: 0.0.0.0
+            passive: false
+          type: loopback
+          virtual_interface: true
+        activate:
+          ipv4: true
+        as: 65000
+        ipv4: 10.0.0.1
+        name: r1
+        next_hop_self: ebgp
+        type: ibgp
+      - activate:
+          ipv4: true
+        as: 65003
+        ifindex: 2
+        ipv4: 10.1.0.6
+        name: r3
+        type: ebgp
+      next_hop_self: true
+      router_id: 10.0.0.2
+    box: quay.io/frrouting/frr:10.4.1
+    clab:
+      binds:
+      - source: node_files/r2/initial
+        target: /etc/config/01-initial.sh
+      - source: node_files/r2/ospf
+        target: /etc/config/02-ospf.sh
+      - source: node_files/r2/isis
+        target: /etc/config/03-isis.sh
+      - source: node_files/r2/bfd
+        target: /etc/config/04-bfd.sh
+      - source: node_files/r2/bgp
+        target: /etc/config/05-bgp.sh
+      - source: node_files/r2/daemons
+        target: /etc/frr/daemons
+      - mode: ro
+        source: node_files/-shared-hosts
+        target: /etc/hosts
+      config_templates:
+      - mode: sh
+        source: initial
+        target: /etc/config/01-initial.sh
+      - mode: sh
+        source: ospf
+        target: /etc/config/02-ospf.sh
+      - mode: sh
+        source: isis
+        target: /etc/config/03-isis.sh
+      - mode: sh
+        source: bfd
+        target: /etc/config/04-bfd.sh
+      - mode: sh
+        source: bgp
+        target: /etc/config/05-bgp.sh
+      - source: daemons
+        target: /etc/frr/daemons
+      - mode: shared
+        source: hosts
+        target: /etc/hosts
+      exec:
+      - sleep 1
+      kind: linux
+    device: frr
+    hostname: clab-lab3-r2
+    id: 2
+    interfaces:
+    - ifindex: 1
+      ifname: eth1
+      ipv4: 10.1.0.2/30
+      isis:
+        network_type: point-to-point
+        passive: false
+      linkindex: 1
+      mtu: 1500
+      name: r2 -> r1
+      neighbors:
+      - ifname: eth1
+        ipv4: 10.1.0.1/30
+        node: r1
+      ospf:
+        area: 0.0.0.0
+        network_type: point-to-point
+        passive: false
+      type: p2p
+    - ifindex: 2
+      ifname: eth2
+      ipv4: 10.1.0.5/30
+      linkindex: 2
+      mtu: 1500
+      name: r2 -> r3
+      neighbors:
+      - ifname: eth1
+        ipv4: 10.1.0.6/30
+        node: r3
+      role: external
+      type: p2p
+    isis:
+      af:
+        ipv4: true
+      area: '49.0001'
+      instance: Gandalf
+      net: 49.0001.0000.0000.0002.00
+      system_id: 0000.0000.0002
+      type: level-2
+    loopback:
+      bgp:
+        advertise: true
+      ifindex: 0
+      ifname: lo
+      ipv4: 10.0.0.2/32
+      isis:
+        passive: false
+      neighbors: []
+      ospf:
+        area: 0.0.0.0
+        passive: false
+      type: loopback
+      virtual_interface: true
+    mgmt:
+      ifname: eth0
+      ipv4: 192.168.121.102
+      mac: ca:fe:00:02:00:00
+    module:
+    - ospf
+    - isis
+    - bfd
+    - bgp
+    mtu: 1500
+    name: r2
+    netlab_ansible_skip_module:
+    - initial
+    - ospf
+    - isis
+    - bfd
+    - bgp
+    ospf:
+      af:
+        ipv4: true
+      area: 0.0.0.0
+      areas:
+      - _area_int: 0
+        area: 0.0.0.0
+        kind: regular
+      router_id: 10.0.0.2
+    role: router
+  r3:
+    _node_config:
+      bfd: /etc/config/03-bfd.sh:sh
+      bgp: /etc/config/02-bgp.sh:sh
+      initial: /etc/config/01-initial.sh:sh
+    af:
+      ipv4: true
+    bfd:
+      min_echo_rx: 0
+      multiplier: 3
+    bgp:
+      advertise:
+      - ipv4: 10.0.0.3/32
+      advertise_loopback: true
+      as: 65003
+      community:
+        ebgp:
+        - standard
+        - large
+        ibgp:
+        - standard
+        - large
+        - extended
+        localas_ibgp:
+        - standard
+        - large
+        - extended
+      ipv4: true
+      neighbors:
+      - activate:
+          ipv4: true
+        as: 65000
+        ifindex: 1
+        ipv4: 10.1.0.5
+        name: r2
+        type: ebgp
+      - activate:
+          ipv4: true
+        as: 65000
+        ifindex: 2
+        ipv4: 10.1.0.9
+        name: r1
+        type: ebgp
+      next_hop_self: true
+      router_id: 10.0.0.3
+    box: quay.io/frrouting/frr:10.4.1
+    clab:
+      binds:
+      - source: node_files/r3/initial
+        target: /etc/config/01-initial.sh
+      - source: node_files/r3/bgp
+        target: /etc/config/02-bgp.sh
+      - source: node_files/r3/bfd
+        target: /etc/config/03-bfd.sh
+      - source: node_files/r3/daemons
+        target: /etc/frr/daemons
+      - mode: ro
+        source: node_files/-shared-hosts
+        target: /etc/hosts
+      config_templates:
+      - mode: sh
+        source: initial
+        target: /etc/config/01-initial.sh
+      - mode: sh
+        source: bgp
+        target: /etc/config/02-bgp.sh
+      - mode: sh
+        source: bfd
+        target: /etc/config/03-bfd.sh
+      - source: daemons
+        target: /etc/frr/daemons
+      - mode: shared
+        source: hosts
+        target: /etc/hosts
+      exec:
+      - sleep 1
+      kind: linux
+    device: frr
+    hostname: clab-lab3-r3
+    id: 3
+    interfaces:
+    - ifindex: 1
+      ifname: eth1
+      ipv4: 10.1.0.6/30
+      linkindex: 2
+      mtu: 1500
+      name: r3 -> r2
+      neighbors:
+      - ifname: eth2
+        ipv4: 10.1.0.5/30
+        node: r2
+      role: external
+      type: p2p
+    - ifindex: 2
+      ifname: eth2
+      ipv4: 10.1.0.10/30
+      linkindex: 3
+      mtu: 1500
+      name: r3 -> r1
+      neighbors:
+      - ifname: eth2
+        ipv4: 10.1.0.9/30
+        node: r1
+      role: external
+      type: p2p
+    loopback:
+      bgp:
+        advertise: true
+      ifindex: 0
+      ifname: lo
+      ipv4: 10.0.0.3/32
+      neighbors: []
+      type: loopback
+      virtual_interface: true
+    mgmt:
+      ifname: eth0
+      ipv4: 192.168.121.103
+      mac: ca:fe:00:03:00:00
+    module:
+    - bgp
+    - bfd
+    mtu: 1500
+    name: r3
+    netlab_ansible_skip_module:
+    - initial
+    - bgp
+    - bfd
+    role: router
+links:
+- _linkname: links[1]
+  interfaces:
+  - ifindex: 1
+    ifname: eth1
+    ipv4: 10.1.0.1/30
+    node: r1
+  - ifindex: 1
+    ifname: eth1
+    ipv4: 10.1.0.2/30
+    node: r2
+  linkindex: 1
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.0/30
+  type: p2p
+- _linkname: links[2]
+  interfaces:
+  - ifindex: 2
+    ifname: eth2
+    ipv4: 10.1.0.5/30
+    node: r2
+  - ifindex: 1
+    ifname: eth1
+    ipv4: 10.1.0.6/30
+    node: r3
+  linkindex: 2
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.4/30
+  role: external
+  type: p2p
+- _linkname: links[3]
+  interfaces:
+  - ifindex: 2
+    ifname: eth2
+    ipv4: 10.1.0.10/30
+    node: r3
+  - ifindex: 2
+    ifname: eth2
+    ipv4: 10.1.0.9/30
+    node: r1
+  linkindex: 3
+  node_count: 2
+  prefix:
+    ipv4: 10.1.0.8/30
+  role: external
+  type: p2p
+- _linkname: links[4]
+  bridge: lab3_4
+  interfaces:
+  - ifindex: 1
+    ifname: eth1
+    ipv4: 172.16.0.4/24
+    node: h1
+  - ifindex: 3
+    ifname: eth3
+    ipv4: 172.16.0.1/24
+    node: r1
+  linkindex: 4
+  node_count: 2
+  prefix:
+    ipv4: 172.16.0.0/24
+  role: stub
+  type: lan
+groups:
+  as65000:
+    members:
+    - r1
+    - r2
+  as65003:
+    members:
+    - r3
+  netlab_no_collect:
+    members:
+    - h1
+  netlab_no_reload:
+    members:
+    - h1
+monitoring:
+  grafana:
+    admin_password: admin
+    anonymous_role: Viewer
+    enabled: true
+  images:
+    collector: python:3.13-alpine
+    gnmic: ghcr.io/openconfig/gnmic:0.42.0
+    grafana: grafana/grafana:12.2.0
+    snmp: prom/snmp-exporter:v0.29.0
+    tsdb: victoriametrics/victoria-metrics:v1.126.0
+  interval: 15
+  node_prefix: mon
+  placement: tool
+  ports:
+    collector: 9480
+    gnmic: 9804
+    grafana: 3000
+    snmp: 9116
+    tsdb: 8428
+  profiles:
+    cat8000v:
+      use: iosv
+    csr:
+      use: iosv
+    cumulus:
+      use: frr
+    cumulus_nvue:
+      use: frr
+    eos:
+      config: monitoring
+      gnmi:
+        encoding: json
+        mapping: openconfig
+        password: admin
+        port: 6030
+        tls: insecure
+        username: admin
+      method: gnmi
+    frr:
+      frr:
+        socket_dirs:
+        - run/frr
+        - var/run/frr
+      method: frr
+    iol:
+      use: iosv
+    ioll2:
+      use: iosv
+    iosv:
+      config: monitoring
+      method: snmp
+    iosvl2:
+      use: iosv
+    linux:
+      method: host
+    nxos:
+      config: monitoring
+      method: snmp
+    srlinux:
+      gnmi:
+        encoding: json_ietf
+        mapping: srlinux
+        password: NokiaSrl1!
+        port: 57400
+        tls: skip-verify
+        username: admin
+      method: gnmi
+    vjunos-router:
+      config: monitoring
+      gnmi:
+        encoding: json
+        mapping: openconfig
+        password: Vagrant
+        port: 32767
+        tls: insecure
+        username: vagrant
+      method: gnmi
+    vjunos-switch:
+      use: vjunos-router
+    vmx:
+      use: vjunos-router
+    vptx:
+      use: vjunos-router
+    vsrx:
+      use: vjunos-router
+    vyos:
+      use: frr
+  retention: 7d
+  snmp:
+    community: public
+  workers: 16
+defaults:
+  providers:
+    clab:
+      lab_prefix: clab

@@ -1,0 +1,153 @@
+# netlab monitoring plugin -- defaults
+#
+# Everything here can be changed per lab (topology 'monitoring:' or 'defaults.monitoring.*')
+# or for all labs (~/.netlab.yml: 'defaults.monitoring.*').
+#
+---
+monitoring:
+  placement: tool            # tool: containers started by 'netlab up' as a netlab external tool
+                             # node: containers added to the lab as nodes (clab), shown on the canvas
+  interval: 15               # Collection/scrape interval in seconds
+  retention: 7d              # Metrics retention (data is kept in <lab>/monitoring/data)
+  workers: 2                 # Parallel node collections (more threads only add GIL contention)
+  grafana:
+    enabled: true
+    anonymous_role: Viewer   # Viewer, Editor or Admin for anonymous users
+    admin_password: admin
+  ports:                     # Host ports (placement: tool). netlab multilab adds the lab id
+    grafana: 3000
+    tsdb: 8428
+    collector: 9480
+    gnmic: 9804
+    snmp: 9116
+  node_prefix: mon           # Name prefix of the monitoring nodes (placement: node)
+  images:
+    collector: python:3.13-alpine          # The collector is pure Python (stdlib only)
+    tsdb: victoriametrics/victoria-metrics:v1.126.0
+    grafana: grafana/grafana:12.2.0
+    gnmic: ghcr.io/openconfig/gnmic:0.42.0
+    snmp: prom/snmp-exporter:v0.29.0
+  snmp:
+    community: public       # matches snmp_exporter's built-in public_v2 auth
+
+  # How to collect protocol state from each device type. Every node also gets host-side
+  # metrics (CPU, memory, interface counters) when it runs as a container or libvirt VM.
+  #
+  # method:   frr  -- FRR vty sockets (no network needed, clab nodes)
+  #           gnmi -- gNMI/OpenConfig through gnmic (needs the management network)
+  #           snmp -- IF-MIB through snmp_exporter (needs the management network)
+  #           host -- host-side metrics only
+  # use:      inherit another profile
+  # config:   netlab custom configuration template enabling the method on the device
+  #           (<plugin>/<config>/<device>.j2, deployed with the initial configuration)
+  #
+  profiles:
+    frr:
+      method: frr
+      frr:
+        socket_dirs: [ run/frr, var/run/frr ]
+    cumulus: { use: frr }
+    cumulus_nvue: { use: frr }
+    vyos: { use: frr }
+    linux: { method: host }
+    srlinux:
+      method: gnmi
+      gnmi:
+        port: 57400
+        username: admin
+        password: NokiaSrl1!
+        tls: skip-verify
+        encoding: json_ietf
+        mapping: srlinux
+    eos:
+      method: gnmi
+      config: monitoring
+      gnmi:
+        port: 6030
+        username: admin
+        password: admin
+        tls: insecure
+        encoding: json
+        mapping: openconfig
+    vjunos-router:
+      method: gnmi
+      config: monitoring
+      gnmi:
+        port: 32767
+        username: vagrant
+        password: Vagrant
+        tls: insecure
+        encoding: json
+        mapping: openconfig
+    vjunos-switch: { use: vjunos-router }
+    vptx: { use: vjunos-router }
+    vmx: { use: vjunos-router }
+    vsrx: { use: vjunos-router }
+    iosv:
+      method: snmp
+      config: monitoring
+    iosvl2: { use: iosv }
+    csr: { use: iosv }
+    cat8000v: { use: iosv }
+    iol: { use: iosv }
+    ioll2: { use: iosv }
+    nxos:
+      method: snmp
+      config: monitoring
+
+attributes:
+  global:
+    monitoring:
+      placement:
+        type: str
+        valid_values: [ tool, node ]
+      interval: { type: int, min_value: 1 }
+      retention: str
+      workers: { type: int, min_value: 1 }
+      grafana:
+        enabled: bool
+        anonymous_role:
+          type: str
+          valid_values: [ Viewer, Editor, Admin ]
+        admin_password: str
+      ports:
+        type: dict
+        _keys:
+          grafana: int
+          tsdb: int
+          collector: int
+          gnmic: int
+          snmp: int
+      node_prefix: str
+      images: dict
+      snmp: dict
+      profiles: dict
+      nodes:                 # Monitor only these nodes/groups (default: all)
+        type: list
+        _subtype: node_or_group
+  node:
+    monitoring:
+      type: dict
+      true_value: {}
+      _keys:
+        enabled: bool        # 'monitoring.enabled: false' skips the node
+        method:              # Override the profile's collection method
+          type: str
+          valid_values: [ frr, gnmi, snmp, host ]
+        exporters:           # Extra Prometheus exporters running on the node
+          type: list
+          _subtype:
+            port: { type: int, _required: True }
+            path: str
+            job: str
+
+tools:
+  monitoring:
+    enabled: true            # Loading the plugin enables the tool
+    runtime: docker
+    docker:
+      up: bash monitoring/up.sh
+      down: bash monitoring/down.sh
+      message: >-
+        Monitoring: Grafana http://{sys.ipurl}:{ monitoring.ports.grafana + (defaults.multilab.id or 0) }
+        | metrics http://{sys.ipurl}:{ monitoring.ports.tsdb + (defaults.multilab.id or 0) }
