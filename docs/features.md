@@ -118,8 +118,9 @@ dialog with three ways to capture:
   `curl -sN '…/api/lab/capture/pcap?…&seconds=0' | wireshark -k -i -` command.
 - **Wireshark in the browser** via Edgeshark. If Edgeshark isn't running, the
   dialog offers *Install Edgeshark*: it downloads Edgeshark's compose file from
-  GitHub and pulls its images (internet needed, a few minutes the first
-  time). Its web port is now
+  GitHub, pulls its images and the Wireshark image, and checks the containers
+  stay up (internet needed, a few minutes the first time). Edgeshark's own
+  port 5001 is published on the UI's bind address only, not on every interface. Its web port is now
   published on the UI's own bind address (`127.0.0.1` by default), no longer
   on every interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
 

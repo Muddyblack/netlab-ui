@@ -6,7 +6,7 @@ import { api, type LabFileEntry } from "../api/client";
 import { getApiBase } from "../api/endpoint";
 import { postLinkCommand } from "../api/linkCommands";
 import { requestCapture } from "./captureStore";
-import { parseIconListResponse, parseIconNamesResponse, selectIconFile, type CustomIconListItem } from "./iconHelpers";
+import { parseIconListResponse, parseIconNamesResponse, parseTemplatesFile, selectFile, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
 import { runningLabMatches } from "./runningMatch";
 import type { RunningLabsStatus } from "../hooks/useAppData";
@@ -529,7 +529,28 @@ export function createApiClabUiHost(options?: {
       );
     },
 
-    importCustomNodes() {},
+    importCustomNodes() {
+      if (!currentSessionId) return;
+      const sessionId = currentSessionId;
+      void (async () => {
+        const file = await selectFile("application/json,.json");
+        if (!file) return;
+        try {
+          const templates = parseTemplatesFile(await file.text());
+          postCustomNodeAction(
+            "import",
+            safeFetch(`${BASE}/api/topology/custom-nodes/import?sessionId=${sessionId}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ templates }),
+            })
+          );
+          resultHost.onLinkResult?.(`Imported ${templates.length} node template${templates.length === 1 ? "" : "s"}`, "success");
+        } catch (err) {
+          resultHost.onLinkResult?.(`Import failed: ${err instanceof Error ? err.message : String(err)}`, "error");
+        }
+      })();
+    },
 
     requestIconList() {
       void loadIconList();

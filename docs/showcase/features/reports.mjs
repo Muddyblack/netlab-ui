@@ -8,13 +8,14 @@ export default {
     await s.openLab("fabric");
     await s.say("netlab's reports as searchable tables");
     await s.palette("Reports…");
-    const dialog = s.page.getByRole("dialog").filter({ hasText: "report gallery" }).first();
+    const dialog = s.page.getByRole("dialog", { name: "Reports" });
     await dialog.waitFor();
     await s.wait(3500);
     await s.shot("gallery", undefined, { hero: true, alt: "The report gallery over the lab" });
     await s.shot("addressing", dialog, { pad: 0, alt: "Addressing report as a table linked to the canvas" });
     await s.say("OSPF, BGP, wiring — download as Markdown, HTML or text");
-    await s.click(dialog.getByText("OSPF Areas", { exact: true }).first());
+    await s.click(dialog.getByRole("combobox"));
+    await s.click(s.page.getByRole("option", { name: /OSPF Areas/ }).first());
     await s.wait(3500);
     await s.shot("ospf", dialog, { pad: 0, alt: "OSPF areas report rendered from netlab's HTML" });
   },

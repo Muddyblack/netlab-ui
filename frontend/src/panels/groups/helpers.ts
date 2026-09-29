@@ -1,11 +1,5 @@
 import type { GroupInfo } from "./types";
 
-export const MODULE_SECTIONS = [
-  { label: "Routing", modules: ["bgp", "ospf", "isis", "eigrp", "ripv2", "routing"] },
-  { label: "Network services", modules: ["vlan", "vrf", "vxlan", "evpn", "mpls", "sr", "srv6"] },
-  { label: "Interfaces", modules: ["bfd", "lag", "stp", "gateway", "dhcp"] }
-];
-
 export const STRUCTURED_MODULES = new Set(["bgp", "ospf", "vlan"]);
 
 export function isStructuredAttribute(key: string): boolean {

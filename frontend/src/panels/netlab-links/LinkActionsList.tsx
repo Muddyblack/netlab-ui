@@ -14,19 +14,19 @@ const LINK_ACTIONS: Array<{
   {
     kind: "stub",
     title: "Stub link",
-    description: "Attach one node. netlab generates the provider-specific dummy endpoint.",
+    description: "One node, one dead-end interface (netlab makes the endpoint).",
     icon: RouteIcon,
   },
   {
     kind: "lan",
     title: "LAN",
-    description: "Connect two or more nodes through one multi-access network.",
+    description: "Two or more nodes on one shared network.",
     icon: LanIcon,
   },
   {
     kind: "uplink",
     title: "External uplink",
-    description: "Connect one container node to a host interface through macvlan.",
+    description: "One container node to a host interface, via macvlan.",
     icon: CableIcon,
   },
 ];
@@ -45,6 +45,9 @@ interface LinkActionsListProps {
 export function LinkActionsList({ selectedNodeCount, onSelect }: LinkActionsListProps) {
   return (
     <Stack spacing={0.75}>
+      <Typography variant="caption" color="text.secondary">
+        Beyond node-to-node links. Select nodes on the canvas first to fill them in.
+      </Typography>
       {LINK_ACTIONS.map((action) => {
         const Icon = action.icon;
         const selectionHint = selectionHintFor(action.kind, selectedNodeCount);
@@ -90,7 +93,7 @@ export function LinkActionsList({ selectedNodeCount, onSelect }: LinkActionsList
                   </Typography>
                 )}
               </Stack>
-              <Typography variant="caption" color="text.secondary" noWrap>{action.description}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.35 }}>{action.description}</Typography>
             </Box>
           </Button>
         );

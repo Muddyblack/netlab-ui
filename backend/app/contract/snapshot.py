@@ -130,6 +130,13 @@ def _store_cache(
     _clab_cache[topology_path] = _CachedProjection(yaml_hash, nodes, edges, source)
 
 
+def _is_empty_lab_error(message: str, fallback: tuple[list[dict], list[dict]]) -> bool:
+    """netlab refuses a topology with no nodes. For a lab that has none yet (a
+    new lab, a unit still being drawn) that is the normal starting state, not
+    an error worth a toast."""
+    return not fallback[0] and "'nodes' is missing or empty" in message
+
+
 def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list[dict], list[dict]]) -> None:
     """Warm the clab-projection cache in the background (deduped per path).
 
@@ -159,12 +166,11 @@ def _schedule_transform(topology_path: str, yaml_hash: str, fallback: tuple[list
                 # Every branch below still produces a renderable canvas, so this
                 # message is the only signal the user gets that what they are
                 # looking at is not the real transform.
-                _transform_errors[topology_path] = (
-                    yaml_hash,
-                    (exc.stderr or str(exc)) if isinstance(exc, runner.NetlabError) else str(exc),
-                )
-                if isinstance(exc, runner.NetlabError):
-                    validation_store.store_failure(topology_path, exc.stderr or str(exc))
+                message = (exc.stderr or str(exc)) if isinstance(exc, runner.NetlabError) else str(exc)
+                if not _is_empty_lab_error(message, fallback):
+                    _transform_errors[topology_path] = (yaml_hash, message)
+                    if isinstance(exc, runner.NetlabError):
+                        validation_store.store_failure(topology_path, message)
                 if _is_locked(topology_path):
                     # The isolated transform is expected to work while the lab is
                     # deployed, but deployment state is still the most likely

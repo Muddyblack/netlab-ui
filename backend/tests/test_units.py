@@ -344,3 +344,33 @@ def test_update_composition_filters_ports_to_own_nodes(tmp_path):
 def test_update_composition_rejects_unknown_unit(tmp_path):
     with pytest.raises(ValueError, match="unknown unit"):
         units.update_unit_composition(tmp_path, "nope", {"includes": []})
+
+
+def test_unit_keeps_the_source_labs_netlab_attributes_not_the_clab_projection(tmp_path):
+    """The canvas sends its containerlab projection; a unit must hold netlab's."""
+    lab = tmp_path / "lab.yml"
+    lab.write_text(
+        "name: lab\n"
+        "defaults:\n"
+        "  device: frr\n"
+        "nodes:\n"
+        "  r1:\n"
+        "    module: [ospf]\n"
+        "  r2:\n"
+        "    device: eos\n"
+        "links: [r1-r2]\n"
+    )
+    canvas_nodes = [
+        {
+            "name": "r1",
+            "device": "frr",
+            "attrs": {"mgmt-ipv4": "192.168.121.101", "restart-policy": "no", "binds": ["x:y"]},
+        },
+        {"name": "r2", "device": "eos", "attrs": {"mgmt-ipv4": "192.168.121.102"}},
+    ]
+    path = _save(tmp_path / "units", "koka", nodes=canvas_nodes, links=[{"endpoints": ["r1", "r2"]}], source=lab)
+    unit = serialize.from_yaml(path.read_text())
+    assert unit.node("r1").device == "frr"  # inherited in the lab, explicit in a standalone unit
+    assert unit.node("r1").attrs == {"module": ["ospf"]}
+    assert unit.node("r2").device == "eos"
+    assert "mgmt-ipv4" not in path.read_text()

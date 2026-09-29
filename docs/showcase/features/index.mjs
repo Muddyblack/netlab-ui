@@ -4,6 +4,7 @@
 export default [
   "canvas.mjs",
   "deploy.mjs",
+  "running-labs.mjs",
   "command-palette.mjs",
   "node-editor.mjs",
   "shell.mjs",
