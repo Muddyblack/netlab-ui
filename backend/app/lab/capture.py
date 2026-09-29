@@ -146,8 +146,8 @@ async def _packetflix_endpoint() -> tuple[str, str]:
     if not running:
         raise HTTPException(
             status_code=409,
-            detail="Edgeshark is not running on the docker host — install it via the explorer's "
-            "'Install Edgeshark' action first.",
+            detail="Edgeshark is not running on the docker host — install it from the capture "
+            "dialog's 'Install Edgeshark' button first.",
         )
     # The compose project has two services; packetflix is the one the VNC
     # container must talk to (service "edgeshark" → edgeshark-edgeshark-1).

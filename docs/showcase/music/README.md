@@ -80,8 +80,8 @@ node --test docs/showcase/music/*.test.mjs
 
 The fourteen-second end card uses the README’s complete animated collaboration
 logo from `frontend/public/netlabxclab-netlab-ui-loop.svg`, including its transition
-to netlab-ui. The centered layout uses the app’s dark theme and Roboto fonts. It thanks the containerlab community, SRL Labs
-and Nokia for their open-source work on containerlab and clab-ui, and displays
-both the netlab-ui and upstream GitHub links. The design and timing live in
+to netlab-ui. The centered layout uses the app’s dark theme and Roboto fonts. It thanks the netlab community (ipspace), the containerlab community, SRL Labs
+and Nokia for their open-source work on netlab, containerlab and clab-ui, and
+displays the netlab-ui and upstream links. The design and timing live in
 [`outro.mjs`](outro.mjs); the same deterministic Playwright capture renders both
 bookends. The final music fade follows the appended outro automatically.

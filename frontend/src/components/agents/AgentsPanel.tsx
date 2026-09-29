@@ -145,7 +145,7 @@ function Proposals({ sessionId, onApplied }: { sessionId: string; onApplied: () 
 
 /** Setup for any MCP tool, folded away until asked for. */
 function ConnectTool({ mcp }: { mcp: McpInfo }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [client, setClient] = useState("claude");
   const snippets = clientSnippets(mcp);
   const snippet = snippets.find((item) => item.id === client) ?? snippets[0];
