@@ -693,6 +693,7 @@ export function useAppController() {
   const quickActions = useMemo(() => [
     { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Gemini CLI, Cursor · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
     { id: "action:new-lab", label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
+    { id: "action:running-labs", label: "Running netlab labs", detail: "Every lab netlab knows about on this host: shut down, force cleanup", run: () => setRunningLabsOpen(true) },
     { id: "action:image-manager", label: "Manage container images", detail: "Open the image manager", run: () => setImageManagerOpen(true) },
     { id: "action:fit", label: "Fit topology to canvas", detail: "Center and zoom to all nodes", run: () => host.emitTopoViewerEvent?.({ type: "fitViewport" }) },
     { id: "action:group", label: "Group selected canvas nodes", detail: "Same as Ctrl+G", run: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "g", code: "KeyG", ctrlKey: true, bubbles: true })) },
