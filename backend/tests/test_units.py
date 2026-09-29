@@ -350,7 +350,15 @@ def test_unit_keeps_the_source_labs_netlab_attributes_not_the_clab_projection(tm
     """The canvas sends its containerlab projection; a unit must hold netlab's."""
     lab = tmp_path / "lab.yml"
     lab.write_text(
-        "name: lab\ndefaults:\n  device: frr\nnodes:\n  r1:\n    module: [ospf]\n  r2:\n    device: eos\nlinks: [r1-r2]\n"  # noqa: E501
+        "name: lab\n"
+        "defaults:\n"
+        "  device: frr\n"
+        "nodes:\n"
+        "  r1:\n"
+        "    module: [ospf]\n"
+        "  r2:\n"
+        "    device: eos\n"
+        "links: [r1-r2]\n"
     )
     canvas_nodes = [
         {

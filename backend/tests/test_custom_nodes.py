@@ -43,7 +43,16 @@ def test_own_template_replaces_the_starters(client, session, tmp_path):
 def _lab_with_nodes(tmp_path, client) -> str:
     topo = tmp_path / "labs" / "lab" / "topology.yml"
     topo.write_text(
-        "name: lab\ndefaults:\n  device: eos\nnodes:\n  r1:\n  r2:\n    device: frr\n  h1:\n    device: linux\nlinks: [r1-r2, r2-h1]\n" #noqa: E501
+        "name: lab\n"
+        "defaults:\n"
+        "  device: eos\n"
+        "nodes:\n"
+        "  r1:\n"
+        "  r2:\n"
+        "    device: frr\n"
+        "  h1:\n"
+        "    device: linux\n"
+        "links: [r1-r2, r2-h1]\n"
     )
     return client.post("/api/topology/sessions", json={"topologyPath": str(topo)}).json()["sessionId"]
 
