@@ -33,7 +33,8 @@ from services.netlab import location, runner
 BRIDGE = Path(__file__).with_name("_tools_bridge.py")
 SNAPSHOT = "netlab.snapshot.pickle"
 # The UI itself is a netlab tool (tools/netlab_ui.yml) — you're already in it.
-HIDDEN = {"netlab_ui"}
+# The monitoring plugin's tool has its own dialog (app.lab.monitoring).
+HIDDEN = {"netlab_ui", "monitoring"}
 
 ABOUT = {
     "graphite": ("Graphite", "Interactive topology graph in the browser, laid out from the lab."),

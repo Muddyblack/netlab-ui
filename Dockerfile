@@ -45,6 +45,10 @@ WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 COPY backend/services ./services
+# The netlab monitoring plugin (Settings / lab "Monitoring"): the UI links it into
+# ~/.netlab when a lab turns monitoring on.
+COPY monitoring/plugin/monitoring ./monitoring_plugin
+ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # The base install includes the MCP server that the user's own AI agent
 # (Claude Code, Codex, Gemini CLI, Cursor, …) connects to; it is served on the
 # same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.

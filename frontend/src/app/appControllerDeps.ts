@@ -18,6 +18,7 @@ export { useCustomPaletteTabs } from "./useCustomPaletteTabs";
 export { useRenderDeployMenuItems } from "./useRenderDeployMenuItems";
 export { publishRuntimeContainers } from "../host/runtimeStore";
 export { openConfigsDialog } from "../host/configsDialogStore";
+export { openMonitoringDialog } from "../host/monitoringDialogStore";
 export { openToolsDialog } from "../host/toolsDialogStore";
 export { registerFileOpener } from "../host/fileOpenStore";
 export { openPanelTab } from "../hooks/useRightPanelTabMemory";

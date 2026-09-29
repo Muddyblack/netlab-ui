@@ -36,7 +36,7 @@ from app.contract.responses import (
     VersionResult,
 )
 from app.lab import common
-from services import lab_limits, owners
+from services import lab_limits, monitoring, owners
 from services.netlab import config_snapshots, deploy_diff, deployment, libvirt, multilab, runner
 from services.netlab import runtime as runtime_state
 from services.netlab import validation as validation_store
@@ -326,16 +326,20 @@ async def lab_link_state(body: LinkStateRequest):
     if info.get("provider") == "libvirt":
         domain, vm_node = await _vm_target(path, body.node, info)
         result = await libvirt.set_link(domain, vm_node, body.interface, body.up)
-        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
-    container = _require_clab_node(body.node, info, "taking a link down")
-    from app.contract import commands
+    else:
+        container = _require_clab_node(body.node, info, "taking a link down")
+        from app.contract import commands
 
-    result = await runner.set_interface_state(
-        container,
-        body.interface,
-        body.up,
-        preferred_runtime=runtime_state.clab_runtime(commands.load_topology(path)),
-    )
+        result = await runner.set_interface_state(
+            container,
+            body.interface,
+            body.up,
+            preferred_runtime=runtime_state.clab_runtime(commands.load_topology(path)),
+        )
+    if not result.code:
+        # Mark the fault on the lab's monitoring dashboards (no-op without monitoring)
+        state = "up" if body.up else "down"
+        await monitoring.annotate(Path(path).parent, f"{body.node} {body.interface} {state}", ["link", body.node])
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 

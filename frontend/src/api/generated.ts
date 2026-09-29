@@ -4,6 +4,109 @@
  */
 
 export interface paths {
+    "/api/lab/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Monitoring */
+        get: operations["get_monitoring_api_lab_monitoring_get"];
+        /**
+         * Toggle Monitoring
+         * @description Turn the plugin on/off for the lab (installing it for netlab if needed).
+         *     Takes effect when the lab is next deployed.
+         */
+        put: operations["toggle_monitoring_api_lab_monitoring_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monitoring Summary
+         * @description Live health: nodes up and sessions/adjacencies up vs what the topology expects.
+         */
+        get: operations["monitoring_summary_api_lab_monitoring_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monitoring Query
+         * @description Instant PromQL query against the lab's metrics (read-only).
+         */
+        get: operations["monitoring_query_api_lab_monitoring_query_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/action": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitoring Action
+         * @description Start or stop the stack of a deployed lab now (``netlab up`` starts it anyway).
+         *     With ``placement: node`` the containers are lab nodes and follow the lab.
+         */
+        post: operations["monitoring_action_api_lab_monitoring_action_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monitoring Event
+         * @description Mark an event (e.g. a link taken down from the UI) on the lab's dashboards.
+         */
+        post: operations["monitoring_event_api_lab_monitoring_event_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/custom-nodes": {
         parameters: {
             query?: never;
@@ -2336,6 +2439,181 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        MissingItem: {
+            /** Protocol */
+            protocol: string;
+            /** Node */
+            node: string;
+            /** Peer */
+            peer: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+        };
+        /** ModelPut */
+        MonitoringAction: {
+            /** Sessionid */
+            sessionId: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "up" | "down";
+        };
+        /** MonitoringActionResult */
+        MonitoringActionResult: {
+            /** Code */
+            code: number;
+            /** Stdout */
+            stdout: string;
+            /** Stderr */
+            stderr: string;
+        };
+        /** MonitoringEvent */
+        MonitoringEvent: {
+            /** Sessionid */
+            sessionId: string;
+            /** Text */
+            text: string;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+        };
+        /** MonitoringNode */
+        MonitoringNode: {
+            /** Node */
+            node: string;
+            /**
+             * Device
+             * @default
+             */
+            device: string;
+            /**
+             * Provider
+             * @default
+             */
+            provider: string;
+            /**
+             * Methods
+             * @default []
+             */
+            methods: string[];
+        };
+        /** MonitoringState */
+        MonitoringState: {
+            /** Pluginavailable */
+            pluginAvailable: boolean;
+            /** Plugininstalled */
+            pluginInstalled: boolean;
+            /** Pluginpath */
+            pluginPath: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Placement
+             * @default tool
+             * @enum {string}
+             */
+            placement: "tool" | "node";
+            /** Labdeployed */
+            labDeployed: boolean;
+            /** Rendered */
+            rendered: boolean;
+            /**
+             * Running
+             * @default {}
+             */
+            running: {
+                [key: string]: boolean;
+            };
+            /** Grafanaport */
+            grafanaPort?: number | null;
+            /** Tsdbport */
+            tsdbPort?: number | null;
+            /**
+             * Dashboards
+             * @default {}
+             */
+            dashboards: {
+                [key: string]: string;
+            };
+            /**
+             * Coverage
+             * @default []
+             */
+            coverage: components["schemas"]["MonitoringNode"][];
+        };
+        /** MonitoringSummary */
+        MonitoringSummary: {
+            /**
+             * Nodes
+             * @default 0
+             */
+            nodes: number;
+            /**
+             * Nodesup
+             * @default 0
+             */
+            nodesUp: number;
+            /**
+             * Bgpup
+             * @default 0
+             */
+            bgpUp: number;
+            /**
+             * Bgpexpected
+             * @default 0
+             */
+            bgpExpected: number;
+            /**
+             * Ospfup
+             * @default 0
+             */
+            ospfUp: number;
+            /**
+             * Ospfexpected
+             * @default 0
+             */
+            ospfExpected: number;
+            /**
+             * Isisup
+             * @default 0
+             */
+            isisUp: number;
+            /**
+             * Isisexpected
+             * @default 0
+             */
+            isisExpected: number;
+            /**
+             * Missing
+             * @default []
+             */
+            missing: components["schemas"]["MissingItem"][];
+        };
+        /** MonitoringToggle */
+        MonitoringToggle: {
+            /** Sessionid */
+            sessionId: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Placement */
+            placement?: ("tool" | "node") | null;
+        };
+        /** MultiserverPut */
+        PromSample: {
+            /** Labels */
+            labels: {
+                [key: string]: string;
+            };
+            /** Value */
+            value: number;
+        };
+        /** ProtocolAdjacency */
         /** AddressingLens */
         AddressingLens: {
             /**
@@ -6035,6 +6313,201 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    get_monitoring_api_lab_monitoring_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_action_api_lab_monitoring_action_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitoringAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_event_api_lab_monitoring_event_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitoringEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_query_api_lab_monitoring_query_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromSample"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_summary_api_lab_monitoring_summary_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_monitoring_api_lab_monitoring_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitoringToggle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_custom_nodes_api_topology_custom_nodes_get: {
         parameters: {
             query: {

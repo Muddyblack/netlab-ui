@@ -50,6 +50,7 @@ import {
   useRenderDeployMenuItems,
   publishRuntimeContainers,
   openConfigsDialog,
+  openMonitoringDialog,
   openToolsDialog,
   registerFileOpener,
   openPanelTab,
@@ -371,6 +372,10 @@ export function useAppController() {
       openTools: async (ref) => {
         const sid = await ensureLabActiveRef.current(ref);
         if (sid) openToolsDialog({ sessionId: sid, openShell: (name) => openShellRef.current(name, sid) });
+      },
+      openMonitoring: async (ref) => {
+        const sid = await ensureLabActiveRef.current(ref);
+        if (sid) openMonitoringDialog({ sessionId: sid });
       },
       nodeLifecycle: async (n, action, ref) => handleNodeLifecycleRef.current(n, action, ref ? await getOrCreateSessionRef.current(ref) : undefined),
       installEdgeshark: () => installEdgesharkAction(addToast),
@@ -723,6 +728,7 @@ export function useAppController() {
     ] : []),
     ...(sessionId ? [
       { id: "action:reports", label: "Reports…", detail: "netlab reports: addressing, BGP, OSPF, wiring — as tables, HTML or text", run: () => { openPanelTab("Lenses"); netlabLenses.setReportOpen(true); } },
+      { id: "action:monitoring", label: "Monitoring…", detail: "Lab health vs topology, metrics and Grafana dashboards (netlab monitoring plugin)", run: () => openMonitoringDialog({ sessionId }) },
       { id: "action:tools", label: "External tools…", detail: "Graphite, SuzieQ, NUTS, NSO, Edgeshark next to the lab", run: () => openToolsDialog({ sessionId, openShell: (name) => openShellRef.current(name, sessionId) }) },
       { id: "action:validate", label: "Validate topology", detail: "Run netlab validate", run: () => void handleNetlabValidate(sessionId) },
       { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) },

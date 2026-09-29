@@ -14,7 +14,7 @@ from pathlib import Path
 import yaml
 
 from . import dashboards
-from .plan import get
+from .plan import container_name, get
 
 PLUGIN_DIR = Path(__file__).resolve().parents[2]
 COLLECTOR_SRC = PLUGIN_DIR / "collector" / "nlmon"
@@ -40,6 +40,7 @@ class Endpoints(typing.NamedTuple):
     tsdb: str
     gnmic: str
     snmp: str
+    grafana: str
     grafana_port: int
     tsdb_port: int
 
@@ -57,6 +58,7 @@ def endpoints(topology: dict, cfg: dict, component_ips: dict[str, str] | None = 
             at("tsdb", ports["tsdb"]),
             at("gnmic", ports["gnmic"]),
             at("snmp", ports["snmp"]),
+            at("grafana", ports["grafana"]),
             ports["grafana"],
             ports["tsdb"],
         )
@@ -67,6 +69,7 @@ def endpoints(topology: dict, cfg: dict, component_ips: dict[str, str] | None = 
         f"127.0.0.1:{p['tsdb']}",
         f"127.0.0.1:{p['gnmic']}",
         f"127.0.0.1:{p['snmp']}",
+        f"127.0.0.1:{p['grafana']}",
         p["grafana"],
         p["tsdb"],
     )
@@ -514,7 +517,34 @@ def render_all(topology: dict, plan: dict, component_ips: dict[str, str] | None 
     else:
         files.update(tool_scripts(plan, cfg, ep))
     files["README.md"] = readme(plan, cfg, ep)
+    files["stack.json"] = json.dumps(stack_info(topology, plan, cfg, ep), indent=1, sort_keys=True)
     return files
+
+
+def stack_info(topology: dict, plan: dict, cfg: dict, ep: Endpoints) -> dict:
+    """Where the running stack is, for tools that drive it (netlab-ui reads this file)."""
+    roles = ["collector", "tsdb"]
+    roles += [r for r in ("gnmic", "snmp") if needs(plan, "gnmi" if r == "gnmic" else r)]
+    if get(cfg, "grafana.enabled", True):
+        roles.append("grafana")
+    if cfg.get("placement") == "node":
+        prefix = cfg.get("node_prefix") or "mon"
+        containers = {r: container_name(topology, f"{prefix}-{r}") for r in roles}
+    else:
+        containers = {r: f"{plan['lab']}_mon_{r}" for r in roles}
+    return {
+        "lab": plan["lab"],
+        "placement": cfg.get("placement") or "tool",
+        "interval": int(cfg.get("interval") or 15),
+        "containers": containers,
+        "tsdb_url": f"http://{ep.tsdb}",
+        "tsdb_port": ep.tsdb_port,
+        "grafana_port": ep.grafana_port if "grafana" in roles else None,
+        "grafana_url": f"http://{ep.grafana}" if "grafana" in roles else None,
+        "grafana_user": "admin",
+        "grafana_password": str(get(cfg, "grafana.admin_password", "admin")),
+        "dashboards": {"overview": "netlab-overview", "routing": "netlab-routing", "node": "netlab-node"},
+    }
 
 
 def readme(plan: dict, cfg: dict, ep: Endpoints) -> str:

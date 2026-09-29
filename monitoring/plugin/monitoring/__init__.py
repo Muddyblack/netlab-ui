@@ -69,6 +69,7 @@ def topology_expand(topology: Box) -> None:
                 "device": "linux",
                 "provider": "clab",
                 "module": [],
+                "interfaces": [],
                 "role": "host",
                 "clab": clab,
                 _plan.COMPONENT_FLAG: True,

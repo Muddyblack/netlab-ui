@@ -79,3 +79,21 @@ def test_node_placement_components(topology):
     assert "192.168.121.110:9480" in files["tsdb/scrape.yml"]
     assert "http://192.168.121.111:8428" in files["grafana/provisioning/datasources/netlab.yml"]
     assert "docker run" not in files["up.sh"]
+
+
+def test_stack_info_tells_tools_where_the_stack_is(topology):
+    files = rendered(topology)
+    info = json.loads(files["stack.json"])
+    assert info["containers"] == {
+        "collector": "lab3_mon_collector",
+        "tsdb": "lab3_mon_tsdb",
+        "grafana": "lab3_mon_grafana",
+    }
+    assert info["tsdb_url"] == "http://127.0.0.1:8428" and info["grafana_url"] == "http://127.0.0.1:3000"
+    topology["monitoring"]["placement"] = "node"
+    files = render.render_all(
+        topology, plan.build(topology), {"collector": "10.0.0.5", "tsdb": "10.0.0.6", "grafana": "10.0.0.7"}
+    )
+    info = json.loads(files["stack.json"])
+    assert info["containers"]["collector"] == "clab-lab3-mon-collector"
+    assert info["tsdb_url"] == "http://10.0.0.6:8428" and info["grafana_url"] == "http://10.0.0.7:3000"

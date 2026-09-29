@@ -39,14 +39,12 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(collector.cycle())
         return 0
 
-    stop = threading.Event()
-    worker = threading.Thread(target=collector.run_forever, args=(stop,), daemon=True)
-    worker.start()
+    collector.scrape()  # warm the PID cache before the first scrape arrives
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             if self.path.startswith("/metrics"):
-                body, ctype = collector.text.encode(), "text/plain; version=0.0.4; charset=utf-8"
+                body, ctype = collector.scrape().encode(), "text/plain; version=0.0.4; charset=utf-8"
             elif self.path.startswith("/healthz"):
                 body, ctype = b"ok\n", "text/plain"
             else:
@@ -63,11 +61,10 @@ def main(argv: list[str] | None = None) -> int:
 
     host, _, port = args.listen.rpartition(":")
     server = http.server.ThreadingHTTPServer((host or "0.0.0.0", int(port)), Handler)
-    signal.signal(signal.SIGTERM, lambda *_: (stop.set(), threading.Thread(target=server.shutdown).start()))
+    signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=server.shutdown).start())
     print(f"nlmon {__version__}: {len(collector.plan.nodes)} nodes, listening on {args.listen}", flush=True)
     with contextlib.suppress(KeyboardInterrupt):
         server.serve_forever()
-    stop.set()
     return 0
 
 

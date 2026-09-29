@@ -100,6 +100,8 @@ class Collector:
         self._lock = threading.Lock()
         self._static = self._static_sinks()
         self.last_cycle = 0.0
+        self._cycle_lock = threading.Lock()
+        self._cycle_done = -1e9
 
     # ------------------------------------------------------------ static samples
     def _static_sinks(self) -> list[Sink]:
@@ -202,11 +204,16 @@ class Collector:
         with self._lock:
             return self._text
 
-    def run_forever(self, stop: threading.Event) -> None:
-        while not stop.is_set():
-            started = time.monotonic()
-            self.cycle()
-            stop.wait(max(1.0, self.plan.interval - (time.monotonic() - started)))
+    def scrape(self, fresh_for: float = 2.0) -> str:
+        """Collect now (when scraped) instead of on a timer of our own: the metrics store
+        then sees data at most one scrape interval old, not two. Concurrent scrapes share
+        one cycle, and a cycle younger than ``fresh_for`` seconds is served again."""
+        with self._cycle_lock:
+            if time.monotonic() - self._cycle_done < fresh_for:
+                return self.text
+            text = self.cycle()
+            self._cycle_done = time.monotonic()
+            return text
 
 
 def default_paths() -> Paths:

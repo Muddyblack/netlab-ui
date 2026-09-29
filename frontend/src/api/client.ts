@@ -39,6 +39,10 @@ export type ConfigSnapshot = Schemas["ConfigSnapshot"];
 export type LabTools = Schemas["LabTools"];
 export type LabTool = Schemas["LabTool"];
 export type ToolActionResult = Schemas["ToolActionResult"];
+export type MonitoringState = Schemas["MonitoringState"];
+export type MonitoringSummary = Schemas["MonitoringSummary"];
+export type MonitoringActionResult = Schemas["MonitoringActionResult"];
+export type PromSample = Schemas["PromSample"];
 export type SetupCatalog = Schemas["SetupCatalog"];
 export type BoxRecipe = Schemas["BoxRecipe"];
 export type CustomConfigs = Schemas["CustomConfigs"];
@@ -424,6 +428,21 @@ export const api = {
 
   labToolAction: (sessionId: string, tool: string, action: "up" | "down") =>
     http<ToolActionResult>("/api/lab/tools/action", { method: "POST", body: JSON.stringify({ sessionId, tool, action }) }, 1, 330000),
+
+  getMonitoring: (sessionId: string) =>
+    http<MonitoringState>(`/api/lab/monitoring?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  setMonitoring: (sessionId: string, enabled: boolean, placement?: "tool" | "node") =>
+    http<MonitoringState>("/api/lab/monitoring", { method: "PUT", body: JSON.stringify({ sessionId, enabled, placement }) }, 1, 30000),
+
+  getMonitoringSummary: (sessionId: string) =>
+    http<MonitoringSummary>(`/api/lab/monitoring/summary?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  queryMonitoring: (sessionId: string, query: string) =>
+    http<PromSample[]>(`/api/lab/monitoring/query?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`, { cache: "no-store" }, 1, 30000),
+
+  monitoringAction: (sessionId: string, action: "up" | "down") =>
+    http<MonitoringActionResult>("/api/lab/monitoring/action", { method: "POST", body: JSON.stringify({ sessionId, action }) }, 1, 330000),
 
   takeConfigSnapshot: (sessionId: string, reason = "manual snapshot") =>
     http<ConfigSnapshot>("/api/lab/configs/snapshots", { method: "POST", body: JSON.stringify({ sessionId, reason }) }, 1, 120000),
