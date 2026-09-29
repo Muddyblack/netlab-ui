@@ -4,7 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/Muddyblack/netlab-ui/releases/latest"><img src="https://img.shields.io/github/v/release/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=ff9f01&logo=github&label=release" alt="Latest release" /></a>
-  <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=download&label=downloads" alt="Downloads" /></a>
+  <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=download&label=release%20downloads" alt="GitHub Release asset downloads" /></a>
+  <a href="https://github.com/Muddyblack/netlab-ui/pkgs/container/netlab-ui"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2FMuddyblack%2Fnetlab-ui%2Fnetlab-ui&query=%24.downloadCountRaw&label=container%20pulls&style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=docker" alt="GHCR container pulls" /></a>
   <a href="docs/features.md"><img src="https://img.shields.io/badge/docs-read-ff9f01?style=for-the-badge&labelColor=182431&logoColor=white&logo=readthedocs" alt="Docs" /></a>
   <a href="https://github.com/Muddyblack/netlab-ui/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Muddyblack/netlab-ui/ci.yml?style=for-the-badge&labelColor=182431&logoColor=white&logo=githubactions&label=ci" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=apache&label=license" alt="License" /></a>
@@ -125,6 +126,7 @@ Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-us
 | [Running as a container](docs/container.md) | Images, required flags, several users on one server |
 | [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
 | [Architecture](docs/architecture.md) | How netlab-ui builds on clab-ui and netlab |
+| [netlab docs: netlab-ui](https://netlab.tools/extool/netlab-ui/) | netlab-ui as a netlab external tool (`tools: [netlab-ui]`); the page goes live once [ipspace/netlab#3913](https://github.com/ipspace/netlab/pull/3913) is merged |
 | [Contributing](CONTRIBUTING.md) | Dev setup, checks, API types, clab-ui patches, showcase |
 
 ## Thanks

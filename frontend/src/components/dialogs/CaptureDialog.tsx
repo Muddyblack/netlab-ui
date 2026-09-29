@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Box, Button, Dialog, DialogContent, DialogTitle, Divider, IconButton, Stack, ToggleButton, ToggleButtonGroup,
+  Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, Divider, IconButton, Stack, ToggleButton, ToggleButtonGroup,
   Tooltip, Typography
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -8,6 +8,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
+import { api } from "../../api/client";
 import { getApiBase } from "../../api/endpoint";
 import { clearCaptureRequest, useCaptureRequest } from "../../host/captureStore";
 
@@ -39,12 +40,44 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+type EdgesharkState = "checking" | "missing" | "installing" | "ready";
+
+/** Edgeshark is what feeds Wireshark in the browser. When it is not running,
+ * offer to install it here instead of sending people to a menu. */
+function useEdgeshark(active: boolean) {
+  const [state, setState] = useState<EdgesharkState>("checking");
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    setState("checking");
+    api.getEdgesharkStatus().then(
+      (status) => { if (!cancelled) setState(status.running ? "ready" : "missing"); },
+      () => { if (!cancelled) setState("missing"); },
+    );
+    return () => { cancelled = true; };
+  }, [active]);
+  const install = () => {
+    setState("installing");
+    setError(null);
+    api.installEdgeshark().then(
+      () => setState("ready"),
+      (err) => { setError(err instanceof Error ? err.message : String(err)); setState("missing"); },
+    );
+  };
+  const hint = state === "ready" || state === "checking"
+    ? "Runs a Wireshark container via Edgeshark."
+    : "Needs Edgeshark on the docker host. This downloads its compose file from GitHub and pulls its images, so it needs internet and takes a few minutes the first time.";
+  return { state, error, hint, install };
+}
+
 /** Chooser behind the canvas' capture menu items: a pcap download, a live
  * stream into a local Wireshark, or Wireshark in the browser (Edgeshark). */
 export function CaptureDialog() {
   const request = useCaptureRequest();
   const [seconds, setSeconds] = useState(savedDuration);
   const [copied, setCopied] = useState(false);
+  const edgeshark = useEdgeshark(Boolean(request));
   if (!request) return null;
   const sessionLab = { sessionId: request.sessionId ?? "" };
   const durableLab = request.topologyPath ? { topology: request.topologyPath } : sessionLab;
@@ -105,12 +138,20 @@ export function CaptureDialog() {
           </Section>
 
           <Section title="Wireshark in the browser">
-            <Button size="small" variant="outlined" startIcon={<OpenInNewIcon />}
-              onClick={() => { request.openInBrowserWireshark(); clearCaptureRequest(); }}>
-              Open Wireshark tab
-            </Button>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-              Runs a Wireshark container via Edgeshark (install it from the explorer&apos;s Running Labs menu first).
+            {edgeshark.state === "ready" || edgeshark.state === "checking" ? (
+              <Button size="small" variant="outlined" startIcon={<OpenInNewIcon />} disabled={edgeshark.state === "checking"}
+                onClick={() => { request.openInBrowserWireshark(); clearCaptureRequest(); }}>
+                Open Wireshark tab
+              </Button>
+            ) : (
+              <Button size="small" variant="outlined" disabled={edgeshark.state === "installing"}
+                startIcon={edgeshark.state === "installing" ? <CircularProgress size={14} /> : <DownloadIcon />}
+                onClick={edgeshark.install}>
+                {edgeshark.state === "installing" ? "Installing Edgeshark…" : "Install Edgeshark"}
+              </Button>
+            )}
+            <Typography variant="caption" color={edgeshark.error ? "error" : "text.secondary"} sx={{ display: "block", mt: 0.75 }}>
+              {edgeshark.error ? `Install failed: ${edgeshark.error}` : edgeshark.hint}
             </Typography>
           </Section>
         </Stack>

@@ -116,7 +116,10 @@ dialog with three ways to capture:
   node's network namespace itself.
 - **Live in your own Wireshark**: copy the
   `curl -sN '…/api/lab/capture/pcap?…&seconds=0' | wireshark -k -i -` command.
-- **Wireshark in the browser** via Edgeshark (as before). Its web port is now
+- **Wireshark in the browser** via Edgeshark. If Edgeshark isn't running, the
+  dialog offers *Install Edgeshark*: it downloads Edgeshark's compose file from
+  GitHub and pulls its images (internet needed, a few minutes the first
+  time). Its web port is now
   published on the UI's own bind address (`127.0.0.1` by default), no longer
   on every interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
 
@@ -125,7 +128,7 @@ shell that has sync switched on (like tmux's synchronize-panes).
 
 ## Providers: containerlab, libvirt VMs, external devices
 
-netlab has three providers, and every lab can mix them (`provider:` on a node
+netlab has three [providers](https://netlab.tools/providers/), and every lab can mix them (`provider:` on a node
 overrides the lab's). The UI works with all three. A lab without containers
 gets its canvas straight from netlab's transformed topology, so VMs show
 netlab's real interface names (`Ethernet1`, `GigabitEthernet0/1`). Settings →
@@ -140,7 +143,7 @@ Environment has the same table as below; hover a mark there for the reason.
 | Link down / up | ✅ | ✅ `domif-setlink` | — |
 | Live traffic and errors | ✅ | ◐ ² | — |
 | Packet capture | ✅ | ◐ ² | — |
-| Link impairment (delay, loss, rate) | ✅ | ◐ ² via `netlab tc` | — |
+| Link impairment (delay, loss, rate) | ✅ | ◐ ² via [`netlab tc`](https://netlab.tools/netlab/tc/) | — |
 | Node logs | ✅ | — | — |
 | Image manager | ✅ | — (Vagrant boxes) | — |
 
@@ -149,18 +152,18 @@ none of them; run the backend natively, or use the UI-only image with a host
 netlab install.
 ² Link state works on every VM link. Counters, capture and impairment work on
 LAN links only: netlab builds point-to-point VM links as UDP tunnels with no host
-interface (the same limit `netlab capture` has).
+interface (the same limit [`netlab capture`](https://netlab.tools/netlab/capture/) has).
 
 Where something isn't possible for a node, the UI says why instead of failing.
 
 ## More of netlab: tools, reports, setup
 
 - **External tools** (Ctrl+P → *External tools*, or a lab's context menu):
-  Graphite, SuzieQ, NUTS, Cisco NSO and Edgeshark from netlab's `tools:`.
+  Graphite, SuzieQ, NUTS, Cisco NSO and Edgeshark from netlab's [`tools:`](https://netlab.tools/extools/).
   Switch one on and netlab starts it with every deploy. For a deployed lab,
   see whether it runs, open its web UI, connect to its CLI (`netlab connect
   suzieq`) or start and stop it. The commands are netlab's own.
-- **Reports** (Ctrl+P → *Reports*): every netlab report as a table, rendered
+- **Reports** (Ctrl+P → *Reports*): every [netlab report](https://netlab.tools/netlab/report/) as a table, rendered
   HTML or text, with download in each format netlab offers (`.md`, `.html`,
   text) and *Open* for the HTML version. The HTML is sandboxed: scripts don't
   run and it doesn't get the UI's origin.
@@ -169,15 +172,15 @@ Where something isn't possible for a node, the UI says why instead of failing.
   `~/.netlab`, `/etc/netlab`) and warns when one has no variant for the
   node's device. *New template* creates `<name>/<device>.j2` with a commented
   starter and opens it.
-- **Containerlab tarball** (a deployed lab's context menu, or Ctrl+P): `netlab
-  clab tarball` downloads `clab.config.yml` plus the devices' current configs,
+- **Containerlab tarball** (a deployed lab's context menu, or Ctrl+P): [`netlab clab
+  tarball`](https://netlab.tools/netlab/clab/) downloads `clab.config.yml` plus the devices' current configs,
   to run with plain containerlab elsewhere.
 - **Setup helpers** (Settings → Environment):
-  - *Check my setup* runs `netlab test clab|libvirt|podman|grpc`: a real
+  - *Check my setup* runs [`netlab test`](https://netlab.tools/netlab/test/) `clab|libvirt|podman|grpc`: a real
     deploy of a tiny lab, checked and removed again. Stopping it halfway
     still tears everything down.
-  - *Install software* runs `netlab install` (Ansible, containerlab, libvirt,
+  - *Install software* runs [`netlab install`](https://netlab.tools/netlab/install/) (Ansible, containerlab, libvirt,
     GraphViz…) on the backend host. It needs root or password-less sudo.
-  - *Build routing-daemon containers* runs `netlab clab build` (BIRD,
+  - *Build routing-daemon containers* runs [`netlab clab build`](https://netlab.tools/netlab/clab/) (BIRD,
     dnsmasq…).
-  - *Vagrant box recipes* show `netlab libvirt config <device>`.
+  - *Vagrant box recipes* show [`netlab libvirt config <device>`](https://netlab.tools/netlab/libvirt/).

@@ -15,6 +15,6 @@ body{background:var(--clab-ui-editor-background,#1e1e1e);color:var(--clab-ui-edi
 @keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 </style></head><body><main class="stage">
 <div class="art"><div class="mark" id="clab-mark"></div></div>
-<section class="copy"><h1>Thank you for making this possible.</h1><p class="names">The containerlab community · SRL Labs · Nokia</p><p class="description">Built with your open-source work on containerlab and clab-ui.<br>With thanks to everyone who builds, shares and contributes.</p></section>
-<footer class="bottom"><div class="url">github.com/Muddyblack/netlab-ui</div><div class="upstream"><span>containerlab.dev</span><span>github.com/srl-labs/containerlab-app</span></div></footer>
+<section class="copy"><h1>Thank you for making this possible.</h1><p class="names">Ivan Pepelnjak &amp; the netlab community · The containerlab community · SRL Labs · Nokia</p><p class="description">Built on your open-source work: netlab, containerlab and clab-ui.<br>With thanks to everyone who builds, shares and contributes.</p></section>
+<footer class="bottom"><div class="url">github.com/Muddyblack/netlab-ui</div><div class="upstream"><span>netlab.tools</span><span>github.com/ipspace/netlab</span><span>containerlab.dev</span><span>github.com/srl-labs/containerlab-app</span></div></footer>
 </main></body></html>`;
