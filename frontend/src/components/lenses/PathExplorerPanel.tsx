@@ -24,8 +24,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { alpha } from "@mui/material/styles";
-
 import type { PathResult, ReachabilityLens } from "../../api/client";
 import type { AddressFamily } from "./LensCanvasOverlay";
 import { PATH_COLORS } from "./lens-canvas-overlay/helpers";
@@ -138,34 +136,64 @@ function PathQueryForm({
   );
 }
 
-function PathResultAlert({ result }: { result: PathResult }) {
-  if (result.reachable) {
-    return <Alert severity="success" icon={<RouteIcon fontSize="small" />}>{result.summary}</Alert>;
-  }
+function roleAt(index: number, length: number): "source" | "destination" | undefined {
+  if (index === 0) return "source";
+  return index === length - 1 ? "destination" : undefined;
+}
+
+function NodeChip({ name, role, onSelectRef }: { name: string; role?: "source" | "destination"; onSelectRef: (ref: string) => void }) {
   return (
-    <Alert severity="error" icon={<BlockIcon fontSize="small" />}>
-      {result.explanation[0] ?? "No path found."}
-      {result.explanation.slice(1).map((line) => <Typography key={line} variant="caption" display="block">{line}</Typography>)}
-    </Alert>
+    <Chip
+      size="small"
+      variant={role ? "filled" : "outlined"}
+      color={role ? "warning" : "default"}
+      label={name}
+      onClick={() => onSelectRef(`node:${name}`)}
+      sx={{ height: 24, fontFamily: "monospace", fontWeight: role ? 700 : 500 }}
+    />
   );
 }
 
-function PathExplanationCard({ explanation }: { explanation: string[] }) {
+/** The verdict in one card: reachable or not, the route as a chain of nodes,
+ * and any caveats as slim notes — instead of a green box, an amber box and a
+ * list that all said parts of the same thing. */
+function PathSummary({ result, source, target, onSelectRef }: { result: PathResult; source: string; target: string; onSelectRef: (ref: string) => void }) {
+  if (!result.reachable) {
+    return (
+      <Alert severity="error" icon={<BlockIcon fontSize="small" />}>
+        {result.explanation[0] ?? "No path found."}
+        {result.explanation.slice(1).map((line) => <Typography key={line} variant="caption" display="block">{line}</Typography>)}
+      </Alert>
+    );
+  }
+  const chain = result.hops.length ? [result.hops[0].fromNode, ...result.hops.map((hop) => hop.toNode)] : [source, target];
+  const protocols = [...new Set(result.hops.map((hop) => hop.protocol))];
+  const cost = result.hops.reduce((sum, hop) => sum + (hop.cost || 0), 0);
   return (
-    <Paper
-      variant="outlined"
-      sx={{
-        p: 1,
-        borderRadius: 2,
-        borderColor: alpha("#f59e0b", 0.35),
-        bgcolor: (theme) => alpha("#f59e0b", theme.palette.mode === "dark" ? 0.12 : 0.08),
-      }}
-    >
-      <Stack spacing={0.6}>
-        {explanation.map((line) => (
+    <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+      <Stack spacing={1}>
+        <Stack direction="row" alignItems="center" spacing={0.75} flexWrap="wrap" useFlexGap>
+          <RouteIcon fontSize="small" color="success" />
+          <Typography variant="subtitle2" sx={{ flex: 1 }}>
+            Reachable · {result.hops.length} hop{result.hops.length === 1 ? "" : "s"}
+          </Typography>
+          {protocols.map((protocol) => (
+            <Chip key={protocol} size="small" variant="outlined" color={PROTOCOL_COLOR[protocol] ?? "default"} label={protocol} sx={{ height: 20 }} />
+          ))}
+          {cost > result.hops.length && <Chip size="small" variant="outlined" label={`cost ${cost}`} sx={{ height: 20 }} />}
+        </Stack>
+        <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap spacing={0.25} sx={{ rowGap: 0.5 }}>
+          {chain.map((name, index) => (
+            <Stack key={`${name}:${index}`} direction="row" alignItems="center" spacing={0.25}>
+              <NodeChip name={name} role={roleAt(index, chain.length)} onSelectRef={onSelectRef} />
+              {index < chain.length - 1 && <ArrowRightAltIcon fontSize="small" color="disabled" />}
+            </Stack>
+          ))}
+        </Stack>
+        {result.explanation.map((line) => (
           <Stack key={line} direction="row" spacing={0.75} alignItems="flex-start">
-            <WarningAmberIcon sx={{ fontSize: 16, color: "#f59e0b", mt: "1px", flexShrink: 0 }} />
-            <Typography variant="caption" sx={{ color: "text.primary", lineHeight: 1.45 }}>{line}</Typography>
+            <WarningAmberIcon sx={{ fontSize: 15, color: "warning.main", mt: "2px", flexShrink: 0 }} />
+            <Typography variant="caption" sx={{ lineHeight: 1.45, color: "text.secondary" }}>{line}</Typography>
           </Stack>
         ))}
       </Stack>
@@ -173,25 +201,34 @@ function PathExplanationCard({ explanation }: { explanation: string[] }) {
   );
 }
 
+function EndpointLine({ node, iface, address }: { node: string; iface?: string | null; address?: string | null }) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: "34px 64px 1fr", columnGap: 0.75, fontFamily: "monospace", fontSize: 12 }}>
+      <Box component="span" sx={{ color: "text.primary", fontWeight: 600 }}>{node}</Box>
+      <Box component="span" sx={{ color: "text.secondary" }}>{iface ?? ""}</Box>
+      <Box component="span" sx={{ color: "text.secondary" }}>{address ?? ""}</Box>
+    </Box>
+  );
+}
+
 function PathHopRow({ hop, isLast, onSelectRef }: { hop: PathResult["hops"][number]; isLast: boolean; onSelectRef: (ref: string) => void }) {
   return (
     <Box sx={{ display: "flex", gap: 1.25 }}>
       <Stack alignItems="center" sx={{ flexShrink: 0 }}>
-        <Box sx={{ width: 24, height: 24, borderRadius: "50%", bgcolor: PATH_COLORS.hop, color: "#fff", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700 }}>{hop.order}</Box>
-        {!isLast && <Box sx={{ flex: 1, width: "2px", minHeight: 14, my: 0.25, bgcolor: "divider" }} />}
+        <Box sx={{ width: 22, height: 22, borderRadius: "50%", bgcolor: PATH_COLORS.hop, color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700 }}>{hop.order}</Box>
+        {!isLast && <Box sx={{ flex: 1, width: "2px", minHeight: 10, my: 0.25, bgcolor: "divider" }} />}
       </Stack>
       <Box sx={{ flex: 1, minWidth: 0, pb: isLast ? 0 : 1.25 }}>
-        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minHeight: 24, flexWrap: "wrap" }}>
-          <Chip size="small" variant="outlined" label={hop.fromNode} onClick={() => onSelectRef(`node:${hop.fromNode}`)} sx={{ height: 22, cursor: "pointer", fontFamily: "monospace", "& .MuiChip-label": { px: 0.85 } }} />
-          <ArrowRightAltIcon fontSize="small" color="disabled" />
-          <Chip size="small" variant="outlined" label={hop.toNode} onClick={() => onSelectRef(`node:${hop.toNode}`)} sx={{ height: 22, cursor: "pointer", fontFamily: "monospace", "& .MuiChip-label": { px: 0.85 } }} />
-          <Chip size="small" variant="outlined" color={PROTOCOL_COLOR[hop.protocol] ?? "default"} label={hop.protocol} sx={{ height: 20 }} />
-          {hop.cost > 1 && <Chip size="small" variant="outlined" label={`cost ${hop.cost}`} sx={{ height: 20 }} />}
+        <Stack direction="row" alignItems="center" spacing={0.75} sx={{ minHeight: 22, mb: 0.4 }}>
+          <Typography variant="caption" sx={{ fontFamily: "monospace", cursor: "pointer" }} onClick={() => onSelectRef(`node:${hop.fromNode}`)}>{hop.fromNode}</Typography>
+          <ArrowRightAltIcon sx={{ fontSize: 16 }} color="disabled" />
+          <Typography variant="caption" sx={{ fontFamily: "monospace", cursor: "pointer" }} onClick={() => onSelectRef(`node:${hop.toNode}`)}>{hop.toNode}</Typography>
+          {hop.subnet && <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>· {hop.subnet}</Typography>}
+          <Box sx={{ flex: 1 }} />
+          <Chip size="small" variant="outlined" color={PROTOCOL_COLOR[hop.protocol] ?? "default"} label={hop.cost > 1 ? `${hop.protocol} · cost ${hop.cost}` : hop.protocol} sx={{ height: 18, fontSize: 11 }} />
         </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, fontFamily: "monospace", wordBreak: "break-word" }}>
-          {hop.egressInterface} {hop.egressAddress} → {hop.ingressInterface} {hop.ingressAddress}
-          {hop.subnet ? ` · ${hop.subnet}` : ""}
-        </Typography>
+        <EndpointLine node={hop.fromNode} iface={hop.egressInterface} address={hop.egressAddress} />
+        <EndpointLine node={hop.toNode} iface={hop.ingressInterface} address={hop.ingressAddress} />
       </Box>
     </Box>
   );
@@ -199,7 +236,7 @@ function PathHopRow({ hop, isLast, onSelectRef }: { hop: PathResult["hops"][numb
 
 function PathHopsList({ hops, onSelectRef }: { hops: PathResult["hops"]; onSelectRef: (ref: string) => void }) {
   return (
-    <Box sx={{ mt: 0.25 }}>
+    <Box sx={{ px: 0.5 }}>
       {hops.map((hop, index) => (
         <PathHopRow key={hop.order} hop={hop} isLast={index === hops.length - 1} onSelectRef={onSelectRef} />
       ))}
@@ -268,9 +305,7 @@ export function PathExplorerPanel({
         onSwap={onSwap}
       />
 
-      {result && <PathResultAlert result={result} />}
-
-      {result?.reachable && result.explanation.length > 0 && <PathExplanationCard explanation={result.explanation} />}
+      {result && <PathSummary result={result} source={source} target={target} onSelectRef={onSelectRef} />}
 
       {result?.reachable && result.hops.length > 0 && <PathHopsList hops={result.hops} onSelectRef={onSelectRef} />}
     </Stack>
