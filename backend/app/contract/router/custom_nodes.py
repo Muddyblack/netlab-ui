@@ -62,7 +62,9 @@ def _catalog(topology_path: str, ann: dict) -> dict:
     hidden = set(ann.get("hiddenTemplates") or [])
     taken = {t.get("name") for t in saved} | {t.get("kind") for t in saved}
     devices = _devices_in_use(topology_path)
-    offered = [_template_for_device(d) for d in devices] if devices else ([] if saved else _starter_templates(topology_path))
+    offered = (
+        [_template_for_device(d) for d in devices] if devices else ([] if saved else _starter_templates(topology_path))
+    )
     templates = [*saved, *(t for t in offered if t["name"] not in hidden and t["name"] not in taken)]
     default = ann.get("defaultNode", "")
     if not default and templates and not saved:

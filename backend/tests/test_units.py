@@ -349,9 +349,15 @@ def test_update_composition_rejects_unknown_unit(tmp_path):
 def test_unit_keeps_the_source_labs_netlab_attributes_not_the_clab_projection(tmp_path):
     """The canvas sends its containerlab projection; a unit must hold netlab's."""
     lab = tmp_path / "lab.yml"
-    lab.write_text("name: lab\ndefaults:\n  device: frr\nnodes:\n  r1:\n    module: [ospf]\n  r2:\n    device: eos\nlinks: [r1-r2]\n")
+    lab.write_text(
+        "name: lab\ndefaults:\n  device: frr\nnodes:\n  r1:\n    module: [ospf]\n  r2:\n    device: eos\nlinks: [r1-r2]\n"  # noqa: E501
+    )
     canvas_nodes = [
-        {"name": "r1", "device": "frr", "attrs": {"mgmt-ipv4": "192.168.121.101", "restart-policy": "no", "binds": ["x:y"]}},
+        {
+            "name": "r1",
+            "device": "frr",
+            "attrs": {"mgmt-ipv4": "192.168.121.101", "restart-policy": "no", "binds": ["x:y"]},
+        },
         {"name": "r2", "device": "eos", "attrs": {"mgmt-ipv4": "192.168.121.102"}},
     ]
     path = _save(tmp_path / "units", "koka", nodes=canvas_nodes, links=[{"endpoints": ["r1", "r2"]}], source=lab)

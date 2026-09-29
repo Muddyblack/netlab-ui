@@ -119,7 +119,9 @@ def _publish_on_capture_bind(compose_yaml: str) -> str:
     interface. It is unauthenticated and can read every container's network
     namespace, so publish it where the UI itself listens. The Wireshark
     container reaches it over the docker network and does not need the port."""
-    return compose_yaml.replace(f'"{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"', f'"{CAPTURE_BIND}:{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"')
+    return compose_yaml.replace(
+        f'"{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"', f'"{CAPTURE_BIND}:{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"'
+    )
 
 
 async def _compose(action: list[str], timeout: float) -> CaptureOpResult:
@@ -170,7 +172,10 @@ async def _pull_wireshark_image() -> None:
     code, out, err = await _docker(["pull", WIRESHARK_VNC_IMAGE], timeout=570.0)
     if code != 0:
         detail = (err or out).strip() or f"docker pull exited with {code}"
-        raise HTTPException(status_code=502, detail=f"Edgeshark is running, but the Wireshark image {WIRESHARK_VNC_IMAGE} could not be pulled: {detail}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Edgeshark is running, but the Wireshark image {WIRESHARK_VNC_IMAGE} could not be pulled: {detail}",
+        )
 
 
 @router.post("/capture/edgeshark/install", response_model=CaptureOpResult)
