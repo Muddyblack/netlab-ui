@@ -34,6 +34,30 @@ export function parseIconNamesResponse(value: unknown): string[] {
 }
 
 export function selectIconFile(): Promise<File | null> {
+  return selectFile("image/svg+xml,image/png,.svg,.png");
+}
+
+/** Node templates exported by the palette: `{templates: [...]}` or a bare array. */
+export function parseTemplatesFile(text: string): Record<string, unknown>[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("File is not valid JSON");
+  }
+  let entries: unknown[] | null = null;
+  if (Array.isArray(parsed)) entries = parsed;
+  else if (isRecord(parsed) && Array.isArray(parsed.templates)) entries = parsed.templates;
+  if (!entries?.length) throw new Error("File contains no node templates");
+  entries.forEach((entry, index) => {
+    if (!isRecord(entry) || typeof entry.name !== "string" || typeof entry.kind !== "string") {
+      throw new Error(`Template ${index + 1} needs a "name" and a "kind"`);
+    }
+  });
+  return entries as Record<string, unknown>[];
+}
+
+export function selectFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     let settled = false;
@@ -53,7 +77,7 @@ export function selectIconFile(): Promise<File | null> {
     };
 
     input.type = "file";
-    input.accept = "image/svg+xml,image/png,.svg,.png";
+    input.accept = accept;
     input.style.display = "none";
     input.addEventListener("change", () => finish(input.files?.[0] ?? null), { once: true });
     document.body.appendChild(input);

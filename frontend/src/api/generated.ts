@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/topology/custom-nodes/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Custom Nodes
+         * @description Merge templates from an exported file (same name replaces).
+         */
+        post: operations["import_custom_nodes_api_topology_custom_nodes_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/custom-nodes/{name}": {
         parameters: {
             query?: never;
@@ -3646,6 +3666,13 @@ export interface components {
             /** Output */
             output?: string | null;
         };
+        /** ImportTemplatesRequest */
+        ImportTemplatesRequest: {
+            /** Templates */
+            templates: {
+                [key: string]: unknown;
+            }[];
+        };
         /** InstanceConflict */
         InstanceConflict: {
             /** Instanceid */
@@ -6053,6 +6080,41 @@ export interface operations {
                 "application/json": {
                     [key: string]: unknown;
                 };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomNodesResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_custom_nodes_api_topology_custom_nodes_import_post: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportTemplatesRequest"];
             };
         };
         responses: {
