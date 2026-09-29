@@ -11,6 +11,7 @@ export default [
   "run-on-nodes.mjs",
   "traffic.mjs",
   "link-faults.mjs",
+  "monitoring.mjs",
   "config-drift.mjs",
   "reports.mjs",
   "ai-agents.mjs",

@@ -122,6 +122,7 @@ Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-us
 | | |
 | --- | --- |
 | [Features](docs/features.md) | Shortcuts, run on nodes, search, running configs, exercises, live traffic, faults, packet capture, providers, reports |
+| [Monitoring](monitoring/README.md) | The netlab `monitoring` plugin: metrics, routing-protocol state and Grafana dashboards for any lab and vendor — also usable without the UI |
 | [AI agents](docs/ai-agents.md) | Start Claude Code, Codex or Gemini CLI connected to your lab, or connect any MCP tool; review what it proposes |
 | [Running as a container](docs/container.md) | Images, required flags, several users on one server |
 | [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
