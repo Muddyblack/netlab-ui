@@ -67,7 +67,7 @@ function useEdgeshark(active: boolean) {
   };
   const hint = state === "ready" || state === "checking"
     ? "Runs a Wireshark container via Edgeshark."
-    : "Needs Edgeshark on the docker host. This downloads its compose file from GitHub and pulls its images, so it needs internet and takes a few minutes the first time.";
+    : "Needs Edgeshark on the docker host. This downloads its compose file from GitHub and pulls its images and the Wireshark image, so it needs internet and takes a few minutes the first time.";
   return { state, error, hint, install };
 }
 

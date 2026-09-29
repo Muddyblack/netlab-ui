@@ -108,9 +108,18 @@ async def _edgeshark_containers() -> dict[str, str]:
 def _fetch_compose_yaml() -> str:
     try:
         with urllib.request.urlopen(EDGESHARK_COMPOSE_URL, timeout=30) as res:
-            return res.read().decode()
+            text = res.read().decode()
     except OSError as err:
         raise HTTPException(status_code=502, detail=f"Failed to download the edgeshark compose file: {err}") from err
+    return _publish_on_capture_bind(text)
+
+
+def _publish_on_capture_bind(compose_yaml: str) -> str:
+    """Edgeshark's own compose file publishes packetflix (port 5001) on every
+    interface. It is unauthenticated and can read every container's network
+    namespace, so publish it where the UI itself listens. The Wireshark
+    container reaches it over the docker network and does not need the port."""
+    return compose_yaml.replace(f'"{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"', f'"{CAPTURE_BIND}:{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"')
 
 
 async def _compose(action: list[str], timeout: float) -> CaptureOpResult:
@@ -129,10 +138,50 @@ async def edgeshark_status():
     return EdgesharkStatus(installed=bool(containers), running=any(s == "running" for s in containers.values()))
 
 
+# How long an install waits for Edgeshark's containers to stay up.
+_UP_TIMEOUT = 20.0
+
+
+async def _wait_until_running() -> None:
+    """`compose up -d` succeeds even when a container then crashes; wait for
+    the project to actually be up and say why if it is not."""
+    deadline = asyncio.get_running_loop().time() + _UP_TIMEOUT
+    containers: dict[str, str] = {}
+    while asyncio.get_running_loop().time() < deadline:
+        containers = await _edgeshark_containers()
+        if containers and all(state == "running" for state in containers.values()):
+            await asyncio.sleep(2)  # a crash-looping container is "running" for a moment
+            containers = await _edgeshark_containers()
+            if containers and all(state == "running" for state in containers.values()):
+                return
+        await asyncio.sleep(1)
+    broken = [name for name, state in containers.items() if state != "running"] or list(containers)
+    logs = ""
+    if broken:
+        _code, out, err = await _docker(["logs", "--tail", "15", broken[0]])
+        logs = (err or out).strip()
+    detail = f"Edgeshark started but {', '.join(broken) or 'its containers'} did not stay running."
+    raise HTTPException(status_code=502, detail=f"{detail} {logs}".strip())
+
+
+async def _pull_wireshark_image() -> None:
+    """The browser Wireshark image is large; pull it now instead of stalling the
+    first capture (whose request would then wait on the download)."""
+    code, out, err = await _docker(["pull", WIRESHARK_VNC_IMAGE], timeout=570.0)
+    if code != 0:
+        detail = (err or out).strip() or f"docker pull exited with {code}"
+        raise HTTPException(status_code=502, detail=f"Edgeshark is running, but the Wireshark image {WIRESHARK_VNC_IMAGE} could not be pulled: {detail}")
+
+
 @router.post("/capture/edgeshark/install", response_model=CaptureOpResult)
 async def edgeshark_install():
-    # First run pulls the ghostwire + packetflix images, so allow minutes.
-    return await _compose(["up", "-d"], timeout=570.0)
+    """Everything browser capture needs: Edgeshark's two containers (running,
+    not just created) and the Wireshark image. First run pulls images, so this
+    allows minutes."""
+    result = await _compose(["up", "-d"], timeout=570.0)
+    await _wait_until_running()
+    await _pull_wireshark_image()
+    return CaptureOpResult(ok=True, message=result.message or "Edgeshark and the Wireshark image are ready")
 
 
 @router.post("/capture/edgeshark/uninstall", response_model=CaptureOpResult)

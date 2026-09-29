@@ -468,7 +468,7 @@ export const api = {
 
   // First install pulls the ghostwire/packetflix images — allow minutes.
   installEdgeshark: () =>
-    http<{ ok: boolean; message: string }>("/api/lab/capture/edgeshark/install", { method: "POST" }, 1, 600000),
+    http<{ ok: boolean; message: string }>("/api/lab/capture/edgeshark/install", { method: "POST" }, 1, 1200000),
 
   uninstallEdgeshark: () =>
     http<{ ok: boolean; message: string }>("/api/lab/capture/edgeshark/uninstall", { method: "POST" }, 1, 180000),
