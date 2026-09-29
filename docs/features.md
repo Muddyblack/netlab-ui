@@ -117,12 +117,13 @@ dialog with three ways to capture:
 - **Live in your own Wireshark**: copy the
   `curl -sN '…/api/lab/capture/pcap?…&seconds=0' | wireshark -k -i -` command.
 - **Wireshark in the browser** via Edgeshark. If Edgeshark isn't running, the
-  dialog offers *Install Edgeshark*: it downloads Edgeshark's compose file from
-  GitHub, pulls its images and the Wireshark image, and checks the containers
-  stay up (internet needed, a few minutes the first time). Edgeshark's own
-  port 5001 is published on the UI's bind address only, not on every interface. Its web port is now
-  published on the UI's own bind address (`127.0.0.1` by default), no longer
-  on every interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
+  dialog offers *Install Edgeshark*: it starts netlab's own
+  [`edgeshark` tool](https://netlab.tools/extool/edgeshark/) (the same
+  containers `tools: [ edgeshark ]` would start), pulls the Wireshark image,
+  and checks the containers stay up (internet needed, a few minutes the first
+  time). Edgeshark's capture port 5001 and the Wireshark web page are published
+  on the UI's own bind address (`127.0.0.1` by default), not on every
+  interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
 
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
@@ -164,6 +165,12 @@ Where something isn't possible for a node, the UI says why instead of failing.
   Switch one on and netlab starts it with every deploy. For a deployed lab,
   see whether it runs, open its web UI, connect to its CLI (`netlab connect
   suzieq`) or start and stop it. The commands are netlab's own.
+- **Monitoring** (Ctrl+P → *Monitoring*, or a lab's context menu): turns on
+  the netlab [`monitoring` plugin](../monitoring/README.md) shipped with the
+  UI. It shows the lab's health against what the topology defines (BGP
+  sessions, OSPF and IS-IS adjacencies up vs expected, and which are missing),
+  how every node is collected, and opens the Grafana dashboards. Links taken
+  down or up from the UI are marked on the dashboards.
 - **Reports** (Ctrl+P → *Reports*): every [netlab report](https://netlab.tools/netlab/report/) as a table, rendered
   HTML or text, with download in each format netlab offers (`.md`, `.html`,
   text) and *Open* for the HTML version. The HTML is sandboxed: scripts don't

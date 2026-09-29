@@ -125,6 +125,7 @@ def is_deployed(lab_dir: Path) -> bool:
 
 
 async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, dict[str, Any]]:
+    """Run the bridge in ``lab_dir`` (any directory for ``host`` commands)."""
     python = location.target_python()
     if not python:
         return 127, {"ok": False, "output": "netlab is not installed"}
@@ -221,3 +222,16 @@ async def action(lab_dir: Path, tool: str, what: str) -> runner.CommandResult:
     if code or not data.get("ok"):
         return runner.CommandResult(code or 1, "", output or f"Could not {'start' if what == 'up' else 'stop'} {tool}")
     return runner.CommandResult(0, "\n".join(part for part in (output, message) if part), "")
+
+
+async def host_tool(tool: str, what: str, bind: str | None = None, timeout: float = 600) -> runner.CommandResult:
+    """Start (``up``) or stop (``down``) a host-wide tool such as Edgeshark from
+    netlab's own definition -- no lab needed. ``bind`` limits the ports the tool
+    publishes on every interface to that address."""
+    args = ["host", what, tool, *(["--bind", bind] if bind else [])]
+    code, data = await _bridge(Path.home(), *args, timeout=timeout)
+    output = _clean(str(data.get("output") or ""))
+    note = str(data.get("note") or "")
+    if code or not data.get("ok"):
+        return runner.CommandResult(code or 1, "", output or f"netlab could not {what} {tool}")
+    return runner.CommandResult(0, "\n".join(part for part in (output, note) if part), "")
