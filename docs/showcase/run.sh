@@ -3,6 +3,7 @@
 #
 #   docs/showcase/run.sh                  everything
 #   docs/showcase/run.sh --only canvas    one feature (requires matching source)
+#   docs/showcase/run.sh --resume         continue a failed run, skipping the features it finished
 #   docs/showcase/run.sh --list           list features
 #   docs/showcase/run.sh --check          check published media against source
 #

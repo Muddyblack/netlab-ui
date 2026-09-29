@@ -5,6 +5,7 @@
 // Start through run.sh, which builds the UI and boots an isolated backend.
 // Options:
 //   --only a,b        just these features (requires matching source for the rest)
+//   --resume          continue a failed run: reuse the features it already finished
 //   --themes light,dark   themes for stills (default dark)
 //   --video-theme dark    theme the clips are recorded in
 //   --no-video        stills only
@@ -33,12 +34,13 @@ const VIEWPORT = { width: 1600, height: 900 };
 const VIDEO_NAME = "netlab-ui-showcase.mp4";
 
 function parseArgs(argv) {
-  const args = { themes: ["dark"], videoTheme: "dark", video: true, previews: true, only: null };
+  const args = { themes: ["dark"], videoTheme: "dark", video: true, previews: true, only: null, resume: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => argv[++i];
     if (flag === "--base") args.base = value();
     else if (flag === "--workspace") args.workspace = path.resolve(value());
+    else if (flag === "--resume") args.resume = true;
     else if (flag === "--only") args.only = value().split(",").map((s) => s.trim());
     else if (flag === "--themes") args.themes = value().split(",");
     else if (flag === "--video-theme") args.videoTheme = value();
@@ -256,7 +258,23 @@ async function main() {
 
   fs.mkdirSync(WORK, { recursive: true });
   const output = fs.mkdtempSync(path.join(WORK, "capture-"));
-  const manifest = new Manifest(features, previous, selected, currentSource);
+  let manifest = new Manifest(features, previous, selected, currentSource);
+  // Finished features are kept here so a failed run can be continued with
+  // --resume instead of re-recording everything. A run without it starts clean.
+  const resumeDir = path.join(WORK, "resume");
+  const resumeFile = path.join(resumeDir, "state.json");
+  const saved = args.resume && fs.existsSync(resumeFile) ? JSON.parse(fs.readFileSync(resumeFile, "utf8")) : { features: {} };
+  if (!args.resume) fs.rmSync(resumeDir, { recursive: true, force: true });
+  if (args.resume && saved.sourceHash && saved.sourceHash !== currentSource) {
+    console.log("! source changed since the failed run; reused features may not show the latest edits");
+  }
+  const reused = selected.filter((f) => saved.features[f.id] && fs.existsSync(path.join(resumeDir, f.id)));
+  for (const feature of reused) {
+    fs.cpSync(path.join(resumeDir, feature.id), path.join(output, feature.id), { recursive: true });
+    manifest.features[features.indexOf(feature)] = { ...saved.features[feature.id] };
+    console.log(`\n▸ ${feature.id} — reused from the failed run`);
+  }
+  saved.features = Object.fromEntries(reused.map((f) => [f.id, saved.features[f.id]]));
   // Verified, unchanged features can be reused for a partial run. New files
   // stay isolated until every requested scene succeeds.
   for (const feature of features.filter((f) => !selected.includes(f))) {
@@ -268,7 +286,7 @@ async function main() {
   const browser = await chromium.launch({ executablePath });
   try {
     for (const [index, feature] of features.entries()) {
-      if (!selected.includes(feature)) continue;
+      if (!selected.includes(feature) || reused.includes(feature)) continue;
       const kicker = `${String(index + 1).padStart(2, "0")} / ${String(features.length).padStart(2, "0")}`;
       console.log(`\n▸ ${feature.id} — ${feature.title}`);
       const plan = (feature.themes ?? args.themes).map((theme) => ({ theme, recording: false }));
@@ -340,6 +358,10 @@ async function main() {
           await context.close();
         }
       }
+      fs.cpSync(path.join(output, feature.id), path.join(resumeDir, feature.id), { recursive: true });
+      saved.features[feature.id] = manifest.feature(feature.id);
+      saved.sourceHash = currentSource;
+      fs.writeFileSync(resumeFile, JSON.stringify(saved, null, 2) + "\n");
     }
   } finally {
     await browser.close();
@@ -373,6 +395,7 @@ async function main() {
     if (fs.existsSync(backup)) fs.renameSync(backup, MEDIA);
     throw error;
   }
+  fs.rmSync(resumeDir, { recursive: true, force: true });
   const injected = writeGallery(manifest, path.join(HERE, "GALLERY.md"), path.join(REPO, "README.md"));
   console.log(`\nGallery: docs/showcase/GALLERY.md${injected ? " and README.md" : ""}`);
   if (manifest.video) console.log(`Video:   docs/showcase/media/${manifest.video}`);

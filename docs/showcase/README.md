@@ -52,7 +52,7 @@ The run is isolated:
 
 ## Keeping recordings current
 
-A full run captures every scene into a temporary directory. Only after every scene succeeds does it replace `media/` and regenerate the gallery. A failure leaves the previous gallery untouched, reports the error, and exits unsuccessfully; it never fills a gap with an old clip. The complete replacement also removes obsolete screenshots and previews.
+A full run captures every scene into a temporary directory. Only after every scene succeeds does it replace `media/` and regenerate the gallery. A failure leaves the previous gallery untouched, reports the error, and exits unsuccessfully; it never fills a gap with an old clip. Features that finished before the failure are kept in `.work/resume/`: fix the problem and run `docs/showcase/run.sh --resume` to record only the remaining ones (a run without `--resume` starts clean). The frontend is still rebuilt, so reused features may predate your fix. The complete replacement also removes obsolete screenshots and previews.
 
 The manifest records a hash of the frontend, backend, dependency files, canvas patches, lab fixtures and recording scripts. This includes uncommitted edits. It also records checksums for every published asset and the final caption timings. The source must remain unchanged throughout the build and recording.
 
