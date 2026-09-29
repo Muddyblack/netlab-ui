@@ -53,6 +53,7 @@ export function NetlabLenses({ sessionId, container, state, themeMode, onToast }
         sessionId={sessionId}
         onClose={() => setReportOpen(false)}
         onSelectObjects={selectObjects}
+        themeMode={themeMode}
         onToast={onToast}
       />
 
