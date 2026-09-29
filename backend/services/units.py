@@ -203,6 +203,24 @@ def _clean_ports(raw: Any, node_names: set[str]) -> list[str]:
     return out
 
 
+def _netlab_node_bodies(node_bodies: list[dict[str, Any]], source_topology: str | Path) -> list[dict[str, Any]]:
+    """Take each node's device and attributes from the source lab's own netlab
+    YAML. The canvas sends what it draws, and that is the containerlab
+    projection (``mgmt-ipv4``, ``restart-policy``, ``binds`` …): saved into a
+    unit, those are not netlab attributes and netlab rejects the file."""
+    try:
+        source = serialize.from_yaml(Path(source_topology).read_text())
+    except (OSError, YAMLError, ValueError):
+        return node_bodies
+    out = []
+    for body in node_bodies:
+        node = source.node(body["name"])
+        # A device the node only inherits (lab defaults, a group) is written
+        # out: a unit is a standalone file with no such defaults.
+        out.append({**body, "device": node.device or body.get("device"), "attrs": dict(node.attrs)} if node else body)
+    return out
+
+
 def save_unit(units_dir: Path, body: dict[str, Any], source_topology: str | Path | None = None) -> Path:
     """Persist a unit from the panel's create/update payload. The YAML gets
     the nodes and *internal* links; everything else goes to the sidecar.
@@ -214,6 +232,8 @@ def save_unit(units_dir: Path, body: dict[str, Any], source_topology: str | Path
     path = _unit_path(units_dir, name)
 
     node_bodies = _declarative_node_bodies(list(body.get("nodes") or []))
+    if source_topology is not None:
+        node_bodies = _netlab_node_bodies(node_bodies, source_topology)
     node_names = {n["name"] for n in node_bodies}
 
     includes = [
