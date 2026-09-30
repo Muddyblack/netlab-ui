@@ -11,7 +11,8 @@ installed in the devices and no change to netlab itself:
 * **What the topology intends**: every BGP session and OSPF/IS-IS adjacency netlab configured,
   so "defined but not up" works the same for every vendor.
 * **Storage and dashboards**: VictoriaMetrics (Prometheus-compatible, light at scale) and
-  Grafana with three dashboards: lab overview (with a live topology graph), routing &
+  Grafana with three dashboards: lab overview (a topology graph is folded at the bottom, for
+  Grafana without netlab-ui), routing &
   convergence (flaps per router, OSPF neighbor states, BGP per peer, SPF, LSAs), node detail.
 
 Every metric carries netlab names -- `node`, `ifname`, `link`, `peer_node` -- so a query or a
@@ -48,11 +49,22 @@ Lab context menu or Ctrl+P → **Monitoring…** → switch it on. The UI instal
 * **Fault tests**: repeatable link flaps (see below).
 * **Setup**: where the stack runs, start/stop, and how each node is collected.
 
-### Dashboard event bands
+### Dashboard markers
 
-The shaded bands on the dashboards are events netlab-ui records in Grafana: **Link outages**
-(orange: a link taken down from the UI, until it came back up) and **Fault tests** (purple:
-one band per down period of a fault test). Each has a toggle at the top of every dashboard.
+Toggles at the top of every dashboard switch these markers on and off:
+
+| Toggle | Default | Shows |
+|---|---|---|
+| **Link outages** | on | Orange band: a link taken down from netlab-ui, until it came back up |
+| **Fault tests** | on | Purple band: each down period of a fault test |
+| **SPF runs** | off | Blue line: when a router ran OSPF or IS-IS SPF |
+| **Neighbor changes** | off | Red line: when an OSPF/IS-IS adjacency or BGP session last changed, per router and peer |
+
+SPF and neighbor markers come from the devices' own timestamps, so they sit at the moment the
+router did it, not at the next scrape. Turn them on next to a fault test to see which
+routers recalculated, and how often, after a link went down and came back.
+
+![SPF runs and neighbor changes around two fault-test cycles](docs/dashboard-markers.png)
 
 ### Fault tests (repeatable link flaps)
 

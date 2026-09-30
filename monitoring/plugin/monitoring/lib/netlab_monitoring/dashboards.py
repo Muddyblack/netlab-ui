@@ -42,6 +42,14 @@ class Board:
         self.row_height = max(self.row_height, h)
         return pos
 
+    def collapsed_row(self, title: str, panel: dict, h: int) -> None:
+        """A row folded shut at the end of the board, holding one full-width panel."""
+        self.row(title)
+        row = self.panels[-1]
+        self.add(panel, 24, h)
+        row["panels"] = [self.panels.pop()]
+        row["collapsed"] = True
+
     def row(self, title: str) -> None:
         if self.x:
             self.x, self.y = 0, self.y + self.row_height
@@ -90,9 +98,53 @@ class Board:
                 "list": [
                     events("Link outages", "link", "rgba(255, 152, 48, 0.4)"),
                     events("Fault tests", "scenario", "rgba(184, 119, 217, 0.4)"),
+                    *device_markers(any(v.get("name") == "node" for v in variables)),
                 ]
             },
         }
+
+
+def device_markers(node_filter: bool) -> list[dict]:
+    """Markers from the devices' own timestamps (off by default, toggles at the top):
+    when each router ran SPF, and when a neighbor/session last changed. Grafana places
+    each at the time the value says (the series value is the timestamp), and a value
+    repeated scrape after scrape is one marker."""
+    sel = f'{LAB},node=~"$node"' if node_filter else LAB
+
+    def when(metric: str, by: str, proto: str) -> str:
+        return f'label_replace(round(max by ({by}) ({metric}{{{sel}}})) * 1000, "proto", "{proto}", "", "")'
+
+    def marker(name: str, color: str, expr: str, title: str) -> dict:
+        return {
+            "datasource": DS,
+            "enable": False,
+            "hide": False,
+            "iconColor": color,
+            "name": name,
+            "expr": expr,
+            "step": "$__interval",
+            "useValueForTime": True,
+            "titleFormat": title,
+            "tagKeys": "proto,node",
+        }
+
+    spf = " or ".join(
+        [
+            when("netlab_ospf_spf_last_run_timestamp_seconds", "node", "OSPF"),
+            when("netlab_isis_spf_last_run_timestamp_seconds", "node, level", "IS-IS"),
+        ]
+    )
+    neighbors = " or ".join(
+        [
+            when("netlab_ospf_neighbor_last_change_timestamp_seconds", "node, peer_node, ifname", "OSPF"),
+            when("netlab_isis_adjacency_last_change_timestamp_seconds", "node, peer_node, ifname", "IS-IS"),
+            when("netlab_bgp_session_last_change_timestamp_seconds", "node, peer_node, peer", "BGP"),
+        ]
+    )
+    return [
+        marker("SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}"),
+        marker("Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed"),
+    ]
 
 
 def events(name: str, tag: str, color: str) -> dict:
@@ -435,8 +487,6 @@ def overview() -> dict:
         24,
         7,
     )
-    b.row("Topology")
-    b.add(node_graph(), 24, 12)
     b.row("Nodes")
     b.add(
         table(
@@ -525,6 +575,8 @@ def overview() -> dict:
         24,
         6,
     )
+    # netlab-ui shows the lab itself; this graph is for Grafana on its own (netlab CLI)
+    b.collapsed_row("Topology graph", node_graph(), 12)
     return b.build(variables(False, False), LINKS)
 
 
