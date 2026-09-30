@@ -70,7 +70,7 @@ def test_libvirt_vm_taps_by_nic_order(tmp_path):
     (run / "lab_r9.xml").write_text("""<domstatus state='running' pid='4242'><domain type='kvm'><name>lab_r9</name>
 <devices>
  <interface type='network'><target dev='vnet6'/></interface>
- <interface type='udp'><source address='127.1.1.1' port='10001'/></interface>
+ <interface type='udp'><source address='127.1.1.1' port='10001'/><link state='down'/></interface>
  <interface type='bridge'><target dev='vnet7'/></interface>
 </devices></domain></domstatus>""")
     proc = make_proc(tmp_path)
@@ -90,7 +90,6 @@ def test_libvirt_vm_taps_by_nic_order(tmp_path):
         str(tmp_path / "run" / "libvirt"),
         "lab_r9",
         str(proc),
-        str(sysfs),
         host.Cgroups(str(proc), str(sysfs)),
         labels,
     )
@@ -98,15 +97,63 @@ def test_libvirt_vm_taps_by_nic_order(tmp_path):
     assert values(sink, "netlab_if_tx_bytes_total") == {"ge-0/0/1": 700}
     assert values(sink, "netlab_if_rx_bytes_total") == {"ge-0/0/1": 800}
     assert "ge-0/0/0" not in values(sink, "netlab_if_rx_bytes_total")  # UDP tunnel: no tap
+    # link state is what libvirt says (a pulled cable, `domif-setlink`), for tunnels too; the host tap stays up
+    assert values(sink, "netlab_if_oper_up") == {"mgmt": 1, "ge-0/0/0": 0, "ge-0/0/1": 1}
     assert (
         libvirt.vm_node(
             Sink(),
             str(tmp_path / "run" / "libvirt"),
             "missing",
             str(proc),
-            str(sysfs),
             host.Cgroups(str(proc), str(sysfs)),
             labels,
         )
         is False
     )
+
+
+def _vm_cgroups(tmp_path, proc_cgroup):
+    """A libvirt VM on cgroup v2: the scope holds the VM, `libvirt/emulator` only the emulator thread."""
+    run = tmp_path / "run" / "libvirt" / "qemu"
+    run.mkdir(parents=True)
+    (run / "lab-r9.xml").write_text(
+        "<domstatus state='running' pid='4242'><domain type='kvm' id='3'><name>lab-r9</name>"
+        "<devices><interface type='bridge'><target dev='vnet7'/></interface></devices></domain></domstatus>"
+    )
+    proc = make_proc(tmp_path, cgroup=proc_cgroup)
+    cg = tmp_path / "sys" / "fs" / "cgroup"
+    cg.mkdir(parents=True)
+    (cg / "cgroup.controllers").write_text("cpu memory\n")
+    scope = cg / "machine.slice" / "machine-qemu\\x2d3\\x2dlab\\x2dr9.scope"
+    (scope / "libvirt" / "emulator").mkdir(parents=True)
+    (scope / "cpu.stat").write_text("usage_usec 30000000\n")
+    (scope / "memory.current").write_text("80000000\n")
+    (scope / "memory.stat").write_text("inactive_file 0\n")
+    (scope / "libvirt" / "emulator" / "cpu.stat").write_text("usage_usec 100000\n")  # emulator thread only
+    return proc, tmp_path / "sys"
+
+
+def _vm_sink(tmp_path, proc, sysfs):
+    sink = Sink({"node": "r9"})
+    assert libvirt.vm_node(
+        sink,
+        str(tmp_path / "run" / "libvirt"),
+        "lab-r9",
+        str(proc),
+        host.Cgroups(str(proc), str(sysfs)),
+        [None],
+    )
+    return sink
+
+
+def test_libvirt_vm_cpu_and_memory_are_the_whole_vm_not_the_emulator_thread(tmp_path):
+    path = "0::/machine.slice/machine-qemu\\x2d3\\x2dlab\\x2dr9.scope/libvirt/emulator\n"
+    sink = _vm_sink(tmp_path, *_vm_cgroups(tmp_path, path))
+    assert values(sink, "netlab_node_cpu_seconds_total") == {"r9": 30.0}
+    assert values(sink, "netlab_node_memory_bytes") == {"r9": 80000000}
+
+
+def test_libvirt_vm_found_by_scope_name_from_a_private_cgroup_namespace(tmp_path):
+    sink = _vm_sink(tmp_path, *_vm_cgroups(tmp_path, "0::/../../machine.slice/x/libvirt/emulator\n"))
+    assert values(sink, "netlab_node_cpu_seconds_total") == {"r9": 30.0}
+    assert values(sink, "netlab_node_memory_bytes") == {"r9": 80000000}

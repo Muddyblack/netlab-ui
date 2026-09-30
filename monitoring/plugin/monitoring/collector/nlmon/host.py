@@ -7,8 +7,13 @@ image (no tools needed inside the node) and for nodes without a management netwo
 from __future__ import annotations
 
 import os
+import re
 
 from .metrics import Sink
+
+# libvirt puts a VM's emulator, vCPU and I/O threads in child cgroups; the VM's CPU and memory
+# are those of the parent (systemd scope on cgroup v2, machine/<name>.libvirt-qemu on v1).
+_LIBVIRT_CHILD = re.compile(r"(?:/libvirt)?/(?:emulator|vcpu\d+|iothread\d+)$")
 
 NETDEV_FIELDS = (
     # (column in /proc/net/dev, metric, is_rx)
@@ -62,14 +67,15 @@ class Cgroups:
         self.root = f"{sysfs}/fs/cgroup"
         self.v2 = os.path.exists(f"{self.root}/cgroup.controllers")
 
-    def _candidates(self, pid: int, cid: str, controller: str) -> list[str]:
+    def _candidates(self, pid: int, cid: str, controller: str, extra: tuple[str, ...] = ()) -> list[str]:
         """Possible cgroup directories: the path in /proc/<pid>/cgroup (correct when we
         share the host cgroup namespace), then the usual docker/podman/libvirt layouts."""
         paths: list[str] = []
         for line in (_read(f"{self.proc}/{pid}/cgroup") or "").splitlines():
             hid, ctrls, path = [*line.split(":", 2), "", ""][:3]
             if (self.v2 and hid == "0") or (not self.v2 and controller in ctrls.split(",")):
-                paths.append(path)
+                paths.append(_LIBVIRT_CHILD.sub("", path))
+        paths += extra
         if cid:
             paths += [f"/docker/{cid}", f"/system.slice/docker-{cid}.scope", f"/machine.slice/libpod-{cid}.scope"]
         base = self.root if self.v2 else f"{self.root}/{'cpu,cpuacct' if controller == 'cpuacct' else controller}"
@@ -77,31 +83,31 @@ class Cgroups:
             base = f"{self.root}/{controller}"
         return [f"{base}{p}" for p in paths if "/.." not in p]
 
-    def _find(self, pid: int, cid: str, controller: str, filename: str) -> str | None:
-        for path in self._candidates(pid, cid, controller):
+    def _find(self, pid: int, cid: str, controller: str, filename: str, extra: tuple[str, ...] = ()) -> str | None:
+        for path in self._candidates(pid, cid, controller, extra):
             if os.path.exists(f"{path}/{filename}"):
                 return path
         return None
 
-    def cpu_seconds(self, pid: int, cid: str = "") -> float | None:
+    def cpu_seconds(self, pid: int, cid: str = "", extra: tuple[str, ...] = ()) -> float | None:
         if self.v2:
-            path = self._find(pid, cid, "", "cpu.stat")
+            path = self._find(pid, cid, "", "cpu.stat", extra)
             usec = _kv(_read(f"{path}/cpu.stat")).get("usage_usec") if path else None
             return usec / 1e6 if usec is not None else None
-        path = self._find(pid, cid, "cpuacct", "cpuacct.usage")
+        path = self._find(pid, cid, "cpuacct", "cpuacct.usage", extra)
         text = _read(f"{path}/cpuacct.usage") if path else None
         return int(text) / 1e9 if text and text.strip().isdigit() else None
 
-    def memory_bytes(self, pid: int, cid: str = "") -> float | None:
+    def memory_bytes(self, pid: int, cid: str = "", extra: tuple[str, ...] = ()) -> float | None:
         """Working set (usage minus inactive file cache), like `docker stats`."""
         if self.v2:
-            path = self._find(pid, cid, "", "memory.current")
+            path = self._find(pid, cid, "", "memory.current", extra)
             if not path:
                 return None
             usage = (_read(f"{path}/memory.current") or "").strip()
             inactive = _kv(_read(f"{path}/memory.stat")).get("inactive_file", 0)
         else:
-            path = self._find(pid, cid, "memory", "memory.usage_in_bytes")
+            path = self._find(pid, cid, "memory", "memory.usage_in_bytes", extra)
             if not path:
                 return None
             usage = (_read(f"{path}/memory.usage_in_bytes") or "").strip()

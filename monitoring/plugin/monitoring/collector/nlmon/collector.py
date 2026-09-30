@@ -153,7 +153,6 @@ class Collector:
                 self.paths.libvirt_run,
                 node["domain"],
                 self.paths.proc,
-                self.paths.sysfs,
                 self.cgroups,
                 _nic_labels(node),
             )

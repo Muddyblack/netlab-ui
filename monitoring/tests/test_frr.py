@@ -88,12 +88,14 @@ def test_parse_duration():
     assert frr.parse_duration("never") is None
 
 
-def test_real_vty_socket_protocol(tmp_path):
+def test_real_vty_socket_protocol():
     """The client speaks FRR's vty framing: NUL-terminated command, reply + 3 NULs + status."""
     import socket
+    import tempfile
     import threading
 
-    path = str(tmp_path / "zebra.vty")
+    # unix socket paths are limited to ~108 characters: pytest's tmp_path can exceed that
+    path = os.path.join(tempfile.mkdtemp(prefix="vty", dir="/tmp"), "zebra.vty")
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(path)
     server.listen(1)
