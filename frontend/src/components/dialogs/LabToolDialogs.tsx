@@ -1,3 +1,4 @@
+import { AgentGuideCard } from "../agents/AgentGuideCard";
 import { CaptureDialog } from "./CaptureDialog";
 import { ConfigsDialog } from "./ConfigsDialog";
 import { CopyLabDialog } from "./CopyLabDialog";
@@ -15,6 +16,7 @@ export function LabToolDialogs() {
       <CopyLabDialog />
       <MonitoringDialog />
       <ToolsDialog />
+      <AgentGuideCard />
     </>
   );
 }

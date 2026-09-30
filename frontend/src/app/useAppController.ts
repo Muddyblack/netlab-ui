@@ -24,6 +24,7 @@ import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agent
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
 import type { TopologyRef } from "../hooks/useTabManager";
 import { runningLabMatches } from "../host/runningMatch";
+import { useAgentGuide } from "./useAgentGuide";
 
 import {
   useAppData,
@@ -1013,6 +1014,9 @@ export function useAppController() {
       }, () => undefined);
     });
   }, [assistantCapabilities, sessionId, addToast]);
+
+  // Let an attached agent show the user around (MCP ui_* tools)
+  useAgentGuide(Boolean(assistantCapabilities), sessionId, quickActions);
 
   const handlePluginPanelChanged = useCallback(async () => {
     if (runtime?.session) {

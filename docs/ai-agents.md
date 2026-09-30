@@ -54,6 +54,19 @@ The token is random per backend start. Set `NETLAB_APP_ASSISTANT_TOKEN` so an ag
 | **Propose** | `propose_topology_edit`, `propose_fault_injection`: staged for your approval (see below) |
 | **Write** | `write_workspace_file`: creates or overwrites a file inside the open lab's directory, without approval |
 | **Teach** | `get_teaching_document`, `create_teaching_document`: guided tour and exercises |
+| **Monitor** | `get_monitoring` (lab health against the topology, Grafana dashboard links), `query_metrics` (PromQL over the `netlab_*` metrics), `get_fault_test_results`. See [lab monitoring](../monitoring/README.md). |
+| **Show you the UI** | `ui_show_nodes` (spotlight nodes on your canvas), `ui_run_action` (open a dialog or panel, from `ui_list_actions`), `ui_open_monitoring` (a Monitoring tab), `ui_prepare_fault_test` (fill in a fault test; you press Run), `ui_explain`, `ui_clear` |
+
+### The agent shows you, live
+
+With netlab-ui open, an agent can walk you through the lab in the window you're looking at:
+it spotlights the nodes it's talking about, opens the dialog that does what you asked, and
+puts a short note at the bottom of the screen explaining what you see. Dismiss the note, or
+ask the agent to `ui_clear`. The agent can only open things (reports, monitoring, external
+tools, the tour, …): it can't deploy, delete or change anything through these tools, and
+fault tests only start when you press **Run**.
+
+![An agent explaining a link and setting up a fault test](images/agent-guide.png)
 
 The tools are built to keep the agent's context small:
 

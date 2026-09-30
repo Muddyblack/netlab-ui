@@ -26,7 +26,7 @@ from app.assistant.responses import (
     AssistantProposalResult,
 )
 from app.sessions.store import store
-from services.assistant import harness, mcp_server, proposals, tools
+from services.assistant import guide, harness, mcp_server, proposals, tools
 from services.assistant.config import mcp_base_url, mcp_token
 from services.events import hub
 from services.netlab import runner
@@ -104,6 +104,24 @@ class Selection(BaseModel):
 def set_selection(body: Selection):
     """Tell agents what the user has selected on the canvas."""
     tools.set_selection(body.sessionId, body.nodes)
+    return {"ok": True}
+
+
+class UiAction(BaseModel):
+    id: str
+    label: str
+    detail: str = ""
+
+
+class UiActions(BaseModel):
+    sessionId: str
+    actions: list[UiAction] = []
+
+
+@router.post("/ui-actions", response_model=AssistantAck)
+def set_ui_actions(body: UiActions):
+    """What the user's UI can open for this lab, so agents can show them around."""
+    guide.set_ui_actions(body.sessionId, [action.model_dump() for action in body.actions])
     return {"ok": True}
 
 

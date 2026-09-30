@@ -33,7 +33,11 @@ import {
   type MonitoringSummary,
   type ScenarioRun
 } from "../../api/client";
-import { openMonitoringDialog, useMonitoringDialogRequest } from "../../host/monitoringDialogStore";
+import {
+  type FaultTestPrefill,
+  openMonitoringDialog,
+  useMonitoringDialogRequest
+} from "../../host/monitoringDialogStore";
 
 type TabId = "health" | "faults" | "setup";
 
@@ -295,10 +299,12 @@ function ScenarioResults({ run }: { run: ScenarioRun }) {
 function FaultsTab({
   sessionId,
   state,
+  prefill,
   onError
 }: {
   sessionId: string;
   state: MonitoringState;
+  prefill?: FaultTestPrefill;
   onError: (text: string) => void;
 }) {
   const links = state.links ?? [];
@@ -309,6 +315,17 @@ function FaultsTab({
   const [up, setUp] = useState(30);
   const [runs, setRuns] = useState<ScenarioRun[]>([]);
   const [busy, setBusy] = useState(false);
+  // Filled in by an AI agent: highlight Run until the user starts it
+  const [suggested, setSuggested] = useState(false);
+  useEffect(() => {
+    if (!prefill) return;
+    setLink(prefill.link);
+    setEnd(prefill.end);
+    setCycles(prefill.cycles);
+    setDown(prefill.down);
+    setUp(prefill.up);
+    setSuggested(true);
+  }, [prefill]);
 
   const load = useCallback(async () => {
     try {
@@ -337,6 +354,7 @@ function FaultsTab({
     : [];
   const start = async () => {
     setBusy(true);
+    setSuggested(false);
     try {
       await api.startScenario({
         sessionId,
@@ -443,11 +461,21 @@ function FaultsTab({
             startIcon={<PlayArrowIcon />}
             disabled={busy || ends.length === 0}
             onClick={() => void start()}
+            sx={
+              suggested
+                ? { outline: 3, outlineColor: "primary.light", outlineOffset: 2 }
+                : undefined
+            }
           >
             Run
           </Button>
         )}
       </Stack>
+      {suggested && !running && (
+        <Typography variant="caption" color="primary">
+          Set up by your AI agent — check the link and timing, then press Run.
+        </Typography>
+      )}
       {latest && (
         <Box>
           <Stack
@@ -497,8 +525,10 @@ function FaultsTab({
           {latest.results.length > 0 && <ScenarioResults run={latest} />}
           {latest.summary.recovery && (
             <Typography variant="body2" sx={{ mt: 1 }}>
-              Recovery {recovery(latest.summary.recovery.min)} –{" "}
-              {recovery(latest.summary.recovery.max)} (avg {recovery(latest.summary.recovery.avg)})
+              {latest.summary.recovery.min === latest.summary.recovery.max
+                ? `Recovery ${recovery(latest.summary.recovery.min)}`
+                : `Recovery ${recovery(latest.summary.recovery.min)} – ${recovery(latest.summary.recovery.max)} ` +
+                  `(avg ${recovery(latest.summary.recovery.avg)})`}
               {latest.summary.notRecovered > 0
                 ? ` · ${latest.summary.notRecovered} not recovered`
                 : ""}
@@ -670,6 +700,11 @@ export function MonitoringDialog() {
     return () => window.clearInterval(timer);
   }, [load, sessionId]);
 
+  // Opened on a tab (e.g. by an AI agent showing the user around)
+  useEffect(() => {
+    if (request?.tab) setTab(request.tab);
+  }, [request]);
+
   const nodes = useMemo(() => (state?.coverage ?? []).map((item) => item.node), [state]);
   useEffect(() => {
     if (nodes.length && !nodes.includes(node)) setNode(nodes[0]);
@@ -795,7 +830,12 @@ export function MonitoringDialog() {
           <HealthTab state={state} summary={summary} node={node} setNode={setNode} />
         )}
         {state?.enabled && tab === "faults" && (
-          <FaultsTab sessionId={sessionId} state={state} onError={showError} />
+          <FaultsTab
+            sessionId={sessionId}
+            state={state}
+            prefill={request.faultTest}
+            onError={showError}
+          />
         )}
         {state?.enabled && tab === "setup" && (
           <SetupTab

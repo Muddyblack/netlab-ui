@@ -14,6 +14,11 @@ import { getApiBase } from "./endpoint";
 
 type Schemas = components["schemas"];
 
+/** A backend push event (`{type: "files" | "workspaces" | "proposals" | "ui" …}`). */
+export type BackendEvent = { type?: string; sessionId?: string; [key: string]: unknown };
+let eventSource: EventSource | null = null;
+const eventHandlers = new Set<(event: BackendEvent) => void>();
+
 export type HealthStatus = Schemas["HealthStatus"];
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
@@ -612,16 +617,29 @@ export const api = {
    * should keep a slow polling fallback — the stream is best-effort (the
    * watcher is disabled when watchfiles isn't installed on the backend).
    */
-  subscribeEvents(onEvent: (event: { type?: string; sessionId?: string }) => void): () => void {
-    const es = new EventSource(`${getApiBase()}/api/lab/events/stream`);
-    es.onmessage = (e) => {
-      try {
-        onEvent(JSON.parse(e.data));
-      } catch {
-        /* ignore malformed frames */
+  subscribeEvents(onEvent: (event: BackendEvent) => void): () => void {
+    // One shared stream for every subscriber: browsers allow only ~6 open
+    // HTTP/1.1 connections per host, and each EventSource holds one forever.
+    eventHandlers.add(onEvent);
+    if (!eventSource) {
+      eventSource = new EventSource(`${getApiBase()}/api/lab/events/stream`);
+      eventSource.onmessage = (e) => {
+        let event: BackendEvent;
+        try {
+          event = JSON.parse(e.data);
+        } catch {
+          return; // ignore malformed frames
+        }
+        for (const handler of [...eventHandlers]) handler(event);
+      };
+    }
+    return () => {
+      eventHandlers.delete(onEvent);
+      if (!eventHandlers.size && eventSource) {
+        eventSource.close();
+        eventSource = null;
       }
     };
-    return () => es.close();
   },
 
   labInitial: (sessionId: string) =>
@@ -780,5 +798,11 @@ export const api = {
     http<{ ok: boolean }>("/api/assistant/selection", {
       method: "POST",
       body: JSON.stringify({ sessionId, nodes }),
+    }),
+  /** What this window can open for the lab, so an attached agent can show the user around. */
+  setAssistantUiActions: (sessionId: string, actions: { id: string; label: string; detail: string }[]) =>
+    http<{ ok: boolean }>("/api/assistant/ui-actions", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, actions }),
     }),
 };
