@@ -11,14 +11,15 @@ installed in the devices and no change to netlab itself:
 * **What the topology intends**: every BGP session and OSPF/IS-IS adjacency netlab configured,
   so "defined but not up" works the same for every vendor.
 * **Storage and dashboards**: VictoriaMetrics (Prometheus-compatible, light at scale) and
-  Grafana with three dashboards (lab overview, routing & convergence, node detail).
+  Grafana with three dashboards: lab overview (with a live topology graph), routing &
+  convergence (flaps per router, OSPF neighbor states, BGP per peer, SPF, LSAs), node detail.
 
 Every metric carries netlab names -- `node`, `ifname`, `link`, `peer_node` -- so a query or a
 dashboard never needs to know which vendor or collection method produced it.
 
 ![Routing and convergence dashboard during a link flap](docs/dashboard-routing.png)
 
-![netlab-ui Monitoring dialog with a link down](docs/netlab-ui-dialog.png)
+![netlab-ui Monitoring dialog](docs/netlab-ui-dialog.png)
 
 ## Use it
 
@@ -40,9 +41,37 @@ prints the Grafana URL (`http://<host>:3000`, anonymous read-only; `admin`/`admi
 ### From netlab-ui
 
 Lab context menu or Ctrl+P → **Monitoring…** → switch it on. The UI installs the plugin in
-`~/.netlab` and edits the topology for you. The dialog shows the lab's health against the
-topology, how each node is collected, and links to the dashboards. Links taken down or up
-from the UI are marked on the dashboards (Grafana annotations).
+`~/.netlab` and edits the topology for you. The dialog has three tabs:
+
+* **Health**: nodes, BGP sessions and OSPF/IS-IS adjacencies up vs what the topology defines,
+  what is missing, and buttons for the dashboards.
+* **Fault tests**: repeatable link flaps (see below).
+* **Setup**: where the stack runs, start/stop, and how each node is collected.
+
+### Dashboard event bands
+
+The shaded bands on the dashboards are events netlab-ui records in Grafana: **Link outages**
+(orange: a link taken down from the UI, until it came back up) and **Fault tests** (purple:
+one band per down period of a fault test). Each has a toggle at the top of every dashboard.
+
+### Fault tests (repeatable link flaps)
+
+Pick one or more link ends, the number of cycles and how long each link stays down and up.
+netlab-ui takes the links down and up on that schedule (containers with `ip link`, libvirt
+VMs with `virsh domif-setlink`) and samples the collector about twice a second. For every
+cycle it reports:
+
+| | |
+|---|---|
+| Reaction | Time from link down until a session/adjacency the topology defines went down |
+| Impact | How many were down at the worst moment (and which) |
+| Recovery | Time from link up until everything the topology defines was up again. Taken from the devices' own "last changed" timestamps where they report them (FRR: whole seconds, so `0 s` means under a second), otherwise at sampling resolution |
+
+Runs are saved in `monitoring/scenarios/*.json` next to the topology, so a change (timers,
+BFD, a different design) can be compared run against run. The same is available over the
+API: `POST /api/lab/monitoring/scenarios`.
+
+![Fault tests in netlab-ui](docs/netlab-ui-fault-tests.png)
 
 ## Settings
 

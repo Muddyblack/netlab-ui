@@ -169,8 +169,12 @@ Where something isn't possible for a node, the UI says why instead of failing.
   the netlab [`monitoring` plugin](../monitoring/README.md) shipped with the
   UI. It shows the lab's health against what the topology defines (BGP
   sessions, OSPF and IS-IS adjacencies up vs expected, and which are missing),
-  how every node is collected, and opens the Grafana dashboards. Links taken
-  down or up from the UI are marked on the dashboards.
+  how every node is collected, and opens the Grafana dashboards. *Fault
+  tests* flap one or more links on a fixed schedule (cycles, seconds down,
+  seconds up) and measure each cycle: how fast the lab noticed, how many
+  sessions went down, and how long recovery took. Results are saved with
+  the lab for comparison. Link outages and fault tests show as shaded bands
+  on the dashboards (toggles at the top of each dashboard).
 - **Reports** (Ctrl+P → *Reports*): every [netlab report](https://netlab.tools/netlab/report/) as a table, rendered
   HTML or text, with download in each format netlab offers (`.md`, `.html`,
   text) and *Open* for the HTML version. The HTML is sandboxed: scripts don't

@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -142,6 +143,16 @@ def coverage(lab_dir: Path) -> list[dict[str, Any]]:
     ]
 
 
+def links(lab_dir: Path) -> list[dict[str, str]]:
+    """The lab's links with both ends (netlab names), from the collection plan."""
+    plan = _read_json(lab_dir / "monitoring" / "plan.json")
+    result = []
+    for link in plan.get("links") or []:
+        if isinstance(link, dict) and link.get("a_node"):
+            result.append({k: str(link.get(k) or "") for k in ("link", "a_node", "a_ifname", "b_node", "b_ifname")})
+    return result
+
+
 async def running_containers(containers: dict[str, str]) -> dict[str, bool]:
     binary = runner.container_runtime_binary()
     if not containers or not binary:
@@ -169,9 +180,16 @@ async def running_containers(containers: dict[str, str]) -> dict[str, bool]:
 _DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def _http_json(url: str, *, data: dict | None = None, auth: tuple[str, str] | None = None, timeout: float = 5.0) -> Any:
+def _http_json(
+    url: str,
+    *,
+    data: dict | None = None,
+    auth: tuple[str, str] | None = None,
+    timeout: float = 5.0,
+    method: str | None = None,
+) -> Any:
     body = json.dumps(data).encode() if data is not None else None
-    request = urllib.request.Request(url, data=body, method="POST" if body else "GET")
+    request = urllib.request.Request(url, data=body, method=method or ("POST" if body else "GET"))
     if body:
         request.add_header("Content-Type", "application/json")
     if auth:
@@ -205,19 +223,54 @@ async def query(lab_dir: Path, promql: str) -> list[dict[str, Any]]:
     ]
 
 
-async def annotate(lab_dir: Path, text: str, tags: list[str]) -> bool:
-    """Mark an event on the lab's Grafana dashboards (best effort)."""
+async def annotate(lab_dir: Path, text: str, tags: list[str]) -> int | None:
+    """Mark an event on the lab's Grafana dashboards (best effort). Returns the annotation id."""
+    info = stack(lab_dir)
+    base = str(info.get("grafana_url") or "")
+    if not base.startswith("http"):
+        return None
+    auth = (str(info.get("grafana_user") or "admin"), str(info.get("grafana_password") or "admin"))
+    try:
+        reply = await asyncio.to_thread(
+            _http_json, f"{base}/api/annotations", data={"text": text, "tags": ["netlab", *tags]}, auth=auth
+        )
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    ident = reply.get("id") if isinstance(reply, dict) else None
+    return ident if isinstance(ident, int) else None
+
+
+async def annotate_end(lab_dir: Path, ident: int, text: str) -> bool:
+    """Turn a point annotation into a region ending now (an outage from down to up)."""
     info = stack(lab_dir)
     base = str(info.get("grafana_url") or "")
     if not base.startswith("http"):
         return False
-    url = f"{base}/api/annotations"
     auth = (str(info.get("grafana_user") or "admin"), str(info.get("grafana_password") or "admin"))
+    data = {"timeEnd": int(time.time() * 1000), "text": text}
     try:
-        await asyncio.to_thread(_http_json, url, data={"text": text, "tags": ["netlab", *tags]}, auth=auth)
+        await asyncio.to_thread(_http_json, f"{base}/api/annotations/{ident}", data=data, auth=auth, method="PATCH")
     except (OSError, ValueError, urllib.error.URLError):
         return False
     return True
+
+
+# Links taken down from the UI: (lab dir, node, interface) -> open annotation id
+_open_outages: dict[tuple[str, str, str], int] = {}
+
+
+async def link_event(lab_dir: Path, node: str, interface: str, up: bool) -> None:
+    """Show a link taken down and brought back up as one shaded region on the dashboards."""
+    key = (str(lab_dir), node, interface)
+    what = f"{node} {interface}"
+    if not up:
+        ident = await annotate(lab_dir, f"{what} down", ["link", node])
+        if ident is not None:
+            _open_outages[key] = ident
+        return
+    ident = _open_outages.pop(key, None)
+    if ident is None or not await annotate_end(lab_dir, ident, f"{what} down (outage)"):
+        await annotate(lab_dir, f"{what} up", ["link", node])
 
 
 async def summary(lab_dir: Path) -> dict[str, Any]:

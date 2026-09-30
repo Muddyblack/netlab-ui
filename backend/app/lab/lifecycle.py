@@ -338,8 +338,7 @@ async def lab_link_state(body: LinkStateRequest):
         )
     if not result.code:
         # Mark the fault on the lab's monitoring dashboards (no-op without monitoring)
-        state = "up" if body.up else "down"
-        await monitoring.annotate(Path(path).parent, f"{body.node} {body.interface} {state}", ["link", body.node])
+        await monitoring.link_event(Path(path).parent, body.node, body.interface, body.up)
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 

@@ -121,12 +121,23 @@ class Resolver:
 # ---------------------------------------------------------------- parsers
 
 
+_LSA_TYPES = (
+    ("lsaRouterNumber", "router"),
+    ("lsaNetworkNumber", "network"),
+    ("lsaSummaryNumber", "summary"),
+    ("lsaAsbrNumber", "asbr-summary"),
+    ("lsaNssaNumber", "nssa"),
+    ("lsaOpaqueAreaNumber", "opaque-area"),
+)
+
+
 def ospf_process(sink: Sink, data: object, now: float) -> None:
     if not isinstance(data, dict):
         return
     last_ms = data.get("spfLastExecutedMsecs")
     if isinstance(last_ms, (int, float)):
         sink.add("netlab_ospf_spf_last_run_timestamp_seconds", round(now - last_ms / 1000, 3))
+    sink.add("netlab_ospf_lsas_by_type", data.get("lsaExternalCounter"), area="", type="external")
     duration = data.get("spfLastDurationMsecs")
     if isinstance(duration, (int, float)):
         sink.add("netlab_ospf_spf_last_duration_seconds", duration / 1000)
@@ -135,6 +146,9 @@ def ospf_process(sink: Sink, data: object, now: float) -> None:
             continue
         sink.add("netlab_ospf_spf_runs_total", adata.get("spfExecutedCounter"), area=area)
         sink.add("netlab_ospf_lsas", adata.get("lsaNumber"), area=area)
+        for key, kind in _LSA_TYPES:
+            sink.add("netlab_ospf_lsas_by_type", adata.get(key), area=area, type=kind)
+        sink.add("netlab_ospf_neighbors_full", adata.get("nbrFullAdjacentCounter"), area=area)
 
 
 def ospf_neighbors(sink: Sink, data: object, now: float, resolver: Resolver, ifmap: dict[str, dict]) -> None:
@@ -160,6 +174,7 @@ def ospf_neighbors(sink: Sink, data: object, now: float, resolver: Resolver, ifm
             full = state == 8 or (state == 4 and "DROther" in role)
             sink.add("netlab_ospf_neighbor_up", 1 if full else 0, **labels)
             sink.add("netlab_ospf_neighbor_changes_total", entry.get("stateChangeCounter"), **labels)
+            sink.add("netlab_ospf_neighbor_retransmissions_total", entry.get("lsaRetransmissions"), **labels)
             since = entry.get("lastPrgrsvChangeMsec")
             if isinstance(since, (int, float)):
                 sink.add("netlab_ospf_neighbor_last_change_timestamp_seconds", round(now - since / 1000, 3), **labels)
@@ -231,7 +246,9 @@ def bgp_neighbors(sink: Sink, data: object, now: float, resolver: Resolver, ifma
             sink.add("netlab_bgp_session_up", 1 if state == 6 else 0, **labels)
             sink.add("netlab_bgp_session_established_total", pdata.get("connectionsEstablished"), **labels)
             sink.add("netlab_bgp_session_dropped_total", pdata.get("connectionsDropped"), **labels)
-            if state == 6 and isinstance(pdata.get("bgpTimerUpEstablishedEpoch"), (int, float)):
+            if state == 6 and isinstance(pdata.get("bgpTimerUpMsec"), (int, float)):
+                changed = round(now - pdata["bgpTimerUpMsec"] / 1000, 3)  # the epoch field is whole seconds
+            elif state == 6 and isinstance(pdata.get("bgpTimerUpEstablishedEpoch"), (int, float)):
                 changed = pdata["bgpTimerUpEstablishedEpoch"]
             elif isinstance(pdata.get("lastResetTimerMsecs"), (int, float)):
                 changed = round(now - pdata["lastResetTimerMsecs"] / 1000, 3)

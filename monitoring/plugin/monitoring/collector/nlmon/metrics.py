@@ -41,6 +41,9 @@ FAMILIES: dict[str, tuple[str, str]] = {
     "netlab_ospf_spf_last_run_timestamp_seconds": ("gauge", "Time of the last OSPF SPF run"),
     "netlab_ospf_spf_last_duration_seconds": ("gauge", "Duration of the last OSPF SPF run"),
     "netlab_ospf_lsas": ("gauge", "LSAs in the OSPF area database"),
+    "netlab_ospf_lsas_by_type": ("gauge", 'LSAs in the OSPF database by type (external: area "")'),
+    "netlab_ospf_neighbors_full": ("gauge", "Full OSPF adjacencies in the area"),
+    "netlab_ospf_neighbor_retransmissions_total": ("counter", "LSA retransmissions to the OSPF neighbor"),
     # IS-IS
     "netlab_isis_adjacency_up": ("gauge", "1 when the IS-IS adjacency is up"),
     "netlab_isis_adjacency_changes_total": ("counter", "IS-IS adjacency flaps"),

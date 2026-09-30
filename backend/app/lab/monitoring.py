@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from app.contract import commands
 from app.lab import common
 from app.sessions.store import store
-from services import monitoring
+from services import monitoring, monitoring_scenarios
 from services.netlab import tools
 
 router = APIRouter()
@@ -27,6 +27,14 @@ class MonitoringNode(BaseModel):
     device: str = ""
     provider: str = ""
     methods: list[str] = []
+
+
+class MonitoringLink(BaseModel):
+    link: str
+    a_node: str
+    a_ifname: str
+    b_node: str = ""
+    b_ifname: str = ""
 
 
 class MonitoringState(BaseModel):
@@ -42,6 +50,7 @@ class MonitoringState(BaseModel):
     tsdbPort: int | None = None
     dashboards: dict[str, str] = {}
     coverage: list[MonitoringNode] = []
+    links: list[MonitoringLink] = []
 
 
 class MonitoringToggle(BaseModel):
@@ -110,6 +119,7 @@ async def _state(path: str) -> MonitoringState:
         tsdbPort=info.get("tsdb_port"),
         dashboards=info.get("dashboards") or {},
         coverage=[MonitoringNode(**item) for item in monitoring.coverage(lab_dir)],
+        links=[MonitoringLink(**item) for item in monitoring.links(lab_dir)],
     )
 
 
@@ -173,3 +183,94 @@ async def monitoring_event(body: MonitoringEvent) -> dict[str, bool]:
     """Mark an event (e.g. a link taken down from the UI) on the lab's dashboards."""
     lab_dir = Path(common.session_path(body.sessionId)).parent
     return {"ok": await monitoring.annotate(lab_dir, body.text[:500], [t[:40] for t in body.tags[:5]])}
+
+
+class ScenarioLinkEnd(BaseModel):
+    node: str
+    ifname: str
+
+
+class ScenarioRequest(BaseModel):
+    sessionId: str
+    links: list[ScenarioLinkEnd]
+    cycles: int = 3
+    downSeconds: float = 10
+    upSeconds: float = 30
+    settleSeconds: float = 120
+
+
+class ScenarioCycle(BaseModel):
+    cycle: int
+    downAt: float
+    upAt: float = 0
+    reactionSeconds: float | None = None
+    impact: int = 0
+    recoverySeconds: float | None = None
+    recoveryExact: bool = False
+    affected: list[str] = []
+
+
+class ScenarioStats(BaseModel):
+    min: float
+    avg: float
+    max: float
+
+
+class ScenarioSummary(BaseModel):
+    reaction: ScenarioStats | None = None
+    recovery: ScenarioStats | None = None
+    notRecovered: int = 0
+
+
+class ScenarioRun(BaseModel):
+    id: str
+    lab: str
+    links: list[ScenarioLinkEnd]
+    cycles: int
+    downSeconds: float
+    upSeconds: float
+    settleSeconds: float
+    status: str
+    message: str = ""
+    startedAt: float
+    finishedAt: float | None = None
+    baselineMissing: int = 0
+    results: list[ScenarioCycle] = []
+    summary: ScenarioSummary
+
+
+@router.post("/monitoring/scenarios", response_model=ScenarioRun)
+async def start_scenario(body: ScenarioRequest):
+    """Flap links on a schedule and measure reaction and recovery against the topology."""
+    lab_dir = Path(common.session_path(body.sessionId)).parent
+    try:
+        return monitoring_scenarios.start(
+            lab_dir,
+            [end.model_dump() for end in body.links],
+            body.cycles,
+            body.downSeconds,
+            body.upSeconds,
+            body.settleSeconds,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/monitoring/scenarios", response_model=list[ScenarioRun])
+async def list_scenarios(sessionId: str):
+    """Running scenarios of the lab, then the saved results (newest first)."""
+    return monitoring_scenarios.history(Path(common.session_path(sessionId)).parent)
+
+
+@router.get("/monitoring/scenarios/{scenario_id}", response_model=ScenarioRun)
+async def get_scenario(scenario_id: str):
+    data = monitoring_scenarios.get(scenario_id)
+    if data is None:
+        raise HTTPException(404, "unknown scenario")
+    return data
+
+
+@router.post("/monitoring/scenarios/{scenario_id}/cancel")
+async def cancel_scenario(scenario_id: str) -> dict[str, bool]:
+    """Stop a running scenario; its links are brought back up."""
+    return {"ok": monitoring_scenarios.cancel(scenario_id)}

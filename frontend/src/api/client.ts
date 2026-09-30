@@ -43,6 +43,8 @@ export type MonitoringState = Schemas["MonitoringState"];
 export type MonitoringSummary = Schemas["MonitoringSummary"];
 export type MonitoringActionResult = Schemas["MonitoringActionResult"];
 export type PromSample = Schemas["PromSample"];
+export type ScenarioRun = Schemas["ScenarioRun"];
+export type ScenarioRequest = Schemas["ScenarioRequest"];
 export type SetupCatalog = Schemas["SetupCatalog"];
 export type BoxRecipe = Schemas["BoxRecipe"];
 export type CustomConfigs = Schemas["CustomConfigs"];
@@ -440,6 +442,15 @@ export const api = {
 
   queryMonitoring: (sessionId: string, query: string) =>
     http<PromSample[]>(`/api/lab/monitoring/query?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`, { cache: "no-store" }, 1, 30000),
+
+  startScenario: (request: ScenarioRequest) =>
+    http<ScenarioRun>("/api/lab/monitoring/scenarios", { method: "POST", body: JSON.stringify(request) }, 1, 30000),
+
+  listScenarios: (sessionId: string) =>
+    http<ScenarioRun[]>(`/api/lab/monitoring/scenarios?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  cancelScenario: (scenarioId: string) =>
+    http<{ ok: boolean }>(`/api/lab/monitoring/scenarios/${encodeURIComponent(scenarioId)}/cancel`, { method: "POST" }, 1, 30000),
 
   monitoringAction: (sessionId: string, action: "up" | "down") =>
     http<MonitoringActionResult>("/api/lab/monitoring/action", { method: "POST", body: JSON.stringify({ sessionId, action }) }, 1, 330000),

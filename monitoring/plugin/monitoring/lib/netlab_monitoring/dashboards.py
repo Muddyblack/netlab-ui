@@ -84,21 +84,27 @@ class Board:
             "templating": {"list": variables},
             "links": links,
             "panels": self.panels,
+            # Events netlab-ui marks on the dashboards; each is a toggle at the top.
+            # A link down/up pair shows as one shaded region (the outage).
             "annotations": {
                 "list": [
-                    {
-                        "builtIn": 1,
-                        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
-                        "enable": True,
-                        "hide": False,
-                        "iconColor": "rgba(255, 152, 48, 1)",
-                        "name": "netlab events",
-                        "type": "dashboard",
-                        "target": {"type": "tags", "tags": ["netlab"], "limit": 100, "matchAny": True},
-                    }
+                    events("Link outages", "link", "rgba(255, 152, 48, 0.4)"),
+                    events("Fault tests", "scenario", "rgba(184, 119, 217, 0.4)"),
                 ]
             },
         }
+
+
+def events(name: str, tag: str, color: str) -> dict:
+    """Annotation toggle for events netlab-ui posts with the tags `netlab` and `tag`."""
+    return {
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": True,
+        "hide": False,
+        "iconColor": color,
+        "name": name,
+        "target": {"type": "tags", "tags": ["netlab", tag], "limit": 200, "matchAny": False},
+    }
 
 
 def q(expr: str, legend: str = "", instant: bool = False, fmt: str | None = None) -> dict:
@@ -205,6 +211,85 @@ def table(
             {"id": "merge", "options": {}},
             {"id": "organize", "options": {"excludeByName": hidden, "renameByName": rename or {}}},
         ],
+    }
+
+
+def node_graph() -> dict:
+    """The lab as a graph: nodes ringed green when up and red when down, links labelled with traffic."""
+    nodes = (
+        f'label_replace(label_replace(max by (node) (netlab_node_up{{{LAB}}}), "id", "$1", "node", "(.*)"),'
+        ' "title", "$1", "node", "(.*)")'
+    )
+    traffic = (
+        f"sum by (link) (rate(netlab_if_rx_bytes_total{{{LAB}}}[$__rate_interval]) + "
+        f"rate(netlab_if_tx_bytes_total{{{LAB}}}[$__rate_interval])) * 4"
+    )
+    edges = (
+        "label_replace(label_replace(label_replace("
+        f'max by (link, a_node, b_node) (netlab_link_info{{{LAB},b_node!=""}}),'
+        ' "id", "$1", "link", "(.*)"), "source", "$1", "a_node", "(.*)"), "target", "$1", "b_node", "(.*)")'
+        f" * on(link) group_left() ({traffic})"
+    )
+
+    def copy(ref: str, alias: str, binary: dict | None = None) -> dict:
+        # nodeGraph finds fields by their real name (id, title, mainstat, arc__*, source, target),
+        # and a rename only changes the display name -- calculateField creates properly named fields
+        options: dict = {"alias": alias}
+        if binary:
+            options |= {"mode": "binary", "binary": binary}
+        else:
+            options |= {"mode": "reduceRow", "reduce": {"include": [f"Value #{ref}"], "reducer": "last"}}
+        return {"id": "calculateField", "options": options, "filter": {"id": "byRefId", "options": ref}}
+
+    def fixed(name: str, color: str) -> dict:
+        return {
+            "matcher": {"id": "byName", "options": name},
+            "properties": [
+                {"id": "color", "value": {"mode": "fixed", "fixedColor": color}},
+                {"id": "displayName", "value": name.removeprefix("arc__")},
+            ],
+        }
+
+    return {
+        "type": "nodeGraph",
+        "title": "Topology",
+        "description": "Nodes: ring green when up, red when down. Links: current traffic (both directions).",
+        "targets": [q(nodes, instant=True, fmt="table"), q(edges, instant=True, fmt="table")],
+        "transformations": [
+            copy("A", "arc__up"),
+            copy(
+                "A",
+                "arc__down",
+                {
+                    "left": {"fixed": "1"},
+                    "operator": "-",
+                    "right": {"matcher": {"id": "byName", "options": "Value #A"}},
+                },
+            ),
+            copy("B", "mainstat"),
+            {
+                "id": "organize",
+                "options": {
+                    "excludeByName": dict.fromkeys(
+                        ("Time", "node", "link", "a_node", "b_node", "Value #A", "Value #B"), True
+                    )
+                },
+            },
+        ],
+        "fieldConfig": {
+            "defaults": {},
+            "overrides": [
+                {"matcher": {"id": "byFrameRefID", "options": "B"}, "properties": [{"id": "unit", "value": "bps"}]},
+                fixed("arc__up", "green"),
+                fixed("arc__down", "red"),
+            ],
+        },
+        "options": {
+            "nodes": {
+                "arcs": [{"field": "arc__up", "color": "green"}, {"field": "arc__down", "color": "red"}],
+            },
+            "edges": {"mainStatUnit": "bps"},
+        },
     }
 
 
@@ -350,6 +435,8 @@ def overview() -> dict:
         24,
         7,
     )
+    b.row("Topology")
+    b.add(node_graph(), 24, 12)
     b.row("Nodes")
     b.add(
         table(
@@ -473,6 +560,41 @@ def routing() -> dict:
                 q(f"sum(increase(netlab_bgp_session_dropped_total{{{NODE}}}[1m]))", "BGP session drops"),
             ],
             "none",
+        ),
+        12,
+        8,
+    )
+    b.add(
+        ts(
+            "Session and adjacency changes per router (5 min)",
+            [
+                q(
+                    f"sum by (node) (increase(netlab_ospf_neighbor_changes_total{{{NODE}}}[5m]) or "
+                    f"increase(netlab_isis_adjacency_changes_total{{{NODE}}}[5m]) or "
+                    f"increase(netlab_bgp_session_dropped_total{{{NODE}}}[5m]) or "
+                    f'increase(netlab_if_carrier_changes_total{{{NODE},link!="mgmt"}}[5m])) > 0',
+                    "{{node}}",
+                )
+            ],
+            "none",
+            "Flaps: routers whose adjacencies, sessions or links changed. Repeated bumps on one router = unstable link",
+            legend="table",
+        ),
+        12,
+        8,
+    )
+    b.add(
+        ts(
+            "OSPF neighbor states",
+            [
+                q(f"count(netlab_ospf_neighbor_state{{{NODE}}} == 8) or vector(0)", "Full"),
+                q(f"count(netlab_ospf_neighbor_state{{{NODE}}} == 4) or vector(0)", "2-Way"),
+                q(f"count(netlab_ospf_neighbor_state{{{NODE}}} >= 5 < 8) or vector(0)", "ExStart/Exchange/Loading"),
+                q(f"count(netlab_ospf_neighbor_state{{{NODE}}} <= 3) or vector(0)", "Down/Init"),
+            ],
+            "none",
+            "All neighbors settle in Full (2-Way is normal between DROthers); time outside Full = convergence",
+            stack=True,
         ),
         12,
         8,
@@ -703,6 +825,55 @@ def node_detail() -> dict:
             rename={"protocol": "Protocol", "peer_node": "Peer", "ifname": "Interface", "Value": "State"},
             hide=["node", "peer_id", "peer_ifname", "area", "level"],
             overrides=[color_cell("State", UP_DOWN)],
+        ),
+        12,
+        7,
+    )
+    b.add(
+        ts(
+            "BGP prefixes received per peer",
+            [q(f"sum without (afi, safi) (netlab_bgp_prefixes_received{{{sel}}})", "{{peer_node}} {{peer}}")],
+            "none",
+        ),
+        12,
+        7,
+    )
+    b.add(
+        ts(
+            "BGP UPDATEs per peer",
+            [
+                q(f"rate(netlab_bgp_updates_received_total{{{sel}}}[$__rate_interval])", "in {{peer_node}} {{peer}}"),
+                q(f"rate(netlab_bgp_updates_sent_total{{{sel}}}[$__rate_interval])", "out {{peer_node}} {{peer}}"),
+            ],
+            "none",
+            "Spikes = prefix churn (route injection, flaps, policy changes)",
+        ),
+        12,
+        7,
+    )
+    b.add(
+        ts(
+            "OSPF LSAs by type",
+            [q(f"sum by (type) (netlab_ospf_lsas_by_type{{{sel}}})", "{{type}}")],
+            "none",
+            "Router LSAs = routers in the area, network LSAs = multi-access segments, summary = inter-area",
+            stack=True,
+        ),
+        12,
+        7,
+    )
+    b.add(
+        ts(
+            "OSPF retransmissions and neighbor changes",
+            [
+                q(
+                    f"increase(netlab_ospf_neighbor_retransmissions_total{{{sel}}}[5m])",
+                    "retransmissions {{peer_node}}",
+                ),
+                q(f"increase(netlab_ospf_neighbor_changes_total{{{sel}}}[5m])", "state changes {{peer_node}}"),
+            ],
+            "none",
+            "Per neighbor, last 5 minutes. Retransmissions = LSAs not acknowledged in time (loss, CPU, MTU)",
         ),
         12,
         7,

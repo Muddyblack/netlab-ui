@@ -107,6 +107,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/monitoring/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Scenarios
+         * @description Running scenarios of the lab, then the saved results (newest first).
+         */
+        get: operations["list_scenarios_api_lab_monitoring_scenarios_get"];
+        put?: never;
+        /**
+         * Start Scenario
+         * @description Flap links on a schedule and measure reaction and recovery against the topology.
+         */
+        post: operations["start_scenario_api_lab_monitoring_scenarios_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/scenarios/{scenario_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Scenario */
+        get: operations["get_scenario_api_lab_monitoring_scenarios__scenario_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/monitoring/scenarios/{scenario_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Scenario
+         * @description Stop a running scenario; its links are brought back up.
+         */
+        post: operations["cancel_scenario_api_lab_monitoring_scenarios__scenario_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/topology/custom-nodes": {
         parameters: {
             query?: never;
@@ -2483,6 +2544,25 @@ export interface components {
              */
             tags: string[];
         };
+        /** MonitoringLink */
+        MonitoringLink: {
+            /** Link */
+            link: string;
+            /** A Node */
+            a_node: string;
+            /** A Ifname */
+            a_ifname: string;
+            /**
+             * B Node
+             * @default
+             */
+            b_node: string;
+            /**
+             * B Ifname
+             * @default
+             */
+            b_ifname: string;
+        };
         /** MonitoringNode */
         MonitoringNode: {
             /** Node */
@@ -2546,6 +2626,11 @@ export interface components {
              * @default []
              */
             coverage: components["schemas"]["MonitoringNode"][];
+            /**
+             * Links
+             * @default []
+             */
+            links: components["schemas"]["MonitoringLink"][];
         };
         /** MonitoringSummary */
         MonitoringSummary: {
@@ -2614,7 +2699,129 @@ export interface components {
             value: number;
         };
         /** ProtocolAdjacency */
-        /** AddressingLens */
+        ScenarioCycle: {
+            /** Cycle */
+            cycle: number;
+            /** Downat */
+            downAt: number;
+            /**
+             * Upat
+             * @default 0
+             */
+            upAt: number;
+            /** Reactionseconds */
+            reactionSeconds?: number | null;
+            /**
+             * Impact
+             * @default 0
+             */
+            impact: number;
+            /** Recoveryseconds */
+            recoverySeconds?: number | null;
+            /**
+             * Recoveryexact
+             * @default false
+             */
+            recoveryExact: boolean;
+            /**
+             * Affected
+             * @default []
+             */
+            affected: string[];
+        };
+        /** ScenarioLinkEnd */
+        ScenarioLinkEnd: {
+            /** Node */
+            node: string;
+            /** Ifname */
+            ifname: string;
+        };
+        /** ScenarioRequest */
+        ScenarioRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Links */
+            links: components["schemas"]["ScenarioLinkEnd"][];
+            /**
+             * Cycles
+             * @default 3
+             */
+            cycles: number;
+            /**
+             * Downseconds
+             * @default 10
+             */
+            downSeconds: number;
+            /**
+             * Upseconds
+             * @default 30
+             */
+            upSeconds: number;
+            /**
+             * Settleseconds
+             * @default 120
+             */
+            settleSeconds: number;
+        };
+        /** ScenarioRun */
+        ScenarioRun: {
+            /** Id */
+            id: string;
+            /** Lab */
+            lab: string;
+            /** Links */
+            links: components["schemas"]["ScenarioLinkEnd"][];
+            /** Cycles */
+            cycles: number;
+            /** Downseconds */
+            downSeconds: number;
+            /** Upseconds */
+            upSeconds: number;
+            /** Settleseconds */
+            settleSeconds: number;
+            /** Status */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Startedat */
+            startedAt: number;
+            /** Finishedat */
+            finishedAt?: number | null;
+            /**
+             * Baselinemissing
+             * @default 0
+             */
+            baselineMissing: number;
+            /**
+             * Results
+             * @default []
+             */
+            results: components["schemas"]["ScenarioCycle"][];
+            summary: components["schemas"]["ScenarioSummary"];
+        };
+        /** ScenarioStats */
+        ScenarioStats: {
+            /** Min */
+            min: number;
+            /** Avg */
+            avg: number;
+            /** Max */
+            max: number;
+        };
+        /** ScenarioSummary */
+        ScenarioSummary: {
+            reaction?: components["schemas"]["ScenarioStats"] | null;
+            recovery?: components["schemas"]["ScenarioStats"] | null;
+            /**
+             * Notrecovered
+             * @default 0
+             */
+            notRecovered: number;
+        };
+        /** ScriptStep */
         AddressingLens: {
             /**
              * Families
@@ -6344,6 +6551,102 @@ export interface operations {
             };
         };
     };
+    toggle_monitoring_api_lab_monitoring_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonitoringToggle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_summary_api_lab_monitoring_summary_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monitoring_query_api_lab_monitoring_query_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+                query: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PromSample"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     monitoring_action_api_lab_monitoring_action_post: {
         parameters: {
             query?: never;
@@ -6412,39 +6715,7 @@ export interface operations {
             };
         };
     };
-    monitoring_query_api_lab_monitoring_query_get: {
-        parameters: {
-            query: {
-                sessionId: string;
-                query: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PromSample"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    monitoring_summary_api_lab_monitoring_summary_get: {
+    list_scenarios_api_lab_monitoring_scenarios_get: {
         parameters: {
             query: {
                 sessionId: string;
@@ -6461,7 +6732,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MonitoringSummary"];
+                    "application/json": components["schemas"]["ScenarioRun"][];
                 };
             };
             /** @description Validation Error */
@@ -6475,7 +6746,7 @@ export interface operations {
             };
         };
     };
-    toggle_monitoring_api_lab_monitoring_put: {
+    start_scenario_api_lab_monitoring_scenarios_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6484,7 +6755,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MonitoringToggle"];
+                "application/json": components["schemas"]["ScenarioRequest"];
             };
         };
         responses: {
@@ -6494,7 +6765,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MonitoringState"];
+                    "application/json": components["schemas"]["ScenarioRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_scenario_api_lab_monitoring_scenarios__scenario_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_scenario_api_lab_monitoring_scenarios__scenario_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
             /** @description Validation Error */

@@ -8,6 +8,7 @@ import http.server
 import signal
 import sys
 import threading
+import urllib.parse
 
 from . import __version__
 from .collector import Collector, Plan, default_paths
@@ -44,7 +45,15 @@ def main(argv: list[str] | None = None) -> int:
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             if self.path.startswith("/metrics"):
-                body, ctype = collector.scrape().encode(), "text/plain; version=0.0.4; charset=utf-8"
+                # ?max_age=0.5 asks for data at most that old (fault scenarios sample faster
+                # than the metrics store scrapes); the default shares cycles between scrapers.
+                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                try:
+                    max_age = max(0.2, float(query.get("max_age", ["2"])[0]))
+                except ValueError:
+                    max_age = 2.0
+                body = collector.scrape(fresh_for=max_age).encode()
+                ctype = "text/plain; version=0.0.4; charset=utf-8"
             elif self.path.startswith("/healthz"):
                 body, ctype = b"ok\n", "text/plain"
             else:

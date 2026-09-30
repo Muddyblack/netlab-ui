@@ -126,7 +126,7 @@ def test_query_without_rendered_stack_is_a_clear_error(tmp_path):
 
 
 def test_annotation_is_skipped_without_grafana(tmp_path):
-    assert asyncio.run(monitoring.annotate(tmp_path, "r1 eth1 down", ["link"])) is False
+    assert asyncio.run(monitoring.annotate(tmp_path, "r1 eth1 down", ["link"])) is None
 
 
 def test_workspace_watcher_ignores_the_metrics_store():

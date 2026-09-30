@@ -538,6 +538,7 @@ def stack_info(topology: dict, plan: dict, cfg: dict, ep: Endpoints) -> dict:
         "interval": int(cfg.get("interval") or 15),
         "containers": containers,
         "tsdb_url": f"http://{ep.tsdb}",
+        "collector_url": f"http://{ep.collector}",
         "tsdb_port": ep.tsdb_port,
         "grafana_port": ep.grafana_port if "grafana" in roles else None,
         "grafana_url": f"http://{ep.grafana}" if "grafana" in roles else None,
