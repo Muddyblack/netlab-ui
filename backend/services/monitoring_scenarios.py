@@ -27,7 +27,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from services import monitoring
+from services import fault_tests, monitoring
 from services.netlab import libvirt, runner
 
 SAMPLE_INTERVAL = 0.5
@@ -120,6 +120,9 @@ class Cycle:
     recoverySeconds: float | None = None
     recoveryExact: bool = False
     affected: list[str] = field(default_factory=list)
+    # netlab validate results: while the link was down, and after it came back
+    during: list[dict[str, Any]] = field(default_factory=list)
+    after: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -137,6 +140,29 @@ class Scenario:
     finishedAt: float | None = None
     baselineMissing: int = 0
     results: list[Cycle] = field(default_factory=list)
+    # A named fault test from the topology (monitoring.faults), and what it checks
+    name: str = ""
+    description: str = ""
+    validateAfter: list[str] | None = None  # None: don't run netlab validate; []: all tests
+    validateDuring: list[str] | None = None
+    expectRecovery: float | None = None
+
+    def verdict(self) -> dict[str, Any]:
+        """passed/failed against what the test expects; `reasons` says why it failed."""
+        if self.status != "done":
+            return {"result": self.status, "reasons": []}
+        reasons = []
+        for c in self.results:
+            if c.recoverySeconds is None:
+                reasons.append(f"cycle {c.cycle}: did not recover within {self.settleSeconds:.0f} s")
+            elif self.expectRecovery is not None and c.recoverySeconds > self.expectRecovery:
+                reasons.append(f"cycle {c.cycle}: recovery {c.recoverySeconds:.2f} s > {self.expectRecovery:g} s")
+            for check in c.after:
+                if check.get("passed") is False:
+                    reasons.append(
+                        f"cycle {c.cycle}: {check['test']} failed after recovery: {check.get('message', '')}"
+                    )
+        return {"result": "failed" if reasons else "passed", "reasons": reasons}
 
     def summary(self) -> dict[str, Any]:
         def stats(values: list[float]) -> dict[str, float] | None:
@@ -152,6 +178,7 @@ class Scenario:
             "reaction": stats([c.reactionSeconds for c in self.results if c.reactionSeconds is not None]),
             "recovery": stats([c.recoverySeconds for c in self.results if c.recoverySeconds is not None]),
             "notRecovered": sum(1 for c in self.results if c.recoverySeconds is None),
+            "verdict": self.verdict(),
         }
 
     def as_dict(self) -> dict[str, Any]:
@@ -217,6 +244,10 @@ async def _run(job: Scenario, lab_dir: Path) -> None:
                 lab_dir, f"Fault test {job.id}: {what} down (cycle {number})", ["scenario"]
             )
             seen: set[tuple[str, ...]] = set()
+            during = None
+            if job.validateDuring is not None:
+                # what the lab still delivers while the link is down (current state, no waiting)
+                during = asyncio.create_task(fault_tests.run_validation(lab_dir, job.validateDuring, skip_wait=True))
             while time.time() - cycle.downAt < job.downSeconds:
                 now_missing = missing(await _sample(collector)) - baseline
                 seen |= now_missing
@@ -225,12 +256,19 @@ async def _run(job: Scenario, lab_dir: Path) -> None:
                     cycle.reactionSeconds = round(time.time() - cycle.downAt, 3)
                 await asyncio.sleep(SAMPLE_INTERVAL)
             cycle.affected = sorted(" ".join(item) for item in seen)
+            if during is not None:
+                job.message = f"cycle {number}/{job.cycles}: {what} down, finishing netlab validate"
+                cycle.during = await during
             job.message = f"cycle {number}/{job.cycles}: {what} up, waiting for recovery"
             cycle.upAt = time.time()
             await _all_links(plan, job.links, up=True)
             if outage is not None:
                 text = f"Fault test {job.id}: {what} down (cycle {number}/{job.cycles})"
                 await monitoring.annotate_end(lab_dir, outage, text)
+            after = None
+            if job.validateAfter is not None:
+                # the tests' own `wait:` gives the lab time to converge
+                after = asyncio.create_task(fault_tests.run_validation(lab_dir, job.validateAfter))
             while time.time() - cycle.upAt < job.settleSeconds:
                 samples = await _sample(collector)
                 if not (missing(samples) - baseline):
@@ -242,6 +280,9 @@ async def _run(job: Scenario, lab_dir: Path) -> None:
                         cycle.recoveryExact = True
                     break
                 await asyncio.sleep(SAMPLE_INTERVAL)
+            if after is not None:
+                job.message = f"cycle {number}/{job.cycles}: running netlab validate"
+                cycle.after = await after
             rest = job.upSeconds - (time.time() - cycle.upAt)
             if number < job.cycles and rest > 0:
                 job.message = f"cycle {number}/{job.cycles} done, next in {rest:.0f}s"
@@ -276,7 +317,18 @@ def _save(job: Scenario, lab_dir: Path) -> None:
 
 
 def start(
-    lab_dir: Path, links: list[dict[str, str]], cycles: int, down: float, up: float, settle: float
+    lab_dir: Path,
+    links: list[dict[str, str]],
+    cycles: int,
+    down: float,
+    up: float,
+    settle: float,
+    *,
+    validate_after: list[str] | None = None,
+    validate_during: list[str] | None = None,
+    expect_recovery: float | None = None,
+    name: str = "",
+    description: str = "",
 ) -> dict[str, Any]:
     info = monitoring.stack(lab_dir)
     if not str(info.get("collector_url") or "").startswith("http"):
@@ -293,10 +345,36 @@ def start(
         downSeconds=max(1.0, min(float(down), 3600)),
         upSeconds=max(1.0, min(float(up), 3600)),
         settleSeconds=max(5.0, min(float(settle), 3600)),
+        name=name,
+        description=description,
+        validateAfter=validate_after,
+        validateDuring=validate_during,
+        expectRecovery=expect_recovery,
     )
     _jobs[job.id] = job
     _tasks[job.id] = asyncio.get_running_loop().create_task(_run(job, lab_dir))
     return job.as_dict()
+
+
+def start_named(lab_dir: Path, attrs: dict[str, Any], name: str) -> dict[str, Any]:
+    """Run a fault test the topology defines (monitoring.faults.<name>)."""
+    spec = next((item for item in fault_tests.definitions(attrs) if item["name"] == name), None)
+    if spec is None:
+        known = ", ".join(item["name"] for item in fault_tests.definitions(attrs)) or "none defined"
+        raise ValueError(f"no fault test {name!r} in the topology (monitoring.faults: {known})")
+    return start(
+        lab_dir,
+        fault_tests.resolve_links(lab_dir, spec["links"]),
+        spec["cycles"],
+        spec["down"],
+        spec["up"],
+        spec["settle"],
+        validate_after=spec["validateAfter"],
+        validate_during=spec["validateDuring"],
+        expect_recovery=spec["expectRecovery"],
+        name=spec["name"],
+        description=spec["description"],
+    )
 
 
 def get(job_id: str) -> dict[str, Any] | None:

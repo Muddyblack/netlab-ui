@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from app.contract import commands
 from app.lab import common
 from app.sessions.store import store
-from services import monitoring, monitoring_scenarios
+from services import fault_tests, monitoring, monitoring_scenarios
 from services.netlab import tools
 
 router = APIRouter()
@@ -191,12 +191,26 @@ class ScenarioLinkEnd(BaseModel):
 
 
 class ScenarioRequest(BaseModel):
+    """Either a fault test the topology defines (`name`), or links and timing."""
+
     sessionId: str
-    links: list[ScenarioLinkEnd]
+    name: str | None = None
+    links: list[ScenarioLinkEnd] = []
     cycles: int = 3
     downSeconds: float = 10
     upSeconds: float = 30
     settleSeconds: float = 120
+    validateAfter: list[str] | None = None  # netlab validate tests after recovery ([] = all)
+    validateDuring: list[str] | None = None
+    expectRecovery: float | None = None
+
+
+class ValidationCheck(BaseModel):
+    test: str
+    description: str = ""
+    passed: bool | None = None
+    seconds: float | None = None
+    message: str = ""
 
 
 class ScenarioCycle(BaseModel):
@@ -208,6 +222,8 @@ class ScenarioCycle(BaseModel):
     recoverySeconds: float | None = None
     recoveryExact: bool = False
     affected: list[str] = []
+    during: list[ValidationCheck] = []
+    after: list[ValidationCheck] = []
 
 
 class ScenarioStats(BaseModel):
@@ -216,10 +232,16 @@ class ScenarioStats(BaseModel):
     max: float
 
 
+class ScenarioVerdict(BaseModel):
+    result: str  # passed | failed | running | cancelled
+    reasons: list[str] = []
+
+
 class ScenarioSummary(BaseModel):
     reaction: ScenarioStats | None = None
     recovery: ScenarioStats | None = None
     notRecovered: int = 0
+    verdict: ScenarioVerdict | None = None
 
 
 class ScenarioRun(BaseModel):
@@ -237,13 +259,44 @@ class ScenarioRun(BaseModel):
     baselineMissing: int = 0
     results: list[ScenarioCycle] = []
     summary: ScenarioSummary
+    name: str = ""
+    description: str = ""
+    validateAfter: list[str] | None = None
+    validateDuring: list[str] | None = None
+    expectRecovery: float | None = None
+
+
+class FaultTest(BaseModel):
+    name: str
+    description: str = ""
+    links: list[str] = []
+    cycles: int
+    down: float
+    up: float
+    settle: float
+    validateAfter: list[str] | None = None  # topology key: validate
+    validateDuring: list[str] | None = None  # topology key: during
+    expectRecovery: float | None = None
+
+
+class LabValidationTest(BaseModel):
+    name: str
+    description: str = ""
+
+
+class FaultTests(BaseModel):
+    faults: list[FaultTest] = []
+    validationTests: list[LabValidationTest] = []
 
 
 @router.post("/monitoring/scenarios", response_model=ScenarioRun)
 async def start_scenario(body: ScenarioRequest):
     """Flap links on a schedule and measure reaction and recovery against the topology."""
-    lab_dir = Path(common.session_path(body.sessionId)).parent
+    path = common.session_path(body.sessionId)
+    lab_dir = Path(path).parent
     try:
+        if body.name:
+            return monitoring_scenarios.start_named(lab_dir, commands.load_topology(path).attrs, body.name)
         return monitoring_scenarios.start(
             lab_dir,
             [end.model_dump() for end in body.links],
@@ -251,9 +304,19 @@ async def start_scenario(body: ScenarioRequest):
             body.downSeconds,
             body.upSeconds,
             body.settleSeconds,
+            validate_after=body.validateAfter,
+            validate_during=body.validateDuring,
+            expect_recovery=body.expectRecovery,
         )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/monitoring/faults", response_model=FaultTests)
+async def fault_test_definitions(sessionId: str):
+    """Fault tests the topology defines (monitoring.faults) and its netlab validation tests."""
+    attrs = commands.load_topology(common.session_path(sessionId)).attrs
+    return {"faults": fault_tests.definitions(attrs), "validationTests": fault_tests.validation_tests(attrs)}
 
 
 @router.get("/monitoring/scenarios", response_model=list[ScenarioRun])

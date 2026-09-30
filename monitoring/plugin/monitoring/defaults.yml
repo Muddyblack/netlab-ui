@@ -125,6 +125,24 @@ attributes:
       nodes:                 # Monitor only these nodes/groups (default: all)
         type: list
         _subtype: node_or_group
+      faults:                # Named fault tests, run from netlab-ui (see README)
+        type: dict
+        _keytype: id
+        _subtype:
+          type: dict
+          _keys:
+            description: str
+            links: list            # link names (r1-r2) or ends (r1:eth1)
+            cycles: { type: int, min_value: 1 }
+            down: { type: int, min_value: 1 }
+            up: { type: int, min_value: 1 }
+            settle: { type: int, min_value: 5 }
+            validate: { type: list, true_value: [] }   # netlab validate tests after recovery (true: all)
+            during: { type: list, true_value: [] }     # ... while the link is down
+            expect:
+              type: dict
+              _keys:
+                recovery: { type: int, min_value: 0 }  # max seconds to recover
   node:
     monitoring:
       type: dict

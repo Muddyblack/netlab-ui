@@ -36,6 +36,7 @@ interface UiEvent {
   message?: string;
   tab?: "health" | "faults" | "setup";
   faultTest?: FaultTestPrefill;
+  link?: { label: string; url: string };
 }
 
 /** Let an attached AI agent show the user the UI, live (MCP `ui_*` tools): tell the
@@ -85,7 +86,12 @@ export function useAgentGuide(
           showAgentGuide(message, event.title);
           break;
         case "explain":
-          showAgentGuide(message, event.title);
+          // only web links: the agent's text never becomes a script URL
+          showAgentGuide(
+            message,
+            event.title,
+            /^https?:\/\//.test(event.link?.url ?? "") ? event.link : undefined
+          );
           break;
         case "clear":
           clearAgentGuide();

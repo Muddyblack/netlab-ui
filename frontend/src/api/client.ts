@@ -50,6 +50,9 @@ export type MonitoringActionResult = Schemas["MonitoringActionResult"];
 export type PromSample = Schemas["PromSample"];
 export type ScenarioRun = Schemas["ScenarioRun"];
 export type ScenarioRequest = Schemas["ScenarioRequest"];
+export type FaultTests = Schemas["FaultTests"];
+export type FaultTestDefinition = Schemas["FaultTest"];
+export type ValidationCheck = Schemas["ValidationCheck"];
 export type SetupCatalog = Schemas["SetupCatalog"];
 export type BoxRecipe = Schemas["BoxRecipe"];
 export type CustomConfigs = Schemas["CustomConfigs"];
@@ -448,8 +451,13 @@ export const api = {
   queryMonitoring: (sessionId: string, query: string) =>
     http<PromSample[]>(`/api/lab/monitoring/query?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`, { cache: "no-store" }, 1, 30000),
 
-  startScenario: (request: ScenarioRequest) =>
+  /** Fields with a server default may be left out (a named test needs only `name`). */
+  startScenario: (request: Partial<ScenarioRequest> & { sessionId: string }) =>
     http<ScenarioRun>("/api/lab/monitoring/scenarios", { method: "POST", body: JSON.stringify(request) }, 1, 30000),
+
+  /** Fault tests the topology defines (monitoring.faults) and its netlab validation tests. */
+  listFaultTests: (sessionId: string) =>
+    http<FaultTests>(`/api/lab/monitoring/faults?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
 
   listScenarios: (sessionId: string) =>
     http<ScenarioRun[]>(`/api/lab/monitoring/scenarios?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),

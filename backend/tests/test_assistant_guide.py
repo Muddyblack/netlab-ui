@@ -104,3 +104,69 @@ def test_get_monitoring_says_how_to_turn_it_on(session):
 def test_the_tools_are_on_the_mcp_server():
     names = set(mcp_server.tool_names())
     assert {"get_monitoring", "query_metrics", "ui_show_nodes", "ui_prepare_fault_test", "ui_run_action"} <= names
+
+
+FAULTS = """
+monitoring.faults:
+  core:
+    description: lose r1-r2
+    links: [ r1-r2 ]
+    validate: true
+validate:
+  ospf: { description: r1 sees r2, nodes: [ r1 ], plugin: ospf_neighbor('x') }
+"""
+
+
+def test_list_fault_tests_gives_tests_links_and_an_example(session):
+    with open(session.topology_path, "a") as handle:
+        handle.write(FAULTS)
+    result = asyncio.run(guide.list_fault_tests())
+    assert [f["name"] for f in result["faults"]] == ["core"]
+    assert result["validationTests"] == [{"name": "ospf", "description": "r1 sees r2"}]
+    assert result["links"] == ["r1-r2"] and "monitoring.faults" in result["example"]
+
+
+def test_propose_fault_test_waits_for_approval_then_runs(session, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from services import monitoring_scenarios
+    from services.assistant import proposals
+
+    with open(session.topology_path, "a") as handle:
+        handle.write(FAULTS)
+    with pytest.raises(ToolError, match="not running"):
+        asyncio.run(guide.propose_fault_test(name="core"))
+    stack = session.topology_path.rsplit("/", 1)[0] + "/monitoring/stack.json"
+    with open(stack, "w") as handle:
+        json.dump({"lab": "demo", "collector_url": "http://collector"}, handle)
+    with pytest.raises(ToolError, match="no fault test"):
+        asyncio.run(guide.propose_fault_test(name="nope"))
+    proposed = asyncio.run(guide.propose_fault_test(name="core", rationale="check OSPF recovery"))
+    assert "awaiting user approval" in proposed["status"]
+
+    started = []
+    monkeypatch.setattr(monitoring_scenarios, "start_named", lambda _lab_dir, _attrs, name: started.append(name))
+    response = TestClient(app).post(f"/api/assistant/proposals/{proposed['proposalId']}/apply")
+    assert response.status_code == 200, response.text
+    assert started == ["core"]
+    proposals.store.clear()
+
+
+def test_get_fault_test_results_link_grafana_to_the_run(session, monkeypatch):
+    from services import monitoring_scenarios
+
+    monkeypatch.setattr(
+        monitoring_scenarios,
+        "history",
+        lambda _lab_dir, limit=5: [  # noqa: ARG005
+            {"id": "a1", "startedAt": 1000.0, "finishedAt": 1100.0}
+        ],
+    )
+    monkeypatch.setattr(
+        monitoring,
+        "stack",
+        lambda _lab_dir: {"lab": "demo", "grafana_url": "http://g:3000", "dashboards": {"routing": "netlab-routing"}},
+    )
+    (run,) = asyncio.run(guide.get_fault_test_results())["runs"]
+    assert run["grafana"]["routing"] == "http://g:3000/d/netlab-routing/?var-lab=demo&from=970000&to=1130000"

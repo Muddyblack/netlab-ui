@@ -3,11 +3,13 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   MenuItem,
@@ -31,7 +33,9 @@ import {
   api,
   type MonitoringState,
   type MonitoringSummary,
-  type ScenarioRun
+  type FaultTests,
+  type ScenarioRun,
+  type ValidationCheck
 } from "../../api/client";
 import {
   type FaultTestPrefill,
@@ -242,8 +246,83 @@ function HealthTab({
   );
 }
 
+/** The run's outcome, coloured explicitly (the app theme flattens Chip colours). */
+function VerdictChip({ value, title }: { value: string; title?: string }) {
+  const tone =
+    value === "passed" || value === "done"
+      ? "success.main"
+      : value === "failed"
+        ? "error.main"
+        : value === "running"
+          ? "primary.main"
+          : "warning.main";
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      label={value}
+      title={title}
+      sx={{ color: tone, borderColor: tone, fontWeight: 600 }}
+    />
+  );
+}
+
+/** passed/failed for a finished run with a verdict, else its status (running, cancelled, …). */
+function verdictOf(run: ScenarioRun): string {
+  const result = run.summary.verdict?.result;
+  return run.status === "done" && result ? result : run.status;
+}
+
+/** "2/2 passed" for a cycle's netlab validate results, with every test in the tooltip. */
+function checksText(checks: ValidationCheck[]): { text: string; failed: boolean; detail: string } {
+  const failed = checks.filter((check) => check.passed === false);
+  const detail = checks
+    .map((check) => {
+      const status = check.passed === false ? "FAIL" : check.passed ? "pass" : "—";
+      const time =
+        check.passed && check.seconds !== null && check.seconds !== undefined
+          ? ` in ${check.seconds} s`
+          : "";
+      return `${status} ${check.test}${time}${check.message ? `: ${check.message}` : ""}`;
+    })
+    .join("\n");
+  const text = failed.length
+    ? `${failed.length} of ${checks.length} failed`
+    : `${checks.length}/${checks.length} passed`;
+  return { text, failed: failed.length > 0, detail };
+}
+
+function ValidateCell({
+  during,
+  after,
+  cell
+}: {
+  during: ValidationCheck[];
+  after: ValidationCheck[];
+  cell: Record<string, unknown>;
+}) {
+  const down = during.length ? checksText(during) : null;
+  const up = after.length ? checksText(after) : null;
+  return (
+    <Typography
+      sx={{ ...cell, color: up?.failed ? "error.main" : "text.secondary" }}
+      noWrap
+      title={[down && `While down:\n${down.detail}`, up && `After recovery:\n${up.detail}`]
+        .filter(Boolean)
+        .join("\n\n")}
+    >
+      {up ? `after: ${up.text}` : ""}
+      {up && down ? " · " : ""}
+      {down ? `while down: ${down.text}` : ""}
+    </Typography>
+  );
+}
+
 function ScenarioResults({ run }: { run: ScenarioRun }) {
   const cell = { py: 0.25, px: 1, fontSize: 13 } as const;
+  const validated = run.results.some(
+    (cycle) => (cycle.after ?? []).length || (cycle.during ?? []).length
+  );
   return (
     <Box
       sx={{
@@ -256,7 +335,13 @@ function ScenarioResults({ run }: { run: ScenarioRun }) {
         borderColor: "divider"
       }}
     >
-      {["Cycle", "Noticed after", "Down at worst", "Recovered after", ""].map((head) => (
+      {[
+        "Cycle",
+        "Noticed after",
+        "Down at worst",
+        "Recovered after",
+        validated ? "netlab validate" : ""
+      ].map((head) => (
         <Typography
           key={head || "x"}
           variant="caption"
@@ -283,13 +368,21 @@ function ScenarioResults({ run }: { run: ScenarioRun }) {
                 : recovery(cycle.recoverySeconds)
               : "—"}
           </Typography>
-          <Typography
-            sx={{ ...cell, color: "text.secondary" }}
-            noWrap
-            title={cycle.affected.join("\n")}
-          >
-            {cycle.recoveryExact ? "device timestamps (1 s)" : cycle.upAt ? "sampled (0.5 s)" : ""}
-          </Typography>
+          {validated ? (
+            <ValidateCell during={cycle.during ?? []} after={cycle.after ?? []} cell={cell} />
+          ) : (
+            <Typography
+              sx={{ ...cell, color: "text.secondary" }}
+              noWrap
+              title={cycle.affected.join("\n")}
+            >
+              {cycle.recoveryExact
+                ? "device timestamps (1 s)"
+                : cycle.upAt
+                  ? "sampled (0.5 s)"
+                  : ""}
+            </Typography>
+          )}
         </Box>
       ))}
     </Box>
@@ -315,6 +408,11 @@ function FaultsTab({
   const [up, setUp] = useState(30);
   const [runs, setRuns] = useState<ScenarioRun[]>([]);
   const [busy, setBusy] = useState(false);
+  const [defined, setDefined] = useState<FaultTests>({ faults: [], validationTests: [] });
+  const [validate, setValidate] = useState(false);
+  useEffect(() => {
+    void api.listFaultTests(sessionId).then(setDefined, () => undefined);
+  }, [sessionId]);
   // Filled in by an AI agent: highlight Run until the user starts it
   const [suggested, setSuggested] = useState(false);
   useEffect(() => {
@@ -362,8 +460,20 @@ function FaultsTab({
         cycles,
         downSeconds: down,
         upSeconds: up,
-        settleSeconds: Math.max(60, up * 2)
+        settleSeconds: Math.max(60, up * 2),
+        validateAfter: validate ? [] : null
       });
+      await load();
+    } catch (err) {
+      onError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const runNamed = async (name: string) => {
+    setBusy(true);
+    try {
+      await api.startScenario({ sessionId, name });
       await load();
     } catch (err) {
       onError(errorText(err));
@@ -373,6 +483,8 @@ function FaultsTab({
   };
   const latest = running ?? runs[0];
   const live = Object.values(state.running).some(Boolean);
+  const lastVerdict = (name: string) =>
+    runs.find((run) => run.name === name && run.status !== "running");
 
   if (!live)
     return (
@@ -385,6 +497,67 @@ function FaultsTab({
       <Typography variant="body2" color="text.secondary">
         Take a link down and up on a schedule and measure how fast the lab notices and recovers —
         every cycle is marked on the Grafana dashboards and kept with the lab for comparison.
+      </Typography>
+      {defined.faults.length > 0 && (
+        <Box>
+          <Typography variant="overline" color="text.secondary">
+            This lab's fault tests
+          </Typography>
+          <Stack spacing={0.75}>
+            {defined.faults.map((fault) => {
+              const last = lastVerdict(fault.name);
+              const verdict = last?.summary.verdict?.result;
+              return (
+                <Stack
+                  key={fault.name}
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                  sx={{ px: 1.25, py: 0.75, border: 1, borderColor: "divider", borderRadius: 1 }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {fault.name}
+                      {fault.description && (
+                        <Typography component="span" variant="body2" color="text.secondary">
+                          {" "}
+                          — {fault.description}
+                        </Typography>
+                      )}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {fault.links.join(", ")} · {fault.cycles}× down {fault.down}s / up {fault.up}s
+                      {fault.validateAfter
+                        ? ` · validate ${fault.validateAfter.length ? fault.validateAfter.join(", ") : "all"}`
+                        : ""}
+                      {fault.expectRecovery !== null && fault.expectRecovery !== undefined
+                        ? ` · recovery ≤ ${fault.expectRecovery} s`
+                        : ""}
+                    </Typography>
+                  </Box>
+                  {verdict && (verdict === "passed" || verdict === "failed") && (
+                    <VerdictChip
+                      value={verdict}
+                      title={`Last run ${new Date(last.startedAt * 1000).toLocaleString()}`}
+                    />
+                  )}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<PlayArrowIcon />}
+                    disabled={busy || Boolean(running)}
+                    onClick={() => void runNamed(fault.name)}
+                  >
+                    Run
+                  </Button>
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Box>
+      )}
+      <Typography variant="overline" color="text.secondary" sx={{ mb: -1.5 }}>
+        {defined.faults.length > 0 ? "Quick test" : "Test a link"}
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <TextField
@@ -471,6 +644,30 @@ function FaultsTab({
           </Button>
         )}
       </Stack>
+      {defined.validationTests.length > 0 && (
+        <FormControlLabel
+          sx={{ mt: -1 }}
+          control={
+            <Checkbox
+              size="small"
+              checked={validate}
+              onChange={(event) => setValidate(event.target.checked)}
+            />
+          }
+          label={
+            <Typography variant="body2" color="text.secondary">
+              Run the lab's netlab validate tests after each recovery (
+              {defined.validationTests.length})
+            </Typography>
+          }
+        />
+      )}
+      {defined.faults.length === 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+          Tip: write repeatable fault tests into the topology (<code>monitoring.faults</code>), with
+          netlab validate checks and a pass/fail limit — they show up here with a Run button.
+        </Typography>
+      )}
       {suggested && !running && (
         <Typography variant="caption" color="primary">
           Set up by your AI agent — check the link and timing, then press Run.
@@ -487,25 +684,24 @@ function FaultsTab({
             useFlexGap
           >
             <Typography variant="subtitle2">
+              {latest.name ? `${latest.name} · ` : ""}
               {latest.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {latest.cycles}× down {latest.downSeconds}s / up {latest.upSeconds}s ·{" "}
               {new Date(latest.startedAt * 1000).toLocaleString()}
             </Typography>
-            <Chip
-              size="small"
-              variant="outlined"
-              label={latest.status}
-              color={
-                latest.status === "done"
-                  ? "success"
-                  : latest.status === "running"
-                    ? "primary"
-                    : "warning"
-              }
-            />
+            <VerdictChip value={verdictOf(latest)} />
           </Stack>
+          {(latest.summary.verdict?.reasons ?? []).length > 0 && (
+            <Alert severity="error" variant="outlined" sx={{ mb: 1, py: 0 }}>
+              {(latest.summary.verdict?.reasons ?? []).map((reason) => (
+                <Typography key={reason} variant="body2">
+                  {reason}
+                </Typography>
+              ))}
+            </Alert>
+          )}
           {latest.status === "running" && (
             <Box sx={{ mb: 1 }}>
               <LinearProgress
@@ -543,9 +739,9 @@ function FaultsTab({
           </Typography>
           {runs.slice(latest === runs[0] ? 1 : 0, 6).map((run) => (
             <Typography key={run.id} variant="body2" color="text.secondary">
-              {new Date(run.startedAt * 1000).toLocaleString()} ·{" "}
+              {new Date(run.startedAt * 1000).toLocaleString()} · {run.name ? `${run.name} · ` : ""}
               {run.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")} · {run.cycles}× ·{" "}
-              recovery avg {recovery(run.summary.recovery?.avg)} · {run.status}
+              recovery avg {recovery(run.summary.recovery?.avg)} · {verdictOf(run)}
             </Typography>
           ))}
         </Box>

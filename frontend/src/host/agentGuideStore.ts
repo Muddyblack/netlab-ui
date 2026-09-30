@@ -5,6 +5,8 @@ import { useSyncExternalStore } from "react";
 export interface AgentGuideNote {
   title: string;
   message: string;
+  /** Optional link the agent points at (e.g. a Grafana dashboard). */
+  link?: { label: string; url: string };
   /** Bumped on every note, so the same text sent twice still shows again. */
   seq: number;
 }
@@ -16,8 +18,12 @@ let current: AgentGuideNote | null = null;
 let seq = 0;
 const listeners = new Set<() => void>();
 
-export function showAgentGuide(message: string, title = ""): void {
-  current = message.trim() ? { title, message, seq: ++seq } : null;
+export function showAgentGuide(
+  message: string,
+  title = "",
+  link?: { label: string; url: string }
+): void {
+  current = message.trim() || link ? { title, message, link, seq: ++seq } : null;
   for (const listener of listeners) listener();
 }
 

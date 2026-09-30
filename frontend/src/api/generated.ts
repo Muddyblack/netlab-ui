@@ -131,6 +131,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/monitoring/faults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fault Test Definitions
+         * @description Fault tests the topology defines (monitoring.faults) and its netlab validation tests.
+         */
+        get: operations["fault_test_definitions_api_lab_monitoring_faults_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/monitoring/scenarios/{scenario_id}": {
         parameters: {
             query?: never;
@@ -2500,6 +2520,232 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        FaultTest: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Links
+             * @default []
+             */
+            links: string[];
+            /** Cycles */
+            cycles: number;
+            /** Down */
+            down: number;
+            /** Up */
+            up: number;
+            /** Settle */
+            settle: number;
+            /** Validateafter */
+            validateAfter?: string[] | null;
+            /** Validateduring */
+            validateDuring?: string[] | null;
+            /** Expectrecovery */
+            expectRecovery?: number | null;
+        };
+        /** FaultTests */
+        FaultTests: {
+            /**
+             * Faults
+             * @default []
+             */
+            faults: components["schemas"]["FaultTest"][];
+            /**
+             * Validationtests
+             * @default []
+             */
+            validationTests: components["schemas"]["LabValidationTest"][];
+        };
+        /** FcliAction */
+        LabValidationTest: {
+            /** Name */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+        };
+        /** LeaseResult */
+        ScenarioCycle: {
+            /** Cycle */
+            cycle: number;
+            /** Downat */
+            downAt: number;
+            /**
+             * Upat
+             * @default 0
+             */
+            upAt: number;
+            /** Reactionseconds */
+            reactionSeconds?: number | null;
+            /**
+             * Impact
+             * @default 0
+             */
+            impact: number;
+            /** Recoveryseconds */
+            recoverySeconds?: number | null;
+            /**
+             * Recoveryexact
+             * @default false
+             */
+            recoveryExact: boolean;
+            /**
+             * Affected
+             * @default []
+             */
+            affected: string[];
+            /**
+             * During
+             * @default []
+             */
+            during: components["schemas"]["ValidationCheck"][];
+            /**
+             * After
+             * @default []
+             */
+            after: components["schemas"]["ValidationCheck"][];
+        };
+        /** ScenarioLinkEnd */
+        ScenarioRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Name */
+            name?: string | null;
+            /**
+             * Links
+             * @default []
+             */
+            links: components["schemas"]["ScenarioLinkEnd"][];
+            /**
+             * Cycles
+             * @default 3
+             */
+            cycles: number;
+            /**
+             * Downseconds
+             * @default 10
+             */
+            downSeconds: number;
+            /**
+             * Upseconds
+             * @default 30
+             */
+            upSeconds: number;
+            /**
+             * Settleseconds
+             * @default 120
+             */
+            settleSeconds: number;
+            /** Validateafter */
+            validateAfter?: string[] | null;
+            /** Validateduring */
+            validateDuring?: string[] | null;
+            /** Expectrecovery */
+            expectRecovery?: number | null;
+        };
+        /** ScenarioRun */
+        ScenarioRun: {
+            /** Id */
+            id: string;
+            /** Lab */
+            lab: string;
+            /** Links */
+            links: components["schemas"]["ScenarioLinkEnd"][];
+            /** Cycles */
+            cycles: number;
+            /** Downseconds */
+            downSeconds: number;
+            /** Upseconds */
+            upSeconds: number;
+            /** Settleseconds */
+            settleSeconds: number;
+            /** Status */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Startedat */
+            startedAt: number;
+            /** Finishedat */
+            finishedAt?: number | null;
+            /**
+             * Baselinemissing
+             * @default 0
+             */
+            baselineMissing: number;
+            /**
+             * Results
+             * @default []
+             */
+            results: components["schemas"]["ScenarioCycle"][];
+            summary: components["schemas"]["ScenarioSummary"];
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Validateafter */
+            validateAfter?: string[] | null;
+            /** Validateduring */
+            validateDuring?: string[] | null;
+            /** Expectrecovery */
+            expectRecovery?: number | null;
+        };
+        /** ScenarioStats */
+        ScenarioSummary: {
+            reaction?: components["schemas"]["ScenarioStats"] | null;
+            recovery?: components["schemas"]["ScenarioStats"] | null;
+            /**
+             * Notrecovered
+             * @default 0
+             */
+            notRecovered: number;
+            verdict?: components["schemas"]["ScenarioVerdict"] | null;
+        };
+        /** ScenarioVerdict */
+        ScenarioVerdict: {
+            /** Result */
+            result: string;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /** ScriptStep */
+        ValidationCheck: {
+            /** Test */
+            test: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Passed */
+            passed?: boolean | null;
+            /** Seconds */
+            seconds?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /** ValidationError */
         MissingItem: {
             /** Protocol */
             protocol: string;
@@ -2699,37 +2945,6 @@ export interface components {
             value: number;
         };
         /** ProtocolAdjacency */
-        ScenarioCycle: {
-            /** Cycle */
-            cycle: number;
-            /** Downat */
-            downAt: number;
-            /**
-             * Upat
-             * @default 0
-             */
-            upAt: number;
-            /** Reactionseconds */
-            reactionSeconds?: number | null;
-            /**
-             * Impact
-             * @default 0
-             */
-            impact: number;
-            /** Recoveryseconds */
-            recoverySeconds?: number | null;
-            /**
-             * Recoveryexact
-             * @default false
-             */
-            recoveryExact: boolean;
-            /**
-             * Affected
-             * @default []
-             */
-            affected: string[];
-        };
-        /** ScenarioLinkEnd */
         ScenarioLinkEnd: {
             /** Node */
             node: string;
@@ -2737,72 +2952,6 @@ export interface components {
             ifname: string;
         };
         /** ScenarioRequest */
-        ScenarioRequest: {
-            /** Sessionid */
-            sessionId: string;
-            /** Links */
-            links: components["schemas"]["ScenarioLinkEnd"][];
-            /**
-             * Cycles
-             * @default 3
-             */
-            cycles: number;
-            /**
-             * Downseconds
-             * @default 10
-             */
-            downSeconds: number;
-            /**
-             * Upseconds
-             * @default 30
-             */
-            upSeconds: number;
-            /**
-             * Settleseconds
-             * @default 120
-             */
-            settleSeconds: number;
-        };
-        /** ScenarioRun */
-        ScenarioRun: {
-            /** Id */
-            id: string;
-            /** Lab */
-            lab: string;
-            /** Links */
-            links: components["schemas"]["ScenarioLinkEnd"][];
-            /** Cycles */
-            cycles: number;
-            /** Downseconds */
-            downSeconds: number;
-            /** Upseconds */
-            upSeconds: number;
-            /** Settleseconds */
-            settleSeconds: number;
-            /** Status */
-            status: string;
-            /**
-             * Message
-             * @default
-             */
-            message: string;
-            /** Startedat */
-            startedAt: number;
-            /** Finishedat */
-            finishedAt?: number | null;
-            /**
-             * Baselinemissing
-             * @default 0
-             */
-            baselineMissing: number;
-            /**
-             * Results
-             * @default []
-             */
-            results: components["schemas"]["ScenarioCycle"][];
-            summary: components["schemas"]["ScenarioSummary"];
-        };
-        /** ScenarioStats */
         ScenarioStats: {
             /** Min */
             min: number;
@@ -2812,16 +2961,6 @@ export interface components {
             max: number;
         };
         /** ScenarioSummary */
-        ScenarioSummary: {
-            reaction?: components["schemas"]["ScenarioStats"] | null;
-            recovery?: components["schemas"]["ScenarioStats"] | null;
-            /**
-             * Notrecovered
-             * @default 0
-             */
-            notRecovered: number;
-        };
-        /** ScriptStep */
         AddressingLens: {
             /**
              * Families
@@ -6766,6 +6905,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioRun"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fault_test_definitions_api_lab_monitoring_faults_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaultTests"];
                 };
             };
             /** @description Validation Error */

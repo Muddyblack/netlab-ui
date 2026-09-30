@@ -194,6 +194,9 @@ def _require_proposal(proposal_id: str) -> proposals.Proposal:
 async def _run_action(proposal: proposals.Proposal) -> None:
     """Execute a non-edit proposal (currently: netem link impairment)."""
     action = proposal.action or {}
+    if action.get("type") == "faultTest":
+        await _run_fault_test(proposal, action)
+        return
     if action.get("type") != "netem":
         raise HTTPException(400, f"unsupported action {action.get('type')!r}")
 
@@ -216,3 +219,32 @@ async def _run_action(proposal: proposals.Proposal) -> None:
     )
     if result.code != 0:
         raise HTTPException(500, result.stderr or "netem failed")
+
+
+async def _run_fault_test(proposal: proposals.Proposal, action: dict[str, Any]) -> None:
+    """Start the fault test the user approved (it runs in the background)."""
+    from app.contract import commands
+    from services import monitoring_scenarios
+
+    session = store.get(proposal.session_id)
+    if session is None:
+        raise HTTPException(404, "unknown session")
+    lab_dir = Path(session.topology_path).parent
+    try:
+        if action.get("name"):
+            attrs = commands.load_topology(session.topology_path).attrs
+            monitoring_scenarios.start_named(lab_dir, attrs, str(action["name"]))
+        else:
+            monitoring_scenarios.start(
+                lab_dir,
+                list(action.get("links") or []),
+                int(action.get("cycles") or 3),
+                float(action.get("downSeconds") or 10),
+                float(action.get("upSeconds") or 30),
+                120,
+                validate_after=action.get("validateAfter"),
+                validate_during=action.get("validateDuring"),
+                expect_recovery=action.get("expectRecovery"),
+            )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc

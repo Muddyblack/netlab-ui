@@ -54,8 +54,9 @@ The token is random per backend start. Set `NETLAB_APP_ASSISTANT_TOKEN` so an ag
 | **Propose** | `propose_topology_edit`, `propose_fault_injection`: staged for your approval (see below) |
 | **Write** | `write_workspace_file`: creates or overwrites a file inside the open lab's directory, without approval |
 | **Teach** | `get_teaching_document`, `create_teaching_document`: guided tour and exercises |
-| **Monitor** | `get_monitoring` (lab health against the topology, Grafana dashboard links), `query_metrics` (PromQL over the `netlab_*` metrics), `get_fault_test_results`. See [lab monitoring](../monitoring/README.md). |
-| **Show you the UI** | `ui_show_nodes` (spotlight nodes on your canvas), `ui_run_action` (open a dialog or panel, from `ui_list_actions`), `ui_open_monitoring` (a Monitoring tab), `ui_prepare_fault_test` (fill in a fault test; you press Run), `ui_explain`, `ui_clear` |
+| **Monitor** | `get_monitoring` (lab health against the topology, Grafana dashboard links), `query_metrics` and `query_metrics_range` (PromQL now, or over time / over a fault test run). See [lab monitoring](../monitoring/README.md). |
+| **Fault tests** | `list_fault_tests` (the lab's `monitoring.faults`, its `netlab validate` tests, a YAML example to write a new one), `propose_fault_test` (staged for your approval, like topology edits), `get_fault_test_results` (verdict and why, per-cycle timings, validate results, Grafana links zoomed to the run) |
+| **Show you the UI** | `ui_show_nodes` (spotlight nodes on your canvas), `ui_run_action` (open a dialog or panel, from `ui_list_actions`), `ui_open_monitoring` (a Monitoring tab), `ui_prepare_fault_test` (fill in a fault test; you press Run), `ui_show_grafana` (a dashboard link, zoomed to a run), `ui_explain`, `ui_clear` |
 
 ### The agent shows you, live
 

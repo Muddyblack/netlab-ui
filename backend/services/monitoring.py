@@ -223,6 +223,38 @@ async def query(lab_dir: Path, promql: str) -> list[dict[str, Any]]:
     ]
 
 
+async def query_range(lab_dir: Path, promql: str, start: float, end: float, step: float) -> list[dict[str, Any]]:
+    """PromQL range query: each series with its [time, value] points."""
+    params = {"query": promql, "start": f"{start:.3f}", "end": f"{end:.3f}", "step": f"{max(step, 1):g}s"}
+    url = f"{_tsdb_url(stack(lab_dir))}/api/v1/query_range?{urllib.parse.urlencode(params)}"
+    try:
+        data = await asyncio.to_thread(_http_json, url)
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        raise RuntimeError(f"metrics store not reachable: {exc}") from exc
+    if not isinstance(data, dict) or data.get("status") != "success":
+        raise RuntimeError(str((data or {}).get("error") or "query failed"))
+    result = (data.get("data") or {}).get("result") or []
+    return [
+        {"labels": item.get("metric") or {}, "points": [[float(t), float(v)] for t, v in item.get("values") or []]}
+        for item in result
+        if isinstance(item, dict)
+    ]
+
+
+def grafana_links(lab_dir: Path, start: float | None = None, end: float | None = None) -> dict[str, str]:
+    """Dashboard URLs for the lab, optionally zoomed to a time window (epoch seconds)."""
+    info = stack(lab_dir)
+    base = str(info.get("grafana_url") or "")
+    if not base.startswith("http"):
+        return {}
+    query = {"var-lab": str(info.get("lab") or "")}
+    if start is not None:
+        query["from"] = str(int(start * 1000))
+        query["to"] = str(int((end or time.time()) * 1000)) if end else "now"
+    suffix = urllib.parse.urlencode(query)
+    return {name: f"{base}/d/{uid}/?{suffix}" for name, uid in (info.get("dashboards") or {}).items()}
+
+
 async def annotate(lab_dir: Path, text: str, tags: list[str]) -> int | None:
     """Mark an event on the lab's Grafana dashboards (best effort). Returns the annotation id."""
     info = stack(lab_dir)

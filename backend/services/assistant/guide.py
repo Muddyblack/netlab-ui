@@ -12,11 +12,13 @@ form, and the user presses *Run*.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Literal
 
-from services import monitoring, monitoring_scenarios
-from services.assistant.tools import ToolError, _lab_name, _session
+from services import fault_tests, monitoring, monitoring_scenarios
+from services.assistant import proposals
+from services.assistant.tools import ToolError, _lab_name, _session, notify_proposals
 
 MAX_SERIES = 200
 MAX_MESSAGE = 600
@@ -114,10 +116,168 @@ async def query_metrics(promql: str, lab: str | None = None) -> dict[str, Any]:
     return result
 
 
-async def get_fault_test_results(lab: str | None = None, limit: int = 5) -> dict[str, Any]:
-    """Fault tests of this lab, running first, then saved runs (newest first)."""
+MAX_POINTS = 120
+
+
+async def query_metrics_range(
+    promql: str,
+    minutes: float = 15,
+    run_id: str | None = None,
+    lab: str | None = None,
+) -> dict[str, Any]:
+    """PromQL over time: the last `minutes`, or the window of a fault test run (run_id)."""
     session = _session(lab)
-    runs = monitoring_scenarios.history(_lab_dir(session), limit=max(1, min(limit, 20)))
+    lab_dir = _lab_dir(session)
+    end = time.time()
+    start = end - max(1.0, min(minutes, 24 * 60)) * 60
+    if run_id:
+        run = next((r for r in monitoring_scenarios.history(lab_dir, limit=50) if r.get("id") == run_id), None)
+        if run is None:
+            raise ToolError(f"no fault test run {run_id!r} -- get_fault_test_results lists them")
+        start, end = run["startedAt"] - 30, (run.get("finishedAt") or end) + 30
+    step = max(1.0, (end - start) / MAX_POINTS)
+    try:
+        series = await monitoring.query_range(lab_dir, promql, start, end, step)
+    except RuntimeError as exc:
+        raise ToolError(str(exc)) from exc
+    # the store aligns points to the step, so the first may sit just before `start`
+    t0 = float(int(min([start, *(p[0] for item in series for p in item["points"][:1])])))
+    result: dict[str, Any] = {
+        "start": t0,
+        "step": round(step, 1),
+        "note": "points are [seconds after start, value]; values that stay the same are merged",
+        "series": [
+            {"labels": item["labels"], "points": _changes(item["points"], t0)} for item in series[: MAX_SERIES // 4]
+        ],
+    }
+    if len(series) > MAX_SERIES // 4:
+        result["truncated"] = f"{len(series)} series -- aggregate (sum by ...) or filter by node"
+    return result
+
+
+def _changes(points: list[list[float]], t0: float) -> list[list[float]]:
+    """Keep the first point, every change, and the last point (compact for the model)."""
+    kept: list[list[float]] = []
+    for index, (t, v) in enumerate(points):
+        if not kept or v != kept[-1][1] or index == len(points) - 1:
+            kept.append([round(t - t0, 1), round(v, 4)])
+    return kept
+
+
+async def list_fault_tests(lab: str | None = None) -> dict[str, Any]:
+    """The lab's fault tests (monitoring.faults), its netlab validation tests, the last verdict of
+    each, and how to write a new one."""
+    session = _session(lab)
+    from app.contract import commands
+
+    lab_dir = _lab_dir(session)
+    attrs = commands.load_topology(session.topology_path).attrs
+    faults = fault_tests.definitions(attrs)
+    last: dict[str, Any] = {}
+    for run in monitoring_scenarios.history(lab_dir, limit=50):
+        if run.get("name") and run["name"] not in last:
+            last[run["name"]] = {"id": run["id"], **(run.get("summary") or {}).get("verdict", {})}
+    for fault in faults:
+        fault["lastRun"] = last.get(fault["name"])
+    links = [link["link"] for link in monitoring.links(lab_dir)]
+    tests = fault_tests.validation_tests(attrs)
+    example = (
+        "monitoring.faults:\n"
+        "  <name>:\n"
+        "    description: <what it proves>\n"
+        f"    links: [ {links[0] if links else 'r1-r2'} ]   # link names or ends (r1:eth1)\n"
+        "    cycles: 3\n    down: 10\n    up: 30\n"
+        f"    during: [ {tests[0]['name'] if tests else '<validate test>'} ]   # checked while the link is down\n"
+        "    validate: true   # netlab validate tests after recovery (true: all, or a list)\n"
+        "    expect.recovery: 5   # seconds; slower fails the run"
+    )
+    return {
+        "faults": faults,
+        "validationTests": tests,
+        "links": links,
+        "howToAdd": "add to the topology with propose_topology_edit (setYamlContent). Validation tests are "
+        "netlab's own `validate:` section (read_netlab_docs page='topology/validate.md').",
+        "example": example,
+    }
+
+
+async def propose_fault_test(
+    name: str | None = None,
+    links: list[str] | None = None,
+    cycles: int = 3,
+    down_seconds: int = 10,
+    up_seconds: int = 30,
+    validate: list[str] | None = None,
+    during: list[str] | None = None,
+    expect_recovery_seconds: float | None = None,
+    rationale: str = "",
+    lab: str | None = None,
+) -> dict[str, Any]:
+    """Propose running a fault test (a named one from the topology, or links + timing). The user
+    approves it in netlab-ui; it takes links down and up, so it never starts on its own."""
+    session = _session(lab)
+    from app.contract import commands
+
+    lab_dir = _lab_dir(session)
+    if not str(monitoring.stack(lab_dir).get("collector_url") or "").startswith("http"):
+        raise ToolError("monitoring is not running for this lab -- get_monitoring says why")
+    if name:
+        spec = next(
+            (
+                f
+                for f in fault_tests.definitions(commands.load_topology(session.topology_path).attrs)
+                if f["name"] == name
+            ),
+            None,
+        )
+        if spec is None:
+            raise ToolError(f"no fault test {name!r} in the topology -- list_fault_tests shows them")
+        action: dict[str, Any] = {"type": "faultTest", "name": name}
+        summary = f"run fault test {name}: {', '.join(spec['links'])}, {spec['cycles']} cycles"
+    else:
+        if not links:
+            raise ToolError("give a fault test name, or links to take down (link names or ends like r1:eth1)")
+        try:
+            ends = fault_tests.resolve_links(lab_dir, links)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        action = {
+            "type": "faultTest",
+            "links": ends,
+            "cycles": max(1, min(int(cycles), 100)),
+            "downSeconds": max(1, int(down_seconds)),
+            "upSeconds": max(1, int(up_seconds)),
+            "validateAfter": validate,
+            "validateDuring": during,
+            "expectRecovery": expect_recovery_seconds,
+        }
+        summary = f"fault test: {', '.join(links)} down {down_seconds}s / up {up_seconds}s, {action['cycles']} cycles"
+    proposal = proposals.create_action(
+        session_id=session.id,
+        base_revision=session.revision,
+        action=action,
+        rationale=rationale,
+        summary=summary,
+    )
+    notify_proposals(session.id)
+    return {
+        "proposalId": proposal.id,
+        "summary": summary,
+        "status": "awaiting user approval in netlab-ui (AI agents panel) -- nothing runs yet; "
+        "get_fault_test_results shows it once it runs",
+    }
+
+
+async def get_fault_test_results(lab: str | None = None, limit: int = 5) -> dict[str, Any]:
+    """Fault tests of this lab, running first, then saved runs (newest first), with the verdict,
+    netlab validate results and Grafana links zoomed to each run."""
+    session = _session(lab)
+    lab_dir = _lab_dir(session)
+    runs = monitoring_scenarios.history(lab_dir, limit=max(1, min(limit, 20)))
+    for run in runs:
+        start = run["startedAt"] - 30
+        end = (run.get("finishedAt") or 0) + 30 if run.get("finishedAt") else None
+        run["grafana"] = monitoring.grafana_links(lab_dir, start, end)
     return {"runs": runs}
 
 
@@ -164,6 +324,32 @@ async def ui_explain(message: str, title: str = "", lab: str | None = None) -> d
         raise ToolError("the message is empty")
     _push(session, {"kind": "explain", "title": _message(title)[:80], "message": _message(message)})
     return {"ok": True}
+
+
+async def ui_show_grafana(
+    dashboard: Literal["overview", "routing", "node"] = "routing",
+    run_id: str | None = None,
+    message: str = "",
+    lab: str | None = None,
+) -> dict[str, Any]:
+    """Put a Grafana dashboard link on the user's screen, zoomed to a fault test run if given."""
+    session = _session(lab)
+    _ui_open(session)
+    lab_dir = _lab_dir(session)
+    start = end = None
+    if run_id:
+        run = next((r for r in monitoring_scenarios.history(lab_dir, limit=50) if r.get("id") == run_id), None)
+        if run is None:
+            raise ToolError(f"no fault test run {run_id!r}")
+        start, end = run["startedAt"] - 30, (run.get("finishedAt") or time.time()) + 30
+    url = monitoring.grafana_links(lab_dir, start, end).get(dashboard)
+    if not url:
+        raise ToolError("Grafana is not running for this lab (get_monitoring says why)")
+    _push(
+        session,
+        {"kind": "explain", "message": _message(message), "link": {"label": f"Open {dashboard} dashboard", "url": url}},
+    )
+    return {"ok": True, "url": url}
 
 
 async def ui_clear(lab: str | None = None) -> dict[str, Any]:

@@ -1,6 +1,7 @@
 import CloseIcon from "@mui/icons-material/Close";
 import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
-import { IconButton, Paper, Stack, Typography } from "@mui/material";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { Button, IconButton, Paper, Stack, Typography } from "@mui/material";
 
 import { AGENT_SPOTLIGHT_LABEL, clearAgentGuide, useAgentGuide } from "../../host/agentGuideStore";
 import { setSpotlight, useSpotlight } from "../../host/canvasSpotlight";
@@ -43,6 +44,19 @@ export function AgentGuideCard() {
           <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
             {note.message}
           </Typography>
+          {note.link && (
+            <Button
+              size="small"
+              variant="outlined"
+              endIcon={<OpenInNewIcon fontSize="small" />}
+              href={note.link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ alignSelf: "flex-start", mt: 0.75 }}
+            >
+              {note.link.label}
+            </Button>
+          )}
         </Stack>
         <IconButton size="small" aria-label="Dismiss" onClick={dismiss}>
           <CloseIcon fontSize="small" />

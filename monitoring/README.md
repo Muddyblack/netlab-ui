@@ -68,22 +68,61 @@ routers recalculated, and how often, after a link went down and came back.
 
 ### Fault tests (repeatable link flaps)
 
-Pick one or more link ends, the number of cycles and how long each link stays down and up.
-netlab-ui takes the links down and up on that schedule (containers with `ip link`, libvirt
-VMs with `virsh domif-setlink`) and samples the collector about twice a second. For every
-cycle it reports:
+A fault test takes links down and up on a fixed schedule and measures every cycle:
 
 | | |
 |---|---|
 | Reaction | Time from link down until a session/adjacency the topology defines went down |
 | Impact | How many were down at the worst moment (and which) |
-| Recovery | Time from link up until everything the topology defines was up again. Taken from the devices' own "last changed" timestamps where they report them (FRR: whole seconds, so `0 s` means under a second), otherwise at sampling resolution |
+| Recovery | Time from link up until everything the topology defines was up again, from the devices' own "last changed" timestamps where they report them, otherwise sampled twice a second |
 
-Runs are saved in `monitoring/scenarios/*.json` next to the topology, so a change (timers,
-BFD, a different design) can be compared run against run. The same is available over the
-API: `POST /api/lab/monitoring/scenarios`.
+Containers are flapped with `ip link`, libvirt VMs with `virsh domif-setlink`.
 
-![Fault tests in netlab-ui](docs/netlab-ui-fault-tests.png)
+**Write them into the topology**, next to netlab's own [validation tests](https://netlab.tools/topology/validate/),
+so they're versioned with the lab and give the same answer every run:
+
+```yaml
+monitoring.faults:
+  core_link:
+    description: Lose the r1-r2 link (OSPF, IS-IS, iBGP)
+    links: [ r1-r2 ]          # link names, or ends like r1:eth1
+    cycles: 3
+    down: 10                  # seconds down, then up, per cycle
+    up: 30
+    during: [ ospf_r2 ]       # netlab validate tests while the link is down
+    validate: [ ospf_r2, ibgp ]   # ... and after it comes back (true: all tests)
+    expect.recovery: 5        # recovery slower than this fails the run
+
+validate:                     # netlab's own tests, run by `netlab validate` too
+  ospf_r2:
+    description: r1 has a Full OSPF adjacency with r2
+    wait: 20
+    nodes: [ r1 ]
+    plugin: ospf_neighbor(nodes.r2.ospf.router_id)
+  ibgp:
+    description: iBGP r1 - r2 established
+    wait: 30
+    nodes: [ r1 ]
+    plugin: bgp_neighbor(node.bgp.neighbors,'r2')
+```
+
+The two sides complement each other: monitoring times what the control plane did,
+`netlab validate` checks what the lab has to deliver (neighbors, prefixes, reachability) with
+each device's own validation plugin. A run **passes** when every cycle recovered within
+`expect.recovery` and every `validate` test passed afterwards; otherwise the verdict lists why.
+Tests run while the link is down use `--skip-wait` (the state right then), tests after
+recovery use their own `wait:`.
+
+In netlab-ui the Fault tests tab lists the lab's fault tests with a **Run** button and their
+last verdict; a quick test (any link, optionally with all `validate` tests) is there too.
+Runs are saved in `monitoring/scenarios/*.json` next to the topology, and each cycle is a band
+on the dashboards. API: `GET /api/lab/monitoring/faults`, `POST /api/lab/monitoring/scenarios`
+(`{"sessionId": ..., "name": "core_link"}`).
+
+![Fault tests in netlab-ui: a named test, its verdict and netlab validate results](docs/netlab-ui-fault-tests.png)
+
+In the lab this was developed on, `core_link` recovers in 10.1 s on every cycle: FRR's OSPF
+hello interval (10 s) decides it, and `netlab validate` agrees (9.6-9.8 s).
 
 ## Settings
 
