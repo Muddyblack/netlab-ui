@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -9,10 +10,13 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Divider,
   FormControlLabel,
   IconButton,
   LinearProgress,
   MenuItem,
+  MenuList,
+  Popover,
   Stack,
   Switch,
   Tab,
@@ -21,12 +25,14 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
-  Typography
+  Typography,
+  createFilterOptions
 } from "@mui/material";
 import { openWebTab } from "../../host/webTabStore";
 import { MonitoringOptions, type MonitoringOptionChange } from "./MonitoringOptions";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
@@ -130,40 +136,105 @@ function HealthTile({ label, up, expected }: { label: string; up: number; expect
   );
 }
 
-function HealthTab({
-  state,
-  summary,
-  node,
-  setNode
-}: {
+/** Re-renders every `ms`, for "updated 5 s ago". */
+function useNow(ms: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), ms);
+    return () => window.clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+function ago(at: number, now: number): string {
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  return s < 60 ? `${s} s ago` : `${Math.round(s / 60)} min ago`;
+}
+
+/** Labs can have hundreds of nodes and links: pickers list the first matches and search the rest. */
+const firstMatches = createFilterOptions<string>({ limit: 50 });
+
+/** One menu for all dashboards: lab overview, routing, and a search for a node's detail. */
+function DashboardMenu({ port, dash, nodes, live }: {
+  port: number;
+  dash: Record<string, string>;
+  nodes: string[];
+  live: boolean;
+}) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const open = (url: string, title: string) => {
+    setAnchor(null);
+    showGrafana(url, title);
+  };
+  return (
+    <>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!live}
+        startIcon={<ShowChartIcon fontSize="small" />}
+        endIcon={<ArrowDropDownIcon />}
+        onClick={(event) => setAnchor(event.currentTarget)}
+        sx={{ textTransform: "none", alignSelf: "flex-start" }}
+      >
+        Open dashboard
+      </Button>
+      {/* A Popover, not a Menu: a Menu's type-to-select would steal the node search's keys. */}
+      <Popover
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={() => setAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        slotProps={{ paper: { sx: { width: 280 } } }}
+      >
+        <MenuList dense>
+          {dash.overview && <MenuItem onClick={() => open(grafanaUrl(port, dash.overview), "Lab overview")}>Lab overview</MenuItem>}
+          {dash.routing && <MenuItem onClick={() => open(grafanaUrl(port, dash.routing), "Routing and convergence")}>Routing and convergence</MenuItem>}
+        </MenuList>
+        {dash.node && nodes.length > 0 && (
+          <>
+            <Divider />
+            <Box sx={{ p: 1.5 }}>
+              <Autocomplete
+                size="small"
+                options={nodes}
+                filterOptions={firstMatches}
+                onChange={(_event, name) => { if (name) open(grafanaUrl(port, dash.node, { node: name }), `Node detail: ${name}`); }}
+                renderInput={(params) => <TextField {...params} label="Node detail" placeholder={`Find one of ${nodes.length} nodes`} />}
+              />
+            </Box>
+          </>
+        )}
+      </Popover>
+    </>
+  );
+}
+
+function HealthTab({ state, summary, updatedAt }: {
   state: MonitoringState;
   summary: MonitoringSummary | null;
-  node: string;
-  setNode: (node: string) => void;
+  /** When the numbers were last fetched (ms), or null before the first answer. */
+  updatedAt: number | null;
 }) {
+  const now = useNow(5000);
   const port = state.grafanaPort ?? null;
   const dash = state.dashboards ?? {};
   const nodes = state.coverage.map((item) => item.node);
   // Grafana is part of the stack that starts with the lab: before a deploy there is nothing to open.
   const live = state.enabled && state.labDeployed && state.rendered && Object.values(state.running).some(Boolean);
+  // A protocol the topology does not define has no tile: a 0 there reads as an outage.
+  const protocols = summary
+    ? [
+        { label: "BGP sessions", up: summary.bgpUp, expected: summary.bgpExpected },
+        { label: "OSPF adjacencies", up: summary.ospfUp, expected: summary.ospfExpected },
+        { label: "IS-IS adjacencies", up: summary.isisUp, expected: summary.isisExpected }
+      ].filter((item) => item.expected > 0)
+    : [];
   return (
     <Stack spacing={2}>
       {summary ? (
         <>
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            <HealthTile label="Nodes up" up={summary.nodesUp} expected={summary.nodes} />
-            <HealthTile label="BGP sessions" up={summary.bgpUp} expected={summary.bgpExpected} />
-            <HealthTile
-              label="OSPF adjacencies"
-              up={summary.ospfUp}
-              expected={summary.ospfExpected}
-            />
-            <HealthTile
-              label="IS-IS adjacencies"
-              up={summary.isisUp}
-              expected={summary.isisExpected}
-            />
-          </Stack>
+          {/* What is down comes first: it's the reason to look. */}
           {summary.missing.length > 0 ? (
             <Alert severity="warning" variant="outlined">
               <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -190,68 +261,28 @@ function HealthTab({
               </Typography>
             </Stack>
           )}
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <HealthTile label="Nodes up" up={summary.nodesUp} expected={summary.nodes} />
+            {protocols.map((item) => (
+              <HealthTile key={item.label} label={item.label} up={item.up} expected={item.expected} />
+            ))}
+          </Stack>
+          {updatedAt !== null && (
+            <Typography variant="caption" color="text.secondary">
+              Updated {ago(updatedAt, now)} · refreshes every 10 s
+            </Typography>
+          )}
         </>
       ) : (
         <Typography variant="body2" color="text.secondary">
           Health appears here while monitoring runs.
         </Typography>
       )}
-      {port && (
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
-            Grafana
-          </Typography>
-          {dash.overview && (
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={!live}
-              endIcon={<ShowChartIcon fontSize="small" />}
-              onClick={() => showGrafana(grafanaUrl(port, dash.overview), "Lab overview")}
-            >
-              Lab
-            </Button>
-          )}
-          {dash.routing && (
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={!live}
-              endIcon={<ShowChartIcon fontSize="small" />}
-              onClick={() => showGrafana(grafanaUrl(port, dash.routing), "Routing and convergence")}
-            >
-              Routing
-            </Button>
-          )}
-          {dash.node && nodes.length > 0 && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <TextField
-                select
-                size="small"
-                value={node}
-                onChange={(event) => setNode(event.target.value)}
-                sx={{ minWidth: 110 }}
-                slotProps={{ htmlInput: { "aria-label": "Node" } }}
-              >
-                {nodes.map((name) => (
-                  <MenuItem key={name} value={name}>
-                    {name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={!live}
-                endIcon={<ShowChartIcon fontSize="small" />}
-                onClick={() => showGrafana(grafanaUrl(port, dash.node, { node }), `Node detail: ${node}`)}
-              >
-                Node
-              </Button>
-            </Stack>
-          )}
+      {port && (dash.overview || dash.routing || dash.node) && (
+        <Stack spacing={0.5}>
+          <DashboardMenu port={port} dash={dash} nodes={nodes} live={live} />
           {!live && (
-            <Typography variant="caption" color="text.secondary" sx={{ flexBasis: "100%" }}>
+            <Typography variant="caption" color="text.secondary">
               Grafana runs with the lab: deploy it to open the dashboards.
             </Typography>
           )}
@@ -575,20 +606,16 @@ function FaultsTab({
         {defined.faults.length > 0 ? "Quick test" : "Test a link"}
       </Typography>
       <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <TextField
-          select
+        <Autocomplete
           size="small"
-          label="Link"
-          value={link}
-          onChange={(event) => setLink(event.target.value)}
-          sx={{ minWidth: 150 }}
-        >
-          {links.map((item) => (
-            <MenuItem key={item.link} value={item.link}>
-              {item.link}
-            </MenuItem>
-          ))}
-        </TextField>
+          options={links.map((item) => item.link)}
+          value={link || null}
+          onChange={(_event, value) => setLink(value ?? "")}
+          filterOptions={firstMatches}
+          disableClearable={Boolean(link)}
+          sx={{ minWidth: 220, flex: "1 1 220px" }}
+          renderInput={(params) => <TextField {...params} label="Link" placeholder="Type to find a link" />}
+        />
         {chosen?.b_node && (
           <TextField
             select
@@ -888,7 +915,7 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("health");
-  const [node, setNode] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -897,6 +924,7 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
       setState(next);
       const live = Object.values(next.running).some(Boolean);
       setSummary(live ? await api.getMonitoringSummary(sessionId).catch(() => null) : null);
+      setUpdatedAt(Date.now());
     } catch (err) {
       setError(errorText(err));
     }
@@ -905,6 +933,7 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
   useEffect(() => {
     setState(null);
     setSummary(null);
+    setUpdatedAt(null);
     setError(null);
     setTab("health");
     void load();
@@ -918,10 +947,6 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
     if (request?.tab) setTab(request.tab);
   }, [request]);
 
-  const nodes = useMemo(() => (state?.coverage ?? []).map((item) => item.node), [state]);
-  useEffect(() => {
-    if (nodes.length && !nodes.includes(node)) setNode(nodes[0]);
-  }, [nodes, node]);
   const showError = useCallback((text: string) => setError(text), []);
 
   const run = async (work: () => Promise<void>) => {
@@ -952,7 +977,7 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
     });
   const status = state ? stackStatus(state) : null;
 
-  return { state, summary, busy, error, setError, tab, setTab, node, setNode, nodes, showError, toggle, place, options, act, status, request };
+  return { state, summary, busy, error, setError, tab, setTab, updatedAt, showError, toggle, place, options, act, status, request };
 }
 
 export function MonitoringDialog() {
@@ -960,7 +985,7 @@ export function MonitoringDialog() {
   const sessionId = request?.sessionId ?? null;
   const c = useMonitoringController(sessionId, request);
   if (!request || !sessionId) return null;
-  const { state, summary, busy, error, setError, tab, setTab, node, setNode, showError, toggle, place, options, act, status } = c;
+  const { state, summary, busy, error, setError, tab, setTab, updatedAt, showError, toggle, place, options, act, status } = c;
   const close = () => openMonitoringDialog(null);
 
   return (
@@ -1054,7 +1079,7 @@ export function MonitoringDialog() {
           </Stack>
         )}
         {state?.enabled && tab === "health" && (
-          <HealthTab state={state} summary={summary} node={node} setNode={setNode} />
+          <HealthTab state={state} summary={summary} updatedAt={updatedAt} />
         )}
         {state?.enabled && tab === "faults" && (
           <FaultsTab
@@ -1082,23 +1107,30 @@ export function MonitoringDialog() {
 /** The same controls as the dialog, docked as a tab of the right-hand panel. */
 export function MonitoringPanel({ sessionId }: { sessionId: string }) {
   const c = useMonitoringController(sessionId, null);
-  const { state, summary, busy, error, setError, tab, setTab, node, setNode, showError, toggle, place, options, act, status } = c;
+  const { state, summary, busy, error, setError, tab, setTab, updatedAt, showError, toggle, place, options, act, status } = c;
   return (
     <Box sx={{ p: 1.5, overflow: "auto", height: "100%" }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ flex: 1 }}>
-          Monitoring
-        </Typography>
+        <Typography variant="subtitle1">Monitoring</Typography>
         {status && <Chip size="small" color={status.color} variant={status.color === "default" ? "outlined" : "filled"} label={status.label} />}
         {busy && <CircularProgress size={14} />}
+        <Box sx={{ flex: 1 }} />
         {state && (
-          <Switch
-            size="small"
-            checked={state.enabled}
-            disabled={busy || !state.pluginAvailable}
-            onChange={(_event, on) => void toggle(on)}
-            slotProps={{ input: { "aria-label": "Monitor this lab" } }}
-          />
+          <Tooltip title={state.enabled ? "Stop monitoring this lab" : "Monitor this lab (every deploy)"}>
+            <FormControlLabel
+              labelPlacement="start"
+              label={<Typography variant="body2" color="text.secondary">Monitor this lab</Typography>}
+              sx={{ mr: 0 }}
+              control={
+                <Switch
+                  size="small"
+                  checked={state.enabled}
+                  disabled={busy || !state.pluginAvailable}
+                  onChange={(_event, on) => void toggle(on)}
+                />
+              }
+            />
+          </Tooltip>
         )}
       </Stack>
       {error && (
@@ -1118,7 +1150,7 @@ export function MonitoringPanel({ sessionId }: { sessionId: string }) {
             <Tab value="faults" label="Fault tests" />
             <Tab value="setup" label="Setup" />
           </Tabs>
-          {tab === "health" && <HealthTab state={state} summary={summary} node={node} setNode={setNode} />}
+          {tab === "health" && <HealthTab state={state} summary={summary} updatedAt={updatedAt} />}
           {tab === "faults" && <FaultsTab sessionId={sessionId} state={state} prefill={undefined} onError={showError} />}
           {tab === "setup" && (
             <SetupTab

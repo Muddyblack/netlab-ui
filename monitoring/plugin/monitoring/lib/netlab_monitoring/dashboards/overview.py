@@ -20,6 +20,17 @@ from .panels import (
 )
 
 
+def protocol_stat(title: str, up: str, expected: str, description: str = "") -> dict:
+    """How many are up, or "—" when the lab's topology defines none: a 0 for a
+    protocol the lab does not run reads as an outage."""
+    return stat(
+        title,
+        f"(sum({up}{{{LAB}}}) or vector(0)) and on() (count({expected}{{{LAB}}}) > 0)",
+        description,
+        no_value="—",
+    )
+
+
 def overview() -> dict:
     b = Board(
         "netlab-overview",
@@ -31,16 +42,17 @@ def overview() -> dict:
     b.add(stat("Nodes up", f"sum(netlab_node_up{{{LAB}}})", "Running containers and VMs"), 4, 4)
     b.add(stat("Nodes in lab", f"count(netlab_node_info{{{LAB}}})"), 4, 4)
     b.add(
-        stat(
+        protocol_stat(
             "BGP sessions up",
-            f"sum(netlab_bgp_session_up{{{LAB}}})",
+            "netlab_bgp_session_up",
+            "netlab_expected_bgp_session",
             "Established BGP sessions (both directions counted)",
         ),
         4,
         4,
     )
-    b.add(stat("OSPF adjacencies up", f"sum(netlab_ospf_neighbor_up{{{LAB}}})"), 4, 4)
-    b.add(stat("IS-IS adjacencies up", f"sum(netlab_isis_adjacency_up{{{LAB}}})"), 4, 4)
+    b.add(protocol_stat("OSPF adjacencies up", "netlab_ospf_neighbor_up", "netlab_expected_ospf_adjacency"), 4, 4)
+    b.add(protocol_stat("IS-IS adjacencies up", "netlab_isis_adjacency_up", "netlab_expected_isis_adjacency"), 4, 4)
     b.add(
         stat(
             "Missing (vs topology)",

@@ -227,6 +227,7 @@ def stat(
     unit: str = "none",
     thresholds: list | None = None,
     color_mode: str = "value",
+    no_value: str = "0",
 ) -> dict:
     return {
         "type": "stat",
@@ -243,7 +244,7 @@ def stat(
         "fieldConfig": {
             "defaults": {
                 "unit": unit,
-                "noValue": "0",
+                "noValue": no_value,
                 "thresholds": {"mode": "absolute", "steps": thresholds or [{"color": "blue", "value": None}]},
             },
             "overrides": [],
