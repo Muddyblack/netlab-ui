@@ -25,7 +25,7 @@ export function NetlabLenses({ sessionId, container, state, themeMode, onToast }
   const { bundle, deployment, lens, family, hiddenAddressPools, routingLayers, selectedRef, selectRef, presentationRefs, dimOthers, pathResult, reportOpen, setReportOpen, selectObjects, configDiffOpen, setConfigDiffOpen, overlayVisible, presenting, teachingDoc, teachingIndex, setTeachingIndex, setTeachingMode } = state;
 
   return (
-    <Box sx={{ position: "absolute", inset: 0, zIndex: 6, pointerEvents: "none", overflow: "hidden" }}>
+    <Box sx={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none", overflow: "hidden" }}>
       {bundle && lens !== "deployment" && lens !== "traffic" && overlayVisible && (
         <LensCanvasOverlay
           container={container}
