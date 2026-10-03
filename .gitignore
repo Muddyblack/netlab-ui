@@ -45,3 +45,5 @@ Vagrantfile
 # labs/ holds user-specific lab data; only the sample lab is tracked
 labs/*
 !labs/sample.yml
+
+.ruff_cache/

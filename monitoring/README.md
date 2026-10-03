@@ -78,6 +78,12 @@ A fault test takes links down and up on a fixed schedule and measures every cycl
 
 Containers are flapped with `ip link`, libvirt VMs with `virsh domif-setlink`.
 
+> **libvirt is in maintenance mode upstream.** netlab 26.09 sunsets the Vagrant/libvirt provider
+> (bug fixes only, no device integration tests, removal planned within 1-2 years; see
+> [netlab#3912](https://github.com/ipspace/netlab/issues/3912)). libvirt support here is
+> best-effort. For VM-only devices netlab recommends vrnetlab containers under containerlab,
+> which are monitored like any other container.
+
 **Write them into the topology**, next to netlab's own [validation tests](https://netlab.tools/topology/validate/),
 so they're versioned with the lab and give the same answer every run:
 
@@ -208,7 +214,7 @@ about 1.6 s per cycle, well inside a 15-second interval.
 | `placement: tool` and `placement: node` | Tested live (containers started from netlab's `clab.yml`) |
 | gnmic config + mapping (SR Linux native, OpenConfig) | gnmic loads the config; mapping tested with `gnmic processor` on sample events -- **needs a run against real SR Linux / cEOS** |
 | SNMP (IOS, NX-OS) | Config rendering tested -- **needs a run against real devices** |
-| libvirt VMs | Unit tests with libvirt state files -- **needs a run on a KVM host** |
+| libvirt VMs | Unit tests with libvirt state files -- **never run on a KVM host; upstream is sunsetting libvirt** |
 
 ## Tests
 

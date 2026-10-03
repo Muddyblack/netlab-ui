@@ -114,6 +114,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir ".[netlab]"
 # The official containerlab image ships the static binary at this path.
 COPY --from=clab /usr/bin/containerlab /usr/bin/containerlab
+# BSD-3 (containerlab) and MIT (netlab) require the notice to travel with the binary.
+COPY licenses/ /usr/share/licenses/
 LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab bundled — topology editor, lab lifecycle and device consoles in one container."
 
 # ---- default image: the UI only ----
