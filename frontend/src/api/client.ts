@@ -42,6 +42,7 @@ export type ExecTargets = Schemas["ExecTargets"];
 export type ExecResolved = Schemas["ExecResolved"];
 export type LabSearchHit = Schemas["LabSearchHit"];
 export type ConfigSnapshot = Schemas["ConfigSnapshot"];
+export type NodeConfigFiles = Schemas["NodeConfigFiles"];
 export type LabTools = Schemas["LabTools"];
 export type LabTool = Schemas["LabTool"];
 export type ToolActionResult = Schemas["ToolActionResult"];
@@ -408,6 +409,9 @@ export const api = {
 
   listConfigSnapshots: (sessionId: string) =>
     http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  listNodeConfigs: (sessionId: string, node: string) =>
+    http<NodeConfigFiles>(`/api/lab/node-configs?sessionId=${encodeURIComponent(sessionId)}&node=${encodeURIComponent(node)}`, { cache: "no-store" }),
 
   getSetupCatalog: () => http<SetupCatalog>("/api/environment/setup", { cache: "no-store" }, 1, 30000),
 

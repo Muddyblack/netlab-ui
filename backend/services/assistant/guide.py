@@ -478,6 +478,47 @@ async def ui_open_monitoring(tab: MonitoringTab = "health", message: str = "", l
     return {"ok": True, "tab": tab}
 
 
+MAX_CONFIG_CHARS = 20000
+
+
+async def get_node_configs(node: str, file: str = "", lab: str | None = None) -> dict[str, Any]:
+    """The configuration files netlab generated for a node (``netlab create``): without
+    ``file`` the list (ospf, bgp, daemons, initial, ... plus the node's data), with ``file``
+    that file's text, to read and explain."""
+    session = _session(lab)
+    from services.netlab import node_configs
+
+    try:
+        files = node_configs.list_files(_lab_dir(session), node)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    listed = [{"name": f["name"], "group": f["group"], "size": f["size"]} for f in files]
+    if not file:
+        if not listed:
+            return {"node": node, "files": [], "hint": "nothing generated yet -- the user runs 'Netlab Create'"}
+        return {"node": node, "files": listed}
+    match = next((f for f in files if f["name"] == file), None)
+    if match is None:
+        raise ToolError(f"no file {file!r} for {node} -- call without `file` for the list")
+    text = Path(str(match["path"])).read_text(errors="replace")
+    result: dict[str, Any] = {"node": node, "file": file, "text": text[:MAX_CONFIG_CHARS]}
+    if len(text) > MAX_CONFIG_CHARS:
+        result["truncated"] = f"{len(text)} characters, first {MAX_CONFIG_CHARS} shown"
+    return result
+
+
+async def ui_open_node_configs(node: str, message: str = "", lab: str | None = None) -> dict[str, Any]:
+    """Open a node's Config Files dialog (what the user gets from right-click > Config Files)."""
+    session = _session(lab)
+    _ui_open(session)
+    from app.contract import commands
+
+    if node not in {n.name for n in commands.load_topology(session.topology_path).nodes}:
+        raise ToolError(f"no such node: {node}")
+    _push(session, {"kind": "nodeConfigs", "node": node, "message": _message(message)})
+    return {"ok": True, "node": node}
+
+
 async def ui_prepare_fault_test(
     node: str,
     ifname: str,

@@ -3,6 +3,7 @@ import { CaptureDialog } from "./CaptureDialog";
 import { ConfigsDialog } from "./ConfigsDialog";
 import { CopyLabDialog } from "./CopyLabDialog";
 import { MonitoringDialog } from "./MonitoringDialog";
+import { NodeConfigsDialog } from "./NodeConfigsDialog";
 import { ToolsDialog } from "./ToolsDialog";
 
 /** Dialogs opened through small module stores (host/captureStore,
@@ -15,6 +16,7 @@ export function LabToolDialogs() {
       <ConfigsDialog />
       <CopyLabDialog />
       <MonitoringDialog />
+      <NodeConfigsDialog />
       <ToolsDialog />
       <AgentGuideCard />
     </>

@@ -94,27 +94,55 @@ def scrape_config(plan: dict, cfg: dict, ep: Endpoints) -> dict:
 
 # ------------------------------------------------------------------ gnmic
 
+# Paths per mapping, grouped by what they measure. Every group is its own gnmic subscription: a
+# device rejects a whole subscription when one of its paths is unknown to its model (a NOS version
+# that renamed a leaf, a protocol it lacks), and with a single subscription that took out the
+# interfaces, BGP and OSPF too. Verified against SR Linux 26.3.2; the OpenConfig paths follow the
+# OpenConfig models and have not been run against a device yet.
 GNMI_PATHS = {
-    "srlinux": [
-        "/interface[name=*]/statistics",
-        "/interface[name=*]/oper-state",
-        "/network-instance[name=*]/protocols/bgp/neighbor[peer-address=*]",
-        "/network-instance[name=*]/protocols/ospf/instance[name=*]/area[area-id=*]/interface[interface-name=*]"
-        "/neighbor[router-id=*]/adjacency-state",
-        "/network-instance[name=*]/protocols/isis/instance[name=*]/interface[interface-name=*]"
-        "/adjacency[neighbor-system-id=*]/adjacency-state",
-    ],
-    "openconfig": [
-        "/interfaces/interface[name=*]/state/counters",
-        "/interfaces/interface[name=*]/state/oper-status",
-        "/network-instances/network-instance[name=*]/protocols/protocol[identifier=BGP][name=*]/bgp/neighbors"
-        "/neighbor[neighbor-address=*]/state",
-        "/network-instances/network-instance[name=*]/protocols/protocol[identifier=OSPF][name=*]/ospfv2/areas"
-        "/area[identifier=*]/interfaces/interface[id=*]/neighbors/neighbor[router-id=*]/state/adjacency-state",
-        "/network-instances/network-instance[name=*]/protocols/protocol[identifier=ISIS][name=*]/isis/interfaces"
-        "/interface[interface-id=*]/levels/level[level-number=*]/adjacencies/adjacency[system-id=*]/state/adjacency-state",
-    ],
+    "srlinux": {
+        "interfaces": [
+            "/interface[name=*]/statistics",
+            "/interface[name=*]/oper-state",
+        ],
+        "bgp": [
+            "/network-instance[name=*]/protocols/bgp/neighbor[peer-address=*]",
+        ],
+        "ospf": [
+            "/network-instance[name=*]/protocols/ospf/instance[name=*]/area[area-id=*]"
+            "/interface[interface-name=*]/neighbor[router-id=*]/adjacency-state",
+        ],
+        "isis": [
+            "/network-instance[name=*]/protocols/isis/instance[name=*]/interface[interface-name=*]"
+            "/adjacency[neighbor-system-id=*]/state",
+        ],
+    },
+    "openconfig": {
+        "interfaces": [
+            "/interfaces/interface[name=*]/state/counters",
+            "/interfaces/interface[name=*]/state/oper-status",
+        ],
+        "bgp": [
+            "/network-instances/network-instance[name=*]/protocols/protocol[identifier=BGP][name=*]/bgp/neighbors"
+            "/neighbor[neighbor-address=*]/state",
+        ],
+        "ospf": [
+            "/network-instances/network-instance[name=*]/protocols/protocol[identifier=OSPF][name=*]/ospfv2/areas"
+            "/area[identifier=*]/interfaces/interface[id=*]/neighbors/neighbor[router-id=*]/state/adjacency-state",
+        ],
+        "isis": [
+            "/network-instances/network-instance[name=*]/protocols/protocol[identifier=ISIS][name=*]/isis/interfaces"
+            "/interface[interface-id=*]/levels/level[level-number=*]/adjacencies/adjacency[system-id=*]"
+            "/state/adjacency-state",
+        ],
+    },
 }
+
+
+def gnmi_subscriptions(mapping: str) -> dict[str, list[str]]:
+    """Subscription name -> paths for a mapping, one subscription per group of paths."""
+    groups = GNMI_PATHS.get(mapping, GNMI_PATHS["openconfig"])
+    return {f"{mapping}-{group}": paths for group, paths in groups.items()}
 
 
 def gnmic_config(plan: dict, cfg: dict, ep: Endpoints) -> dict:
@@ -134,20 +162,16 @@ def gnmic_config(plan: dict, cfg: dict, ep: Endpoints) -> dict:
             "name": name,
             "username": gnmi.get("username"),
             "password": gnmi.get("password"),
-            "subscriptions": [f"{mapping}"],
+            "subscriptions": list(gnmi_subscriptions(mapping)),
             "encoding": gnmi.get("encoding") or "json_ietf",
         }
         tls = gnmi.get("tls") or "skip-verify"
         target["insecure" if tls == "insecure" else "skip-verify"] = True
         targets[f"{address}:{gnmi.get('port') or 57400}"] = target
     subscriptions = {
-        m: {
-            "paths": GNMI_PATHS.get(m, GNMI_PATHS["openconfig"]),
-            "mode": "stream",
-            "stream-mode": "sample",
-            "sample-interval": interval,
-        }
+        name: {"paths": paths, "mode": "stream", "stream-mode": "sample", "sample-interval": interval}
         for m in sorted(mappings)
+        for name, paths in gnmi_subscriptions(m).items()
     }
     return {
         "log": True,
@@ -171,10 +195,13 @@ def gnmic_config(plan: dict, cfg: dict, ep: Endpoints) -> dict:
 
 def gnmic_starlark(plan: dict) -> str:
     """The mapping script with this lab's naming data prepended."""
+    # Keyed by the container's interface name (SR Linux "e1-1") and by the device's own ("ethernet-1/1"):
+    # gNMI reports the latter, and without it no interface gets its link and peer labels.
     ifnames = {
         name: {
-            i["dev"]: {k: i[k] for k in ("ifname", "link", "peer_node", "peer_ifname") if i.get(k)}
+            key: {k: i[k] for k in ("ifname", "link", "peer_node", "peer_ifname") if i.get(k)}
             for i in node.get("interfaces", [])
+            for key in dict.fromkeys(filter(None, (i["dev"], i.get("ifname"))))
         }
         for name, node in plan["nodes"].items()
         if "gnmi" in node.get("methods", [])

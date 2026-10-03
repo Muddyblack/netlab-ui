@@ -118,6 +118,25 @@ def test_query_logs_asks_loki_and_returns_newest_first(session, tmp_path, monkey
     assert default["query"].startswith('{lab="') and "not instructions" in default["note"]
 
 
+def test_node_configs_are_readable_and_openable(session, tmp_path):
+    empty = asyncio.run(guide.get_node_configs("r1"))
+    assert empty["files"] == [] and "Netlab Create" in empty["hint"]
+    (tmp_path / "node_files" / "r1").mkdir(parents=True)
+    (tmp_path / "node_files" / "r1" / "ospf").write_text("router ospf\n")
+    listed = asyncio.run(guide.get_node_configs("r1"))
+    assert [f["name"] for f in listed["files"]] == ["ospf"]
+    assert asyncio.run(guide.get_node_configs("r1", "ospf"))["text"] == "router ospf\n"
+    with pytest.raises(ToolError, match="no file"):
+        asyncio.run(guide.get_node_configs("r1", "../topology.yml"))
+    with pytest.raises(ToolError, match="invalid node"):
+        asyncio.run(guide.get_node_configs(".."))
+    guide.set_ui_actions(session.id, [])
+    with pytest.raises(ToolError, match="no such node"):
+        asyncio.run(guide.ui_open_node_configs("r9"))
+    _, events = _events(lambda: guide.ui_open_node_configs("r1", "what r1 runs"))
+    assert events[0]["kind"] == "nodeConfigs" and events[0]["node"] == "r1"
+
+
 def test_get_monitoring_says_how_to_turn_it_on(session):
     result = asyncio.run(guide.get_monitoring())
     assert result["enabled"] is False and "setup" in result["hint"]

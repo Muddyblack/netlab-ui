@@ -44,8 +44,18 @@ def test_gnmi_and_snmp_nodes_get_their_collectors(topology):
     files = rendered(topology)
     gnmic = yaml.safe_load(files["gnmic/gnmic.yml"])
     target = next(iter(gnmic["targets"].values()))
-    assert target["name"] == "r3" and target["subscriptions"] == ["srlinux"]
-    assert "INTERFACES" in files["gnmic/netlab_map.star"] and '"e1-1"' in files["gnmic/netlab_map.star"]
+    assert target["name"] == "r3"
+    # one subscription per group of paths: a device rejects a whole subscription for one path it does not know
+    assert target["subscriptions"] == ["srlinux-interfaces", "srlinux-bgp", "srlinux-ospf", "srlinux-isis"]
+    assert set(target["subscriptions"]) <= set(gnmic["subscriptions"])
+    assert all(len(sub["paths"]) >= 1 for sub in gnmic["subscriptions"].values())
+    # SR Linux's IS-IS adjacency leaf is "state"; "adjacency-state" does not exist there (checked on a device)
+    assert gnmic["subscriptions"]["srlinux-isis"]["paths"][0].endswith("/adjacency[neighbor-system-id=*]/state")
+    star = files["gnmic/netlab_map.star"]
+    assert "INTERFACES" in star and '"e1-1"' in star
+    # gNMI reports the device's own interface name, so the lookup table has that too (checked on SR Linux)
+    ifname = topology["nodes"]["r3"]["interfaces"][0]["ifname"]
+    assert f'"{ifname}"' in star
     scrape = yaml.safe_load(files["tsdb/scrape.yml"])
     jobs = {j["job_name"]: j for j in scrape["scrape_configs"]}
     assert set(jobs) >= {"netlab", "gnmi", "snmp"}
@@ -124,3 +134,46 @@ def test_dashboard_markers_are_picked_in_one_dropdown(topology):
     folded = [p for p in overview["panels"] if p["type"] == "row" and p["collapsed"]]
     assert [p["title"] for p in folded] == ["Topology graph"]
     assert folded[0]["panels"][0]["type"] == "nodeGraph"
+
+
+def _run(code):
+    import subprocess
+    import sys
+
+    return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
+
+
+def test_up_sh_stops_on_a_port_another_program_holds(topology):
+    """Grafana in a restart loop under a "netlab up ... OK", and the UI opening another program on its port."""
+    import socket
+
+    from netlab_monitoring import containers
+
+    up = rendered(topology)["up.sh"]
+    check = up.split("NETLAB_PORT_CHECK\n")[1]
+    assert "grafana" in check and "3000" in check and "8428" in check and "tsdb" in check
+    assert up.index("NETLAB_PORT_CHECK") < up.index("docker run")  # before anything is started
+
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(("0.0.0.0", 0))
+    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp.bind(("0.0.0.0", 0))
+    try:
+        taken, taken_udp = tcp.getsockname()[1], udp.getsockname()[1]
+        result = _run(containers.port_check_code([("grafana", taken, "tcp"), ("syslog", taken_udp, "udp")]))
+        assert result.returncode == 1
+        assert f"port {taken} (grafana)" in result.stderr and "monitoring.ports.grafana" in result.stderr
+        assert f"port {taken_udp} (syslog)" in result.stderr
+    finally:
+        tcp.close()
+        udp.close()
+    # free again: the check passes
+    assert _run(containers.port_check_code([("grafana", taken, "tcp"), ("syslog", taken_udp, "udp")])).returncode == 0
+
+
+def test_the_port_check_covers_only_the_components_the_lab_runs(topology):
+    plain = rendered(topology)["up.sh"]
+    assert "loki" not in plain.split("NETLAB_PORT_CHECK")[1] and "syslog" not in plain.split("NETLAB_PORT_CHECK")[1]
+    topology["monitoring"]["logs"] = {"enabled": True}
+    with_logs = rendered(topology)["up.sh"].split("NETLAB_PORT_CHECK")[1]
+    assert "loki" in with_logs and "syslog" in with_logs and "udp" in with_logs

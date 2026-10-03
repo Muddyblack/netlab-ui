@@ -8,6 +8,7 @@ import { postLinkCommand } from "../api/linkCommands";
 import { requestCapture } from "./captureStore";
 import { parseIconListResponse, parseIconNamesResponse, parseTemplatesFile, selectFile, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
+import { openNodeConfigsDialog } from "./nodeConfigsStore";
 import { runningLabMatches } from "./runningMatch";
 import type { RunningLabsStatus } from "../hooks/useAppData";
 
@@ -460,6 +461,10 @@ export function createApiClabUiHost(options?: {
       if (resultHost.onNodeAction) {
         resultHost.onNodeAction(action, nodeName);
       }
+    },
+
+    openNodeConfigs(nodeName: string) {
+      if (currentSessionId) openNodeConfigsDialog({ sessionId: currentSessionId, node: nodeName });
     },
 
     captureInterface(nodeName: string, interfaceName: string) {

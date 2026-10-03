@@ -72,7 +72,9 @@ pages) and `netlab_examples` (small working topologies per feature).
 Show, don't just tell: the user has netlab-ui open, and the `ui_*` tools act on that \
 window live. `ui_show_nodes` spotlights nodes on the canvas, `ui_run_action` opens a \
 dialog or panel (see `ui_list_actions`), `ui_open_monitoring` opens the Monitoring \
-dialog on a tab, and `ui_explain` puts a short card on screen. Each takes a `message` \
+dialog on a tab, `ui_open_node_configs` shows a node's generated config files (read them \
+with `get_node_configs` to explain what the node runs), and `ui_explain` puts a short card \
+on screen. Anything the UI can open is in `ui_list_actions`; use it rather than guessing. Each takes a `message` \
 the user reads next to what you opened. Keep it to a sentence or two, one step at a \
 time, and say in your reply what you showed. `ui_clear` removes the spotlight and the \
 card.
@@ -298,6 +300,17 @@ _TOOLS: tuple[tuple[Callable[..., Awaitable[Any]], ToolAnnotations, str], ...] =
         guide.ui_open_monitoring,
         _UI,
         "Open the Monitoring dialog on a tab: health (vs topology), faults (fault tests), setup.",
+    ),
+    (
+        guide.get_node_configs,
+        _READ,
+        "The configuration netlab generated for a node: the file list (ospf, bgp, daemons, initial...), or one "
+        "file's text with `file`. Read it to explain what a node runs.",
+    ),
+    (
+        guide.ui_open_node_configs,
+        _UI,
+        "Open a node's Config Files dialog in the user's netlab-ui (right-click a node > Config Files).",
     ),
     (
         guide.ui_prepare_fault_test,

@@ -32,6 +32,7 @@ from app.lab import (
     lab_copy,
     lifecycle,
     monitoring,
+    node_configs,
     pcap,
     tools,
 )
@@ -47,6 +48,7 @@ router.include_router(files.router)
 router.include_router(images.router)
 router.include_router(lab_copy.router)
 router.include_router(monitoring.router)
+router.include_router(node_configs.router)
 router.include_router(lifecycle.router)
 router.include_router(tools.router)
 

@@ -728,11 +728,11 @@ export function useAppController() {
   }, [openTabs, activeTabId]);
 
   const quickActions = useMemo(() => [
-    { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Copilot, Cursor, Kiro · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
-    { id: "action:new-lab", label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
-    { id: "action:running-labs", label: "Running netlab labs", detail: "Every lab netlab knows about on this host: shut down, force cleanup", run: () => setRunningLabsOpen(true) },
-    { id: "action:image-manager", label: "Manage container images", detail: "Open the image manager", run: () => setImageManagerOpen(true) },
-    { id: "action:fit", label: "Fit topology to canvas", detail: "Center and zoom to all nodes", run: () => host.emitTopoViewerEvent?.({ type: "fitViewport" }) },
+    { id: "action:toggle-assistant", guide: true, label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Copilot, Cursor, Kiro · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
+    { id: "action:new-lab", guide: true, label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
+    { id: "action:running-labs", guide: true, label: "Running netlab labs", detail: "Every lab netlab knows about on this host: shut down, force cleanup", run: () => setRunningLabsOpen(true) },
+    { id: "action:image-manager", guide: true, label: "Manage container images", detail: "Open the image manager", run: () => setImageManagerOpen(true) },
+    { id: "action:fit", guide: true, label: "Fit topology to canvas", detail: "Center and zoom to all nodes", run: () => host.emitTopoViewerEvent?.({ type: "fitViewport" }) },
     { id: "action:group", label: "Group selected canvas nodes", detail: "Same as Ctrl+G", run: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "g", code: "KeyG", ctrlKey: true, bubbles: true })) },
     ...(sessionId && !isTopologyLocked ? [{
       id: "action:add-node",
@@ -752,24 +752,25 @@ export function useAppController() {
       }
     }] : []),
     { id: "action:new-terminal", priority: 10, label: "New terminal", detail: `A normal shell in the lab's folder, in the bottom panel · ${terminalShortcutLabel(terminalShortcut, true)}`, run: () => newTerminalRef.current() },
-    { id: "action:toggle-terminal", priority: 10, label: "Show or hide the terminal panel", detail: `The bottom panel with shells, logs and your AI agent · ${terminalShortcutLabel(terminalShortcut)}`, run: () => toggleSessionDockRef.current() },
+    { id: "action:toggle-terminal", guide: true, priority: 10, label: "Show or hide the terminal panel", detail: `The bottom panel with shells, logs and your AI agent · ${terminalShortcutLabel(terminalShortcut)}`, run: () => toggleSessionDockRef.current() },
     ...(sessionId && activeLabRunning ? [
-      { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, one answer per node", run: () => sessionDock.openTab("multi", "nodes") },
-      { id: "action:traffic", priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
-      { id: "action:running-configs", priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
+      { id: "action:run-on-nodes", guide: true, priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, one answer per node", run: () => sessionDock.openTab("multi", "nodes") },
+      { id: "action:traffic", guide: true, priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
+      { id: "action:running-configs", guide: true, priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
       { id: "action:clab-tarball", label: "Export as containerlab tarball", detail: "clab.yml + the devices' current configs (netlab clab tarball)", run: () => void exportClabTarballRef.current(sessionId) },
       { id: "action:config-snapshot", label: "Take a config snapshot", detail: "Save every node's running config now", run: () => void api.takeConfigSnapshot(sessionId).then((snap) => addToast(`Snapshot of ${snap.nodes?.length ?? 0} nodes saved`, "success"), (err: unknown) => addToast(`Snapshot failed: ${String(err)}`, "error")) },
     ] : []),
     ...(sessionId ? [
-      { id: "action:reports", label: "Reports…", detail: "netlab reports: addressing, BGP, OSPF, wiring — as tables, HTML or text", run: () => { openPanelTab("Lenses"); netlabLenses.setReportOpen(true); } },
-      { id: "action:monitoring", label: "Monitoring…", detail: "Lab health vs topology, metrics and Grafana dashboards (netlab monitoring plugin)", run: () => openMonitoringDialog({ sessionId }) },
-      { id: "action:tools", label: "External tools…", detail: "Graphite, SuzieQ, NUTS, NSO, Edgeshark next to the lab", run: () => openToolsDialog({ sessionId, openShell: (name) => openShellRef.current(name, sessionId) }) },
+      { id: "action:reports", guide: true, label: "Reports…", detail: "netlab reports: addressing, BGP, OSPF, wiring — as tables, HTML or text", run: () => { openPanelTab("Lenses"); netlabLenses.setReportOpen(true); } },
+      { id: "action:monitoring", guide: true, label: "Monitoring…", detail: "Lab health vs topology, metrics and Grafana dashboards (netlab monitoring plugin)", run: () => openMonitoringDialog({ sessionId }) },
+      { id: "action:tools", guide: true, label: "External tools…", detail: "Graphite, SuzieQ, NUTS, NSO, Edgeshark next to the lab", run: () => openToolsDialog({ sessionId, openShell: (name) => openShellRef.current(name, sessionId) }) },
       { id: "action:validate", label: "Validate topology", detail: "Run netlab validate", run: () => void handleNetlabValidate(sessionId) },
       { id: "action:create-config", label: "Generate netlab configuration", detail: "Run netlab create", run: () => void handleNetlabCreateConfigs(sessionId) },
       { id: "action:module-filter", label: "Filter canvas by module…", detail: "Spotlight the nodes running OSPF, BGP, VLANs…", nextQuery: "module:", run: () => undefined },
-      { id: "action:tour", label: "Guided tour & exercises", detail: "Open the tour editor in the Lenses panel", run: () => { openPanelTab("Lenses"); netlabLenses.setTeachingOpen(true); } },
+      { id: "action:tour", guide: true, label: "Guided tour & exercises", detail: "Open the tour editor in the Lenses panel", run: () => { openPanelTab("Lenses"); netlabLenses.setTeachingOpen(true); } },
       ...(activeTopologyRef ? [{
         id: "action:copy-lab",
+        guide: true,
         label: "Copy this lab to a workspace…",
         detail: "Fork, publish to the shared folder, or duplicate",
         run: () => requestCopyLab({ topologyPath: activeTopologyRef.yamlPath, labName: activeTopologyRef.labName, onCopied: (ref) => void handleOpenLab(ref as TopologyRef) }),

@@ -67,10 +67,22 @@ def _node_for(value):
 
 
 def _if_labels(node, dev):
-    labels = INTERFACES.get(node, {}).get(dev)
+    table = INTERFACES.get(node, {})
+    labels = table.get(dev)
+    if labels == None and "." in dev:
+        # Routing protocols run on a subinterface (SR Linux: "ethernet-1/1.0"); the interface the
+        # topology and the interface metrics name is the part before the dot.
+        labels = table.get(dev.rsplit(".", 1)[0])
     if labels == None:
         return {"ifname": dev}
     return dict(labels)
+
+
+def _int_text(v):
+    # gNMI JSON numbers arrive as floats: 65000.0 must read 65000
+    if type(v) == "float" and v == int(v):
+        return str(int(v))
+    return str(v)
 
 
 def _afi(name):
@@ -120,7 +132,7 @@ def apply(*events):
                     labels.update({"afi": a, "safi": s})
                     values["netlab_bgp_prefixes_sent"] = _num(value)
                 elif leaf == "peer-as":
-                    labels["peer_as"] = str(value)
+                    labels["peer_as"] = _int_text(value)
             elif "ospf" in p or "ospfv2" in p:
                 if leaf == "adjacency-state":
                     rid = tags.get("neighbor_router-id", "")
@@ -135,7 +147,8 @@ def apply(*events):
                     values["netlab_ospf_neighbor_state"] = state
                     values["netlab_ospf_neighbor_up"] = 1 if state == 8 else 0
             elif "isis" in p:
-                if leaf == "adjacency-state":
+                # SR Linux names the adjacency state leaf "state", OpenConfig "adjacency-state"
+                if leaf == "adjacency-state" or leaf == "state":
                     dev = tags.get("interface_interface-name", tags.get("interface_interface-id", ""))
                     labels.update(_if_labels(node, dev))
                     labels.pop("link", None)

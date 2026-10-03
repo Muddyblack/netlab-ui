@@ -4,33 +4,25 @@ import { api } from "../api/client";
 import { AGENT_SPOTLIGHT_LABEL, clearAgentGuide, showAgentGuide } from "../host/agentGuideStore";
 import { setSpotlight } from "../host/canvasSpotlight";
 import { openMonitoringDialog, type FaultTestPrefill } from "../host/monitoringDialogStore";
-
-/** Palette actions an agent may open to show the user around: they open a dialog
- * or panel, or move the view -- none deploys, writes or changes the lab. */
-const GUIDE_ACTIONS = new Set([
-  "action:running-labs",
-  "action:image-manager",
-  "action:fit",
-  "action:reports",
-  "action:monitoring",
-  "action:tools",
-  "action:tour",
-  "action:new-lab",
-  "action:copy-lab"
-]);
+import { openNodeConfigsDialog } from "../host/nodeConfigsStore";
 
 interface PaletteAction {
   id: string;
   label: string;
   detail?: string;
+  /** Opens a dialog or panel or moves the view -- never deploys, writes or
+   * changes the lab. Only these are offered to an attached agent; declare it
+   * where the action is defined (useAppController's quickActions). */
+  guide?: boolean;
   run: () => void;
 }
 
 interface UiEvent {
   type?: string;
   sessionId?: string;
-  kind?: "run" | "spotlight" | "explain" | "clear" | "monitoring";
+  kind?: "run" | "spotlight" | "explain" | "clear" | "monitoring" | "nodeConfigs";
   id?: string;
+  node?: string;
   nodes?: string[];
   title?: string;
   message?: string;
@@ -47,7 +39,7 @@ export function useAgentGuide(
   quickActions: PaletteAction[]
 ) {
   const actions = useMemo(
-    () => quickActions.filter((action) => GUIDE_ACTIONS.has(action.id)),
+    () => quickActions.filter((action) => action.guide),
     [quickActions]
   );
   const actionsRef = useRef(actions);
@@ -83,6 +75,10 @@ export function useAgentGuide(
           break;
         case "monitoring":
           openMonitoringDialog({ sessionId, tab: event.tab, faultTest: event.faultTest });
+          showAgentGuide(message, event.title);
+          break;
+        case "nodeConfigs":
+          if (event.node) openNodeConfigsDialog({ sessionId, node: event.node });
           showAgentGuide(message, event.title);
           break;
         case "explain":
