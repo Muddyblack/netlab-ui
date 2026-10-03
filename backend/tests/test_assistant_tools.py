@@ -215,6 +215,18 @@ def test_run_show_command_defaults_to_every_node_and_merges_identical_answers(se
     assert "── r3 ──\ndifferent" in output
 
 
+def test_run_show_command_takes_patterns_over_the_running_nodes(session, monkeypatch):
+    _running(monkeypatch, ("r1", "r2", "r3", "h1"))
+    _spawn_answering(monkeypatch, {"r1": "a\n", "r2": "b\n", "r3": "c\n", "h1": "d\n"})
+    output = asyncio.run(tools.run_show_command("show version", ["r1-r2", "r[3]", "r1"]))
+    assert "── r1 ──\na" in output and "── r2 ──\nb" in output and "── r3 ──\nc" in output
+    assert "h1" not in output  # a pattern only reaches what it matches, and duplicates run once
+    with pytest.raises(tools.ToolError, match="matches none of the running nodes"):
+        asyncio.run(tools.run_show_command("show version", ["leaf*"]))
+    with pytest.raises(tools.ToolError, match="not a valid pattern"):
+        asyncio.run(tools.run_show_command("show version", ["r(1"]))
+
+
 def test_run_show_command_names_the_running_nodes_on_a_typo(session, monkeypatch):
     _running(monkeypatch)
     with pytest.raises(tools.ToolError) as excinfo:

@@ -100,7 +100,7 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 <a href="docs/showcase/GALLERY.md#showcase-ai-agents">
 <img src="docs/showcase/media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change, shown as a diff to apply or reject" />
 </a>
-<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
+<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
 </td>
 </tr>
 </table>
@@ -123,7 +123,7 @@ Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-us
 | --- | --- |
 | [Features](docs/features.md) | Shortcuts, run on nodes, search, running configs, exercises, live traffic, faults, packet capture, providers, reports |
 | [Monitoring](monitoring/README.md) | The netlab `monitoring` plugin: metrics, routing-protocol state and Grafana dashboards for any lab and vendor — also usable without the UI |
-| [AI agents](docs/ai-agents.md) | Start Claude Code, Codex or Gemini CLI connected to your lab, or connect any MCP tool; review what it proposes |
+| [AI agents](docs/ai-agents.md) | Start Claude Code, Codex, Copilot, Kiro and more connected to your lab, or connect any MCP tool; review what it proposes |
 | [Running as a container](docs/container.md) | Images, required flags, several users on one server |
 | [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
 | [Architecture](docs/architecture.md) | How netlab-ui builds on clab-ui and netlab |

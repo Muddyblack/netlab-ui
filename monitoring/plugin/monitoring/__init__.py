@@ -25,6 +25,8 @@ _PLUGIN_DIR = Path(__file__).resolve().parent
 if str(_PLUGIN_DIR / "lib") not in sys.path:
     sys.path.insert(0, str(_PLUGIN_DIR / "lib"))
 
+from netlab_monitoring import logs as _logs  # noqa: E402
+from netlab_monitoring import notify as _notify  # noqa: E402
 from netlab_monitoring import plan as _plan  # noqa: E402
 from netlab_monitoring import render as _render  # noqa: E402
 
@@ -79,6 +81,8 @@ def topology_expand(topology: Box) -> None:
 
 def init(topology: Box) -> None:
     cfg = _settings(topology)
+    for problem in _notify.problems(cfg):
+        log.error(problem, category=log.IncorrectValue, module="monitoring")
     append_to_list(topology.defaults.netlab.create, "plugin", "monitoring")
     tool = topology.defaults.tools.monitoring
     if cfg.get("placement") == "node":
@@ -123,9 +127,17 @@ def output(topology: Box) -> None:
         path.write_text(content)
         if rel.endswith(".sh"):
             path.chmod(0o755)
-    (root / "data" / "tsdb").mkdir(parents=True, exist_ok=True)
-    with contextlib.suppress(OSError):
-        os.chmod(root / "data" / "tsdb", 0o777)  # written by the TSDB container user
+    # The user's own dashboards and alerts live next to the generated files and are never
+    # overwritten: starter files are written only into a folder that has no such files yet.
+    for rel, content in _render.seed_files().items():
+        folder = (root / rel).parent
+        if not any(folder.glob("*.yml" if rel.endswith(".yml") else "*.json")):
+            folder.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(content)
+    for data in ("tsdb", "grafana", *(("loki", "vector") if _logs.enabled(topology.monitoring) else ())):
+        (root / "data" / data).mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(OSError):
+            os.chmod(root / "data" / data, 0o777)  # written by the container's own user
     counts: dict[str, int] = {}
     for node in plan["nodes"].values():
         for method in node["methods"]:

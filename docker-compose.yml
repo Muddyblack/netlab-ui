@@ -10,7 +10,9 @@
 # that are missing under Settings → Environment → Container Setup):
 #   * privileged / host network / host pid — containerlab creates network
 #     namespaces, veth links and sysctls for the lab nodes, and node
-#     management IPs must be reachable for SSH and web UIs.
+#     management IPs must be reachable for SSH and web UIs. The same access
+#     lets the UI start your AI agents (Claude Code, Codex, ...) on the host
+#     with nsenter, so they are not installed in the image (AI agents panel).
 #   * docker.sock — labs run on the host's Docker daemon, next to this one.
 #   * the labs directory is mounted at the SAME path it has on the host:
 #     containerlab asks the host daemon to bind-mount node files by their

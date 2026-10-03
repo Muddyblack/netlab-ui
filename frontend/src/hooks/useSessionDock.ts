@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 
-export type SessionKind = "shell" | "logs" | "drawio" | "multi" | "agent";
+export type SessionKind = "shell" | "logs" | "drawio" | "multi" | "agent" | "terminal";
 export type SessionTab = { key: string; kind: SessionKind; node: string; sessionId?: string | null };
 
 export const sessionTabKey = (kind: SessionKind, node: string) => `${kind}:${node}`;
@@ -69,5 +69,27 @@ export function useSessionDock(sessionId: string | null) {
   const tabs = useMemo(() => state.tabs.filter((tab) => tab.sessionId === sessionId), [state.tabs, sessionId]);
   const activeKey = tabs.some((tab) => tab.key === state.activeKey) ? state.activeKey : (tabs[0]?.key ?? null);
 
-  return { tabs, activeKey, open, setOpen, openTab, selectTab, closeTab };
+  /** A new normal terminal tab (terminal, terminal 2, …): always a fresh one, like VS Code's "+". */
+  const openTerminal = useCallback(() => {
+    const used = new Set(tabs.filter((tab) => tab.kind === "terminal").map((tab) => tab.node));
+    let number = 1;
+    while (used.has(String(number))) number += 1;
+    openTab("terminal", String(number));
+  }, [tabs, openTab]);
+
+  /** Show an agent's terminal, starting it if it is not running. With `another`, start one more instance of an
+   * agent that is already running (claude, claude~2, claude~3, ...). Returns the tab's node, to identify it. */
+  const openAgent = useCallback((agentId: string, another = false): string => {
+    const used = new Set(tabs.filter((tab) => tab.kind === "agent").map((tab) => tab.node));
+    let node = agentId;
+    if (another && used.has(agentId)) {
+      let number = 2;
+      while (used.has(`${agentId}~${number}`)) number += 1;
+      node = `${agentId}~${number}`;
+    }
+    openTab("agent", node);
+    return node;
+  }, [tabs, openTab]);
+
+  return { tabs, activeKey, open, setOpen, openTab, openTerminal, openAgent, selectTab, closeTab };
 }

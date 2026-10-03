@@ -23,6 +23,7 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
+import { MonitoringOptions, type MonitoringOptionChange } from "./MonitoringOptions";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -754,12 +755,14 @@ function SetupTab({
   state,
   busy,
   onPlace,
-  onAction
+  onAction,
+  onOptions
 }: {
   state: MonitoringState;
   busy: boolean;
   onPlace: (placement: "tool" | "node") => void;
   onAction: (action: "up" | "down") => void;
+  onOptions: (change: MonitoringOptionChange) => void;
 }) {
   const live = Object.values(state.running).some(Boolean);
   const groups = new Map<string, string[]>();
@@ -815,6 +818,7 @@ function SetupTab({
           </Box>
         )}
       </Box>
+      <MonitoringOptions state={state} busy={busy} onChange={onOptions} />
       <Box>
         <Typography variant="subtitle2" gutterBottom>
           What is collected
@@ -924,6 +928,8 @@ export function MonitoringDialog() {
     run(async () => setState(await api.setMonitoring(sessionId, on, state?.placement)));
   const place = (placement: "tool" | "node") =>
     run(async () => setState(await api.setMonitoring(sessionId, true, placement)));
+  const options = (change: MonitoringOptionChange) =>
+    run(async () => setState(await api.setMonitoring(sessionId, true, state?.placement, change)));
   const act = (action: "up" | "down") =>
     run(async () => {
       const result = await api.monitoringAction(sessionId, action);
@@ -1039,6 +1045,7 @@ export function MonitoringDialog() {
             busy={busy}
             onPlace={(value) => void place(value)}
             onAction={(action) => void act(action)}
+            onOptions={(change) => void options(change)}
           />
         )}
       </DialogContent>

@@ -39,6 +39,7 @@ export type GeneratorPreview = Schemas["GeneratorPreview"];
 export type TopologyPattern = Schemas["TopologyPattern"];
 export type VersionResult = Schemas["VersionResult"];
 export type ExecTargets = Schemas["ExecTargets"];
+export type ExecResolved = Schemas["ExecResolved"];
 export type LabSearchHit = Schemas["LabSearchHit"];
 export type ConfigSnapshot = Schemas["ConfigSnapshot"];
 export type LabTools = Schemas["LabTools"];
@@ -442,8 +443,15 @@ export const api = {
   getMonitoring: (sessionId: string) =>
     http<MonitoringState>(`/api/lab/monitoring?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
 
-  setMonitoring: (sessionId: string, enabled: boolean, placement?: "tool" | "node") =>
-    http<MonitoringState>("/api/lab/monitoring", { method: "PUT", body: JSON.stringify({ sessionId, enabled, placement }) }, 1, 30000),
+  /** Turn monitoring on/off and set where it runs; `options` sets the opt-in parts (logs, alert targets;
+   * an omitted one stays as it is, an empty address removes a target). */
+  setMonitoring: (
+    sessionId: string,
+    enabled: boolean,
+    placement?: "tool" | "node",
+    options: { logs?: boolean; webhook?: string; slack?: string } = {}
+  ) =>
+    http<MonitoringState>("/api/lab/monitoring", { method: "PUT", body: JSON.stringify({ sessionId, enabled, placement, ...options }) }, 1, 30000),
 
   getMonitoringSummary: (sessionId: string) =>
     http<MonitoringSummary>(`/api/lab/monitoring/summary?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
@@ -484,6 +492,10 @@ export const api = {
 
   getExecTargets: (sessionId: string) =>
     http<ExecTargets>(`/api/lab/exec/targets?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 15000),
+
+  /** What a "Run on" selection (names, groups, patterns like r1-r3 or leaf*) resolves to. */
+  resolveExecTargets: (sessionId: string, nodes: string[]) =>
+    http<ExecResolved>("/api/lab/exec/resolve", { method: "POST", body: JSON.stringify({ sessionId, nodes }) }, 1, 15000),
 
   getExecScripts: (sessionId: string) =>
     http<{ scripts: ExecScript[] }>(`/api/lab/exec/scripts?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),

@@ -5,7 +5,7 @@
 export default {
   id: "ai-agents",
   title: "Bring your own AI agent",
-  summary: "Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.",
+  summary: "Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.",
   lab: "fabric",
   state: "deployed",
   async run(s) {

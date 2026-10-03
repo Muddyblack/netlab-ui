@@ -263,7 +263,8 @@ runtime_files_router = APIRouter(prefix="/api/runtime/file-explorer", tags=["run
 
 @runtime_files_router.get("/file", response_model=FileDocument)
 async def read_workspace_file(path: str):
-    target = common.resolve_workspace_path(path)
+    # Reading is also allowed for the folder of a lab netlab is running (Running Labs), wherever it lives.
+    target, _ = await common.resolve_openable_path(path)
     if not target.is_file():
         raise HTTPException(404, f"not a file: {target}")
     try:

@@ -452,6 +452,16 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                 runner.lifecycle_argv("down", path),
                 runner.lifecycle_argv("up", path, multilab_id=instance),
             ]
+    recovery_note = ""
+    if body.action == "up" and body.multilabId is None:
+        recovery = await interrupted_start(path)
+        if recovery == "continue":
+            # Same working directory, but the topology comes from the snapshot the interrupted start saved.
+            steps = [(["up", "--snapshot"], steps[0][1])]
+            recovery_note = "A previous start of this lab was interrupted; continuing it with netlab up --snapshot."
+        elif recovery == "unlock":
+            (Path(path).parent / "netlab.lock").unlink(missing_ok=True)
+            recovery_note = "Removed the netlab.lock left by an interrupted start."
     args = steps[0][0]
     if body.action == "up":
         await _enforce_quota(user, path)
@@ -473,6 +483,8 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
             )
             yield f"data: {json.dumps({'progress': tracker.payload(delta=True)})}\n\n"
         try:
+            if recovery_note:
+                yield f"data: {json.dumps({'stream': 'stdout', 'line': recovery_note})}\n\n"
             yield f"data: {json.dumps({'stream': 'stdout', 'line': f'Running netlab {args[0]}…'})}\n\n"
             async for stream, line in _run_sequence(steps):
                 if stream == "exit":
@@ -554,6 +566,33 @@ async def _run_sequence(steps: list[tuple[list[str], Path]]) -> Any:
             elif line != "0" or index == len(steps) - 1:
                 yield stream, line
                 return
+
+
+async def interrupted_start(path: str) -> str | None:
+    """Is the lab's ``netlab.lock`` left over from a ``netlab up`` that never finished?
+
+    The UI's backend can be restarted (or the machine can lose power) while a lab is starting; the
+    lock then stays and netlab refuses every later ``up`` with "Cannot start another lab in the same
+    directory". It is stale when netlab's registry does not know the lab, or lists it as still
+    *starting* (nothing is running that start). A lab it lists as running is left to netlab.
+
+    Returns ``"continue"`` (resume with ``netlab up --snapshot``, netlab's own advice for a failed
+    start), ``"unlock"`` (no snapshot to resume from: the lock can simply go), or ``None``.
+    """
+    lab_dir = Path(path).parent
+    if not (lab_dir / "netlab.lock").exists():
+        return None
+    try:
+        instances = await runner.status_cached(max_age=0)
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        instances = {}
+    here = str(lab_dir.resolve())
+    for lab in instances.values() if isinstance(instances, dict) else ():
+        if isinstance(lab, dict) and lab.get("dir") and str(Path(str(lab["dir"])).resolve()) == here:
+            if not str(lab.get("status", "")).lower().startswith("starting"):
+                return None
+            break
+    return "continue" if (lab_dir / "netlab.snapshot.pickle").exists() else "unlock"
 
 
 async def _registered_multilab_id(path: str) -> int | None:

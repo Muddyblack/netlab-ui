@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel,
-  IconButton, ListItemText, Menu, MenuItem, Switch, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography
+  IconButton, ListItemText, Menu, MenuItem, Switch, TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
+  createFilterOptions
 } from "@mui/material";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
@@ -11,7 +12,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import { useNodes } from "@containerlab/clab-ui";
 
-import { api, type ExecMode, type ExecScript, type ExecTargets } from "../../api/client";
+import { api, type ExecMode, type ExecResolved, type ExecScript, type ExecTargets } from "../../api/client";
 import { suggestCommands } from "./suggestions";
 import { downloadText, scriptFromRuns, transcriptMarkdown, type ExecRun } from "./model";
 import { RunResults } from "./RunResults";
@@ -21,9 +22,18 @@ const HISTORY_KEY = "netlab.multiExec.history";
 const HIGHLIGHT_KEY = "netlab.multiExec.highlight";
 const MAX_HISTORY = 50;
 
-const GROUP_HEADINGS = { all: "", group: "Groups", node: "Nodes" } as const;
+const GROUP_HEADINGS = { all: "", group: "Groups", node: "Nodes", pattern: "Pattern" } as const;
 
-interface TargetOption { value: string; label: string; kind: "all" | "group" | "node"; running?: boolean }
+interface TargetOption { value: string; label: string; kind: "all" | "group" | "node" | "pattern"; running?: boolean }
+
+/** A lab can have hundreds of thousands of nodes: the drop-down only ever draws the best matches. */
+const filterTargets = createFilterOptions<TargetOption>({ limit: 100 });
+
+/** Typed text that is not a name or a group: a range (r1-r3), hostlist (r[1-3,5]), wildcards (leaf*, h#) or a
+ * regular expression. The backend expands it against the lab's nodes, so any size of lab works. */
+const patternOption = (value: string): TargetOption => ({ value, label: value, kind: "pattern" });
+
+const SYNTAX_HINT = "r1-r3 · r[1-3,5] · leaf* · h# · h? · a regular expression";
 
 function loadHistory(): string[] {
   try {
@@ -94,6 +104,8 @@ function ScriptsMenu({ anchorEl, scripts, onClose, onReplay, onDelete }: {
 export function MultiExecPanel({ sessionId }: { sessionId: string }) {
   const [targets, setTargets] = useState<ExecTargets | null>(null);
   const [selection, setSelection] = useState<string[]>(["all"]);
+  const [typed, setTyped] = useState("");
+  const [preview, setPreview] = useState<ExecResolved | null>(null);
   const [mode, setMode] = useState<ExecMode>("auto");
   const [modules, setModules] = useState<string[]>([]);
   const [history, setHistory] = useState<string[]>(loadHistory);
@@ -148,6 +160,24 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
   }, [runs]);
 
   const options = useMemo(() => targetOptions(targets), [targets]);
+  const optionByValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
+
+  // What the selection (and the text being typed) resolves to, asked of the backend, which does the
+  // matching so a pattern over thousands of nodes costs one request. Only worth a line when the answer
+  // is not obvious from the chips: a pattern, a group, or text not yet turned into a chip.
+  const draft = useMemo(() => [...selection, ...(typed.trim() ? [typed.trim()] : [])], [selection, typed]);
+  const needsPreview = useMemo(
+    () => draft.some((item) => optionByValue.get(item)?.kind !== "node"),
+    [draft, optionByValue]
+  );
+  useEffect(() => {
+    if (!needsPreview || draft.length === 0) { setPreview(null); return; }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      api.resolveExecTargets(sessionId, draft).then((value) => { if (!cancelled) setPreview(value); }, () => { if (!cancelled) setPreview(null); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [sessionId, draft, needsPreview]);
 
   const execute = useCallback(async (step: { command: string; mode: ExecMode; selection: string[] }, signal: AbortSignal) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -234,7 +264,8 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
     })));
   };
 
-  const selected = options.filter((option) => selection.includes(option.value));
+  // In the order they were chosen; anything that is not a known name or group is a typed pattern.
+  const selected = selection.map((value) => optionByValue.get(value) ?? patternOption(value));
   const quickCommands = useMemo(() => {
     const nodes = targets?.nodes ?? [];
     const chosen = selection.includes("all")
@@ -249,11 +280,20 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, px: 1, py: 0.75, borderBottom: 1, borderColor: "divider", flexWrap: "wrap" }}>
         <Autocomplete
           multiple
+          freeSolo
+          autoSelect
           size="small"
           options={options}
+          filterOptions={filterTargets}
           value={selected}
-          onChange={(_event, value) => setSelection(value.map((option) => option.value))}
-          getOptionLabel={(option) => option.label}
+          inputValue={typed}
+          onInputChange={(_event, text, reason) => { if (reason !== "reset") setTyped(text); else setTyped(""); }}
+          onChange={(_event, value) => {
+            // Typed text arrives as a string: a name, a group or a pattern; the backend tells them apart.
+            const next = value.map((item) => (typeof item === "string" ? item.trim() : item.value)).filter(Boolean);
+            setSelection([...new Set(next)]);
+          }}
+          getOptionLabel={(option) => (typeof option === "string" ? option : option.label)}
           isOptionEqualToValue={(a, b) => a.value === b.value}
           groupBy={(option) => GROUP_HEADINGS[option.kind]}
           renderOption={(props, option) => (
@@ -263,10 +303,28 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
               </Typography>
             </li>
           )}
-          renderTags={(value, getTagProps) => value.map((option, index) => (
-            <Chip {...getTagProps({ index })} key={option.value} size="small" label={option.kind === "group" ? `@${option.value}` : option.value} />
-          ))}
-          renderInput={(params) => <TextField {...params} label="Run on" placeholder={selection.length ? "" : "nodes or groups"} />}
+          renderTags={(value, getTagProps) => value.map((option, index) => {
+            const { key: _key, ...tagProps } = getTagProps({ index });
+            const item = typeof option === "string" ? patternOption(option) : option;
+            return (
+              <Chip
+                {...tagProps}
+                key={item.value}
+                size="small"
+                variant={item.kind === "pattern" ? "outlined" : "filled"}
+                label={item.kind === "group" ? `@${item.value}` : item.value}
+                sx={item.kind === "pattern" ? { fontFamily: "monospace" } : undefined}
+              />
+            );
+          })}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Run on"
+              placeholder={selection.length ? "" : "nodes, groups, r1-r3, leaf*"}
+              title={`Names, groups, all, or patterns: ${SYNTAX_HINT}. Press Enter to add.`}
+            />
+          )}
           sx={{ minWidth: 170, flex: "1 1 200px", maxWidth: 420 }}
         />
         <ToggleButtonGroup size="small" exclusive value={mode} onChange={(_event, value: ExecMode | null) => value && setMode(value)}>
@@ -299,6 +357,21 @@ export function MultiExecPanel({ sessionId }: { sessionId: string }) {
           <MoreVertIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      {preview && needsPreview && (
+        <Box sx={{ px: 1.25, py: 0.4, borderBottom: 1, borderColor: "divider" }}>
+          {preview.error ? (
+            <Typography variant="caption" color="error">{preview.error}</Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary">
+              {preview.count === 0
+                ? "Matches no node"
+                : `${preview.count.toLocaleString()} node${preview.count === 1 ? "" : "s"}: ${preview.first.join(", ")}${preview.count > preview.first.length ? ", …" : ""}`}
+              {typed.trim() ? "  ·  Enter adds it" : ""}
+            </Typography>
+          )}
+        </Box>
+      )}
 
       {quickCommands.length > 0 && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, px: 1, py: 0.5, borderBottom: 1, borderColor: "divider", overflowX: "auto" }}>

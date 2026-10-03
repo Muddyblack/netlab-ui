@@ -2845,6 +2845,27 @@ export interface components {
              * @enum {string}
              */
             placement: "tool" | "node";
+            /**
+             * Logs
+             * @default false
+             */
+            logs: boolean;
+            /**
+             * Webhook
+             * @default
+             */
+            webhook: string;
+            /**
+             * Slack
+             * @default
+             */
+            slack: string;
+            /**
+             * Email
+             * @description An email alert target exists in the topology (edited there, not in the UI).
+             * @default false
+             */
+            email: boolean;
             /** Labdeployed */
             labDeployed: boolean;
             /** Rendered */
@@ -2934,6 +2955,12 @@ export interface components {
             enabled: boolean;
             /** Placement */
             placement?: ("tool" | "node") | null;
+            /** Logs */
+            logs?: boolean | null;
+            /** Webhook */
+            webhook?: string | null;
+            /** Slack */
+            slack?: string | null;
         };
         /** MultiserverPut */
         PromSample: {
@@ -3026,6 +3053,28 @@ export interface components {
              * @default true
              */
             harnessesAllowed: boolean;
+            /**
+             * Agentsrunon
+             * @description Where agent CLIs are looked for and started: this machine ("native"), the host the container runs on ("host"), or only inside the container ("container", see agentsNote for why).
+             * @default native
+             * @enum {string}
+             */
+            agentsRunOn: "native" | "host" | "container";
+            /**
+             * Agentsnote
+             * @default
+             */
+            agentsNote: string;
+        };
+        /**
+         * AssistantConnectHelp
+         * @description How to connect an agent that cannot be wired up automatically.
+         */
+        AssistantConnectHelp: {
+            /** Where */
+            where: string;
+            /** Text */
+            text: string;
         };
         /**
          * AssistantHarness
@@ -3043,6 +3092,18 @@ export interface components {
              * @default
              */
             homepage: string;
+            /**
+             * Mcp
+             * @default session
+             * @enum {string}
+             */
+            mcp: "session" | "register" | "manual";
+            connect?: components["schemas"]["AssistantConnectHelp"] | null;
+            /**
+             * Skippermissions
+             * @default false
+             */
+            skipPermissions: boolean;
         };
         /**
          * AssistantMcpInfo
@@ -3980,6 +4041,28 @@ export interface components {
              * @default false
              */
             running: boolean;
+        };
+        /** ExecResolveRequest */
+        ExecResolveRequest: {
+            /** Sessionid */
+            sessionId: string;
+            /** Nodes */
+            nodes?: string[];
+        };
+        /**
+         * ExecResolved
+         * @description What a selection resolves to, for the live "matches N nodes" line under the field.
+         */
+        ExecResolved: {
+            /** Count */
+            count: number;
+            /** First */
+            first: string[];
+            /**
+             * Error
+             * @default
+             */
+            error: string;
         };
         /** ExecTargets */
         ExecTargets: {

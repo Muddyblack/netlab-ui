@@ -47,7 +47,8 @@ Lab context menu or Ctrl+P → **Monitoring…** → switch it on. The UI instal
 * **Health**: nodes, BGP sessions and OSPF/IS-IS adjacencies up vs what the topology defines,
   what is missing, and buttons for the dashboards.
 * **Fault tests**: repeatable link flaps (see below).
-* **Setup**: where the stack runs, start/stop, and how each node is collected.
+* **Setup**: where the stack runs, start/stop, the opt-in logs and alert notifications (webhook,
+  Slack; an email target is set in the topology), and how each node is collected.
 
 ### Dashboard markers
 
@@ -80,9 +81,10 @@ Containers are flapped with `ip link`, libvirt VMs with `virsh domif-setlink`.
 
 > **libvirt is in maintenance mode upstream.** netlab 26.09 sunsets the Vagrant/libvirt provider
 > (bug fixes only, no device integration tests, removal planned within 1-2 years; see
-> [netlab#3912](https://github.com/ipspace/netlab/issues/3912)). libvirt support here is
-> best-effort. For VM-only devices netlab recommends vrnetlab containers under containerlab,
-> which are monitored like any other container.
+> [netlab#3912](https://github.com/ipspace/netlab/issues/3912)). Monitoring libvirt VMs was
+> tested successfully on a real KVM host (libvirt 12.2, QEMU VMs, cgroup v2) and works today, but
+> expect no new work on it. For VM-only devices netlab recommends vrnetlab containers under
+> containerlab, which are monitored like any other container.
 
 **Write them into the topology**, next to netlab's own [validation tests](https://netlab.tools/topology/validate/),
 so they're versioned with the lab and give the same answer every run:
@@ -130,6 +132,87 @@ on the dashboards. API: `GET /api/lab/monitoring/faults`, `POST /api/lab/monitor
 In the lab this was developed on, `core_link` recovers in 10.1 s on every cycle: FRR's OSPF
 hello interval (10 s) decides it, and `netlab validate` agrees (9.6-9.8 s).
 
+## Your own dashboards and alerts
+
+Everything lives in the lab's `monitoring/` folder, is never overwritten by `netlab create`,
+and goes live within about 10 seconds, with no restart and no change to the plugin.
+`monitoring/METRICS.md` lists every metric and label (generated from the collector).
+
+**Dashboards.** Write a short YAML spec and compile it, or drop in any Grafana JSON (Grafana:
+Share > Export). They appear in Grafana's **My dashboards** folder, which is editable
+(the built-in boards are read-only). Edits made in the Grafana UI are kept in `monitoring/data/grafana`.
+
+```yaml
+# board.yml
+title: BGP at a glance
+node_variable: true                 # adds the $node picker
+rows:
+  - title: Sessions
+    panels:
+      - { type: stat, title: Established, expr: 'sum(netlab_bgp_session_up{lab="$lab"})' }
+      - type: timeseries
+        title: Session state per peer
+        queries:
+          - { expr: 'netlab_bgp_session_up{lab="$lab",node=~"$node"}', legend: '{{node}} -> {{peer}}' }
+```
+
+```bash
+python -m netlab_monitoring.spec board.yml -o monitoring/dashboards/bgp.json   # PYTHONPATH=<plugin>/lib
+```
+
+Panel types are `stat`, `timeseries` and `table`; options are `unit`, `description`, `width`
+(1-24), `height`, `stack`, and `thresholds` for stats. Filter on `lab="$lab"` so the board follows
+the lab picker. The compiler rejects a broken spec with a message naming the panel, and warns
+about unknown `netlab_*` metrics.
+
+**Alerts.** Put Prometheus-format rule files in `monitoring/alerts/*.yml`; [vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/)
+evaluates them together with the built-in rules (BGP sessions and OSPF/IS-IS adjacencies the topology
+defines but that are not up, node down, collector failing). Firing alerts are listed at
+`http://<host>:8880` and stored as the `ALERTS` metric, so they can be graphed and queried like
+anything else. A starter `alerts/example.yml` is created on first `netlab create`.
+
+**From the AI assistant.** The netlab-ui MCP server has `list_metrics` (what exists, plus the spec
+and rule formats), `query_metrics` (try a query first), `create_dashboard` and `create_alert_rules`.
+Both create tools validate before writing and report unknown metrics, so "make me a board of BGP
+prefixes per peer" or "alert when a router uses over 1.5 GiB" works without writing JSON by hand.
+
+## Logs (opt-in)
+
+```yaml
+monitoring.logs.enabled: true      # retention: 168h by default
+```
+
+Adds Loki (storage) and Vector (collection) and a **netlab logs** dashboard in Grafana, with the
+same lab and node pickers and a search box. Every line carries `lab`, `node`, `severity` and
+`source`, so a log line lines up with the metrics on the other dashboards.
+
+| Source | Needs on the device | Notes |
+|---|---|---|
+| **Container logs** of every containerlab node | Nothing | Docker's stdout/stderr of the node, labelled by node name |
+| **Syslog** (UDP, port 1514) | Point the device at `<lab host>:1514` | The sender is matched to a node by its management address, else by the hostname in the message. Lines are stamped on arrival, because lab devices' clocks drift and syslog timestamps carry no year or zone |
+
+Pointing a device at the stack is device configuration, so the plugin does not do it for you:
+for example `logging host <lab host> transport udp port 1514` (EOS, IOS) or
+`set system syslog host <lab host> any any port 1514` (Junos). Query them in Grafana, or ask the
+assistant (`query_logs`). Data is kept in `monitoring/data/loki`.
+
+## Alert notifications (opt-in)
+
+Without a target, firing alerts stay in vmalert (`http://<host>:8880`) and the `ALERTS` metric. To
+have them delivered, add one or more targets; the plugin then starts an Alertmanager
+(`http://<host>:9093`, grouped by alert, lab and node, resolved notices included):
+
+```yaml
+monitoring.alerts.notify:
+  webhook: https://example.org/hooks/netlab        # Alertmanager's JSON, for scripts and chat bridges
+  slack: https://hooks.slack.com/services/T000/B000/xxxx
+  email: { to: ops@example.org, from: netlab@example.org, smarthost: "smtp.example.org:587", username: u, password: p }
+```
+
+This applies to the built-in rules and to your own `monitoring/alerts/*.yml`. Webhook and Slack URLs
+and the SMTP password are written into `monitoring/alertmanager/alertmanager.yml`, so keep the lab
+directory out of version control if they are secrets.
+
 ## Settings
 
 All optional -- in the topology (`monitoring:`), or for every lab in `~/.netlab.yml`
@@ -141,6 +224,8 @@ All optional -- in the topology (`monitoring:`), or for every lab in `~/.netlab.
 | `monitoring.interval` | `15` | Scrape interval (seconds) |
 | `monitoring.retention` | `7d` | How long metrics are kept |
 | `monitoring.nodes` | all | Monitor only these nodes or groups |
+| `monitoring.logs.enabled` | `false` | Loki + Vector: container logs and syslog, with a logs dashboard |
+| `monitoring.alerts.notify` | none | `webhook`, `slack` or `email` target for firing alerts (starts Alertmanager) |
 | `monitoring.grafana.enabled` | `true` | `false` keeps just the metrics store (use your own Grafana, or only netlab-ui) |
 | `monitoring.ports.*` | 3000, 8428, … | Host ports (netlab multilab adds the lab id) |
 | node `monitoring.enabled: false` | | Skip a node |
@@ -190,6 +275,27 @@ netlab up ──────> tool ────> collector (host /proc, docker A
 * The collector collects when it is scraped (fresh data within one interval) and costs
   roughly one core-percent per hundred nodes.
 
+Optional parts, off unless asked for: **vmalert** always runs the alert rules; **Alertmanager**
+only with `monitoring.alerts.notify`; **Loki + Vector** only with `monitoring.logs.enabled`.
+
+### Where things are
+
+| To change... | Look at |
+|---|---|
+| What is collected from a device type | `defaults.yml` (profiles), then `collector/nlmon/` for new parsing |
+| A metric (name, type, help) | `collector/nlmon/metrics.py` `FAMILIES`: dashboards, alerts, `METRICS.md` and the assistant's `list_metrics` all read it |
+| A built-in dashboard | `lib/netlab_monitoring/dashboards/` one module per board; builders in `panels.py` |
+| User dashboards (YAML spec) | `lib/netlab_monitoring/spec.py` (same builders as the built-in boards) |
+| Alert rules, notification targets | `alerts.py`, `notify.py` |
+| Logs (Loki, Vector, syslog) | `logs.py` |
+| Which containers run, and how | `containers.py` (`up.sh` for placement `tool`, lab nodes for `node`); ports in `endpoints.py` |
+| Scrape and gNMI config | `collect.py` |
+| Grafana provisioning | `grafana.py` |
+| What lands in `<lab>/monitoring/` | `render.py` (`render_all`) |
+
+`tests/test_extend.py` fails if a built-in dashboard or rule uses a metric that is not in
+`FAMILIES`, so renaming a metric cannot silently break a panel.
+
 ### Scale (measured in the development VM, 4 vCPU)
 
 600 containers without a management network (500 Linux hosts + 100 FRR routers running
@@ -214,7 +320,8 @@ about 1.6 s per cycle, well inside a 15-second interval.
 | `placement: tool` and `placement: node` | Tested live (containers started from netlab's `clab.yml`) |
 | gnmic config + mapping (SR Linux native, OpenConfig) | gnmic loads the config; mapping tested with `gnmic processor` on sample events -- **needs a run against real SR Linux / cEOS** |
 | SNMP (IOS, NX-OS) | Config rendering tested -- **needs a run against real devices** |
-| libvirt VMs | Unit tests with libvirt state files -- **never run on a KVM host; upstream is sunsetting libvirt** |
+| libvirt VMs | Tested on a real KVM host (libvirt 12.2, cgroup v2); upstream is sunsetting libvirt, so this stays best-effort |
+| Logs (Loki + Vector), alert notifications (Alertmanager) | Config files validated by the real images; a syslog line was delivered to Loki labelled by node, and an alert reached a webhook through Alertmanager. **Not yet run against real devices sending syslog** |
 
 ## Tests
 

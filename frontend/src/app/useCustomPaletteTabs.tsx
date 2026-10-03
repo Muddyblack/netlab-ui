@@ -9,6 +9,7 @@ import { UnitComposer } from "../panels/UnitComposer";
 import { GroupsPanel } from "../panels/Groups";
 import { WorkersPanel } from "../panels/Workers";
 import { AgentsPanel } from "../components/agents/AgentsPanel";
+import { pendingProposals, useProposals } from "../components/agents/proposalsStore";
 import { LensesPanel } from "../components/lenses/LensesPanel";
 
 type Toast = (message: string, severity?: "info" | "success" | "warning" | "error") => void;
@@ -26,7 +27,7 @@ interface UseCustomPaletteTabsOptions {
   validationIssues: ValidationIssue[];
   addToast: Toast;
   handleRerunDeployment: (action: string) => void;
-  openAgentTerminal: (agentId: string) => void;
+  openAgentTerminal: (agentId: string, another?: boolean) => string;
 }
 
 // Leads the tab strip when present — it's the reason you're looking at this
@@ -46,6 +47,7 @@ export function useCustomPaletteTabs({
   handleRerunDeployment,
   openAgentTerminal,
 }: UseCustomPaletteTabsOptions): CustomPaletteTab[] {
+  const waiting = pendingProposals(useProposals().proposals).length;
   return useMemo<CustomPaletteTab[]>(() => {
     if (!sessionId) return [];
     const tabs: CustomPaletteTab[] = [];
@@ -79,7 +81,7 @@ export function useCustomPaletteTabs({
     if (assistantCapabilities && assistantOpen) {
       tabs.push({
         id: "netlab-assistant",
-        label: "AI agents",
+        label: waiting ? `AI agents (${waiting})` : "AI agents",
         render: () => (
           <AgentsPanel
             capabilities={assistantCapabilities}
@@ -91,5 +93,5 @@ export function useCustomPaletteTabs({
       });
     }
     return tabs;
-  }, [sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal]);
+  }, [sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal]);
 }

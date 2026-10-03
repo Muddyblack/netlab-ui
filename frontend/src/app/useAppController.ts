@@ -20,7 +20,10 @@ import { type DeploymentProgress } from "../components/CanvasDeploymentProgress"
 import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
+import { rememberAgents } from "../components/agents/agentNames";
 import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
+import { matchesTerminalShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
+import { useProposalWatcher } from "../components/agents/proposalsStore";
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
 import type { TopologyRef } from "../hooks/useTabManager";
 import { runningLabMatches } from "../host/runningMatch";
@@ -62,9 +65,10 @@ type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => v
 
 /** App-wide keyboard shortcuts. Ctrl/Cmd+I stays out of the way while the
  * user is typing so it never fights a text field's own shortcuts. */
-function globalShortcut(event: KeyboardEvent): "run-on-nodes" | "quick-open" | "assistant" | null {
+function globalShortcut(event: KeyboardEvent): "toggle-terminal" | "new-terminal" | "quick-open" | "assistant" | null {
   if (!(event.ctrlKey || event.metaKey)) return null;
-  if (event.key === "`") return "run-on-nodes";
+  // The terminal key (Settings → General; the backtick by default) shows or hides the panel, with Shift it opens another terminal.
+  if (matchesTerminalShortcut(event)) return event.shiftKey ? "new-terminal" : "toggle-terminal";
   const key = event.key.toLowerCase();
   if (key === "p") return "quick-open";
   if (key !== "i" || event.altKey) return null;
@@ -524,6 +528,7 @@ export function useAppController() {
 
   // ── Session dock (node shells + log streams) ────────────────────────────────
   const sessionDock = useSessionDock(sessionId);
+  const terminalShortcut = useTerminalShortcut();
   const handleSessionPopOut = useCallback((tab: SessionTab) => {
     if (!sessionId) return;
     const params = new URLSearchParams({ popout: tab.kind, node: tab.node, sessionId });
@@ -645,8 +650,8 @@ export function useAppController() {
       const shortcut = globalShortcut(event);
       if (!shortcut) return;
       event.preventDefault();
-      // Ctrl+` — the VS Code terminal key — opens "run on nodes".
-      if (shortcut === "run-on-nodes") openMultiExecRef.current();
+      if (shortcut === "toggle-terminal") toggleSessionDockRef.current();
+      if (shortcut === "new-terminal") newTerminalRef.current();
       if (shortcut === "quick-open") setQuickOpen(true);
       if (shortcut === "assistant") setAssistantOpen((open) => !open);
     };
@@ -697,7 +702,7 @@ export function useAppController() {
   }, [openTabs, activeTabId]);
 
   const quickActions = useMemo(() => [
-    { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Gemini CLI, Cursor · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
+    { id: "action:toggle-assistant", label: assistantOpen ? "Hide AI agents panel" : "Connect an AI agent (MCP)", detail: "Setup for Claude Code, Codex, Copilot, Cursor, Kiro · proposed changes · Ctrl+I", run: () => setAssistantOpen((open) => !open) },
     { id: "action:new-lab", label: "Create a new lab", detail: "Start a topology in the current workspace", run: () => setNewLabDialogOpen(true) },
     { id: "action:running-labs", label: "Running netlab labs", detail: "Every lab netlab knows about on this host: shut down, force cleanup", run: () => setRunningLabsOpen(true) },
     { id: "action:image-manager", label: "Manage container images", detail: "Open the image manager", run: () => setImageManagerOpen(true) },
@@ -720,8 +725,10 @@ export function useAppController() {
           });
       }
     }] : []),
+    { id: "action:new-terminal", priority: 10, label: "New terminal", detail: `A normal shell in the lab's folder, in the bottom panel · ${terminalShortcutLabel(terminalShortcut, true)}`, run: () => newTerminalRef.current() },
+    { id: "action:toggle-terminal", priority: 10, label: "Show or hide the terminal panel", detail: `The bottom panel with shells, logs and your AI agent · ${terminalShortcutLabel(terminalShortcut)}`, run: () => toggleSessionDockRef.current() },
     ...(sessionId && activeLabRunning ? [
-      { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, one answer per node · Ctrl+`", run: () => sessionDock.openTab("multi", "nodes") },
+      { id: "action:run-on-nodes", priority: 10, label: "Run a command on nodes", detail: "Same command on many nodes, one answer per node", run: () => sessionDock.openTab("multi", "nodes") },
       { id: "action:traffic", priority: 10, label: "Show live traffic", detail: "Traffic lens: load, drops and down links on every link", run: () => { openPanelTab("Lenses"); netlabLenses.setLens("traffic"); } },
       { id: "action:running-configs", priority: 10, label: "Running configs & changes", detail: "What changed on the devices since the last snapshot", run: () => openConfigsDialog(sessionId) },
       { id: "action:clab-tarball", label: "Export as containerlab tarball", detail: "clab.yml + the devices' current configs (netlab clab tarball)", run: () => void exportClabTarballRef.current(sessionId) },
@@ -893,8 +900,15 @@ export function useAppController() {
   }, [getOrCreateSession, handleOpenLab]);
   const ensureLabActiveRef = useRef(ensureLabActive); ensureLabActiveRef.current = ensureLabActive;
   const openMultiExec = useCallback((sid?: string | null) => sessionDock.openTab("multi", "nodes", sid ?? undefined), [sessionDock]);
-  const openAgentTerminal = useCallback((agentId: string) => sessionDock.openTab("agent", agentId), [sessionDock]);
+  const openAgentTerminal = useCallback((agentId: string, another?: boolean) => sessionDock.openAgent(agentId, another), [sessionDock]);
   const openMultiExecRef = useRef(openMultiExec); openMultiExecRef.current = openMultiExec;
+  // Like VS Code's terminal toggle: show or hide the bottom panel; with nothing open in it yet, start a terminal.
+  const toggleSessionDock = useCallback(() => {
+    if (sessionDock.tabs.length === 0) sessionDock.openTerminal();
+    else sessionDock.setOpen(!sessionDock.open);
+  }, [sessionDock]);
+  const toggleSessionDockRef = useRef(toggleSessionDock); toggleSessionDockRef.current = toggleSessionDock;
+  const newTerminalRef = useRef(sessionDock.openTerminal); newTerminalRef.current = sessionDock.openTerminal;
   const openDrawioWizard = useCallback(() => sessionDock.openTab("drawio", "diagram"), [sessionDock]);
   const openShellRef = useRef(openShell); openShellRef.current = openShell;
   const exportClabTarball = useCallback(async (sid: string) => {
@@ -978,7 +992,10 @@ export function useAppController() {
   const refreshAssistantCapabilities = useCallback(() => {
     void api
       .assistantCapabilities()
-      .then((capabilities) => setAssistantCapabilities(capabilities.enabled ? capabilities : null))
+      .then((capabilities) => {
+        rememberAgents(capabilities.harnesses ?? []);
+        setAssistantCapabilities(capabilities.enabled ? capabilities : null);
+      })
       .catch(() => setAssistantCapabilities(null));
   }, []);
 
@@ -1050,6 +1067,12 @@ export function useAppController() {
       window.removeEventListener("message", onWindowMessage);
     };
   }, []);
+
+  // Proposals are watched here, not in the AI agents tab, so one that arrives while that tab is hidden still
+  // shows up (as a toast and a count on the tab) instead of waiting until the tab is opened again.
+  useProposalWatcher(sessionId, Boolean(assistantCapabilities?.enabled), () => {
+    addToast("An agent proposed a change. Review it in the AI agents tab.", "info");
+  });
 
   const customPaletteTabs = useCustomPaletteTabs({
     sessionId,

@@ -2,7 +2,7 @@
 change proposals.
 
 netlab-ui has no chat of its own. Users point their own agent (Claude Code,
-Codex, Gemini CLI, Cursor, …) at the MCP server, or have netlab-ui start the
+Codex, Copilot, Cursor, Kiro, …) at the MCP server, or have netlab-ui start the
 agent's own CLI in a terminal tab; this router tells the UI how to connect one
 and lets the user apply or reject what an agent proposed. The one piece of real
 logic here is applying an approved proposal, because that is where an agent
@@ -12,6 +12,8 @@ host to stay undoable.
 
 from __future__ import annotations
 
+import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +28,8 @@ from app.assistant.responses import (
     AssistantProposalResult,
 )
 from app.sessions.store import store
-from services.assistant import guide, harness, mcp_server, proposals, tools
+from services import host
+from services.assistant import guide, harness, mcp_server, notes, proposals, tools
 from services.assistant.config import mcp_base_url, mcp_token
 from services.events import hub
 from services.netlab import runner
@@ -46,24 +49,23 @@ def capabilities(request: Request):
             "tools": mcp_server.tool_names(),
             "clientConfig": mcp_server.describe_config(base),
         },
-        "harnesses": harness.available(),
+        "harnesses": harness.available(base),
         "harnessesAllowed": _harness_allowed(request.client.host if request.client else None),
+        "agentsRunOn": host.mode(),
+        "agentsNote": host.note(),
     }
 
 
 def _harness_allowed(client_host: str | None) -> bool:
-    """Agent terminals run the user's agent, logged in as them, on the backend
-    host. Without a login in front of netlab-ui, only allow that from the same
-    machine: anyone else who can reach the port would get the user's agent."""
-    if auth.configured_users():
-        return True
-    return client_host in {"127.0.0.1", "::1", "localhost"}
+    """Agent terminals run the user's agent, logged in as them, on the backend host."""
+    return auth.local_process_allowed(client_host)
 
 
 @router.websocket("/harness/{harness_id}/terminal")
-async def harness_terminal(websocket: WebSocket, harness_id: str, sessionId: str):
+async def harness_terminal(websocket: WebSocket, harness_id: str, sessionId: str, mcp: bool = True, yolo: bool = False):
     """The user's own agent CLI in a PTY, started in the lab's directory and
-    connected to the MCP server. The UI is the CLI's own terminal interface."""
+    connected to the MCP server (unless ``mcp=false``). The UI is the CLI's own
+    terminal interface."""
     from app.shell.ws import bridge_pty
 
     await websocket.accept()
@@ -86,13 +88,65 @@ async def harness_terminal(websocket: WebSocket, harness_id: str, sessionId: str
         return
     try:
         # The agent runs on this host: point it at the address the UI used (ws → http).
-        base = websocket.base_url.replace(scheme="https" if websocket.url.scheme == "wss" else "http")
-        argv, env = harness.launch_spec(selected, str(base))
+        base = str(websocket.base_url.replace(scheme="https" if websocket.url.scheme == "wss" else "http"))
+        lab_dir = Path(session.topology_path).parent
+        # These look for the CLI (on the host, when running in a container): off the event loop.
+        argv, env = await asyncio.to_thread(harness.launch_spec, selected, base, lab_dir, mcp, yolo)
+        setup = await asyncio.to_thread(harness.setup_commands, selected, base, mcp)
     except FileNotFoundError as exc:
         await websocket.send_text(f"\r\n[{exc}]\r\n")
         await websocket.close()
         return
-    await bridge_pty(websocket, argv, Path(session.topology_path).parent, env)
+    if not mcp:
+        await websocket.send_text("\r\n[netlab-ui: started without a lab connection (the MCP switch is off)]\r\n")
+    elif selected.mcp == "manual":
+        await websocket.send_text(
+            f"\r\n[netlab-ui: {selected.name} cannot be connected automatically; "
+            "see 'Connect a tool by hand' in the AI agents tab]\r\n"
+        )
+    for command, command_env in setup:
+        spawn, spawn_env = host.wrap(command, command_env, lab_dir)
+        note = await _run_setup(spawn, spawn_env, lab_dir, command)
+        if note:
+            await websocket.send_text(f"\r\n[{note}]\r\n")
+    if yolo and selected.id not in harness.YOLO_FLAGS:
+        await websocket.send_text(
+            f"\r\n[netlab-ui: {selected.name} has no known skip-permissions flag; started normally]\r\n"
+        )
+    # When the agent quits (Ctrl+C, /exit) the terminal stays as a normal shell in the lab's folder
+    # instead of going blank.
+    shell = await asyncio.to_thread(host.login_shell)
+    # (the trap keeps Ctrl+C that ends the agent from ending this wrapper too; it is not inherited by the agent)
+    argv = ["/bin/sh", "-c", 'trap : INT; "$@"; exec "$0" -i', shell, *argv]
+    argv, env = host.wrap(argv, env, lab_dir)
+    await bridge_pty(websocket, argv, lab_dir, env)
+
+
+async def _run_setup(argv: list[str], env: dict[str, str], cwd: Path, command: list[str] | None = None) -> str | None:
+    """Run one pre-launch command (registering the MCP server in an agent's own config).
+    Returns a one-line note when it failed; the agent still starts, so one bad step
+    never blocks the terminal. ``argv`` is what is spawned (possibly wrapped to run on the host);
+    ``command`` is the command itself, for the messages."""
+    command = command or argv
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(cwd),
+            env={**os.environ, **env},
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+    except (OSError, TimeoutError):
+        return f"could not run `{Path(command[0]).name} {command[1]}`"
+    if proc.returncode:
+        # "mcp remove" of a server that isn't there yet is expected to fail: say nothing.
+        if "remove" in command[:3]:
+            return None
+        detail = out.decode(errors="replace").strip().splitlines()
+        return f"`{Path(command[0]).name} mcp` failed: {detail[-1][:160] if detail else proc.returncode}"
+    return None
 
 
 class Selection(BaseModel):
@@ -248,3 +302,30 @@ async def _run_fault_test(proposal: proposals.Proposal, action: dict[str, Any]) 
             )
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+# --------------------------------------------------------------------- notes
+def _notes_dir(session_id: str) -> Path:
+    session = store.get(session_id)
+    if session is None:
+        raise HTTPException(404, "unknown session")
+    return Path(session.topology_path).parent
+
+
+@router.get("/notes")
+def list_notes(session_id: str = Query(alias="sessionId")) -> dict[str, Any]:
+    """What agents saved about this lab, for the AI agents panel."""
+    try:
+        return {"notes": notes.load(_notes_dir(session_id))}
+    except tools.ToolError as exc:
+        raise HTTPException(500, str(exc)) from exc
+
+
+@router.delete("/notes/{note_id}", response_model=AssistantAck)
+def delete_note(note_id: str, session_id: str = Query(alias="sessionId")):
+    try:
+        if not notes.delete(_notes_dir(session_id), note_id):
+            raise HTTPException(404, "no such note")
+    except tools.ToolError as exc:
+        raise HTTPException(500, str(exc)) from exc
+    return {"ok": True}

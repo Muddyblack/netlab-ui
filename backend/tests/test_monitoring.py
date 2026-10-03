@@ -90,6 +90,49 @@ def test_enabling_from_the_api_installs_the_plugin_and_edits_the_topology(tmp_pa
     assert not res.json()["enabled"] and "monitoring" not in path.read_text()
 
 
+def test_logs_and_alert_targets_are_set_without_leaving_empty_sections():
+    attrs = {"plugin": ["monitoring"]}
+    assert not monitoring.logs_enabled(attrs) and monitoring.notify_targets(attrs)["webhook"] == ""
+    monitoring.set_options(attrs, logs=True, webhook="https://example.org/hook", slack="https://hooks.slack.com/x")
+    assert attrs["monitoring"] == {
+        "logs": {"enabled": True},
+        "alerts": {"notify": {"webhook": "https://example.org/hook", "slack": "https://hooks.slack.com/x"}},
+    }
+    assert monitoring.logs_enabled(attrs) and monitoring.notify_targets(attrs)["slack"].endswith("/x")
+    # None leaves a setting alone; an empty address removes just that target.
+    monitoring.set_options(attrs, slack="")
+    assert monitoring.notify_targets(attrs) == {"webhook": "https://example.org/hook", "slack": "", "email": False}
+    monitoring.set_options(attrs, logs=False, webhook="")
+    assert "monitoring" not in attrs
+    # The placement set earlier, and an email target written in the topology, are not disturbed.
+    attrs = {"monitoring": {"placement": "node", "alerts": {"notify": {"email": {"to": "a@b"}}}}}
+    monitoring.set_options(attrs, logs=True, webhook="http://x/hook")
+    assert attrs["monitoring"]["placement"] == "node" and monitoring.notify_targets(attrs)["email"] is True
+    # netlab's dotted spelling is understood and migrated
+    attrs = {"monitoring.logs.enabled": True}
+    assert monitoring.logs_enabled(attrs)
+    monitoring.set_options(attrs, logs=False)
+    assert attrs == {}
+
+
+def test_options_from_the_api_validate_and_persist(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    path = tmp_path / "topology.yml"
+    path.write_text("name: t\nnodes: [r1]\n")
+    sid = store.create(str(path)).id
+    client = TestClient(app)
+    body = {"sessionId": sid, "enabled": True, "logs": True, "webhook": "https://example.org/hook"}
+    res = client.put("/api/lab/monitoring", json=body)
+    assert res.status_code == 200 and res.json()["logs"] is True and res.json()["webhook"].endswith("/hook")
+    assert "enabled: true" in path.read_text() and "webhook: https://example.org/hook" in path.read_text()
+    assert client.get("/api/lab/monitoring", params={"sessionId": sid}).json()["logs"] is True
+    # A later toggle of something else keeps them.
+    res = client.put("/api/lab/monitoring", json={"sessionId": sid, "enabled": True, "placement": "node"})
+    assert res.json()["logs"] is True and res.json()["webhook"]
+    bad = client.put("/api/lab/monitoring", json={"sessionId": sid, "enabled": True, "webhook": "ftp://nope"})
+    assert bad.status_code == 422 and "http(s)" in bad.json()["detail"]
+
+
 def test_query_and_summary_use_the_labs_metrics_store(tmp_path, monkeypatch):
     mon = tmp_path / "monitoring"
     mon.mkdir()

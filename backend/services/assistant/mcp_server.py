@@ -3,7 +3,7 @@
 This is the *only* module that knows about the MCP protocol; every tool body
 lives in :mod:`.tools`. It is mounted into the existing FastAPI app (see
 ``app.main``) rather than run as a separate process, so there is one port, one
-lifecycle, for any agent the user points at it (Claude Code, Codex, Gemini CLI,
+lifecycle, for any agent the user points at it (Claude Code, Codex, Copilot,
 Cursor, …).
 
 Access is gated on a bearer token (:func:`services.assistant.config.mcp_token`)
@@ -26,7 +26,7 @@ from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from services.assistant import guide, tools
+from services.assistant import guide, notes, tools
 from services.assistant.config import MCP_MOUNT_PATH, MCP_SERVER_NAME, mcp_token
 
 logger = logging.getLogger(__name__)
@@ -39,6 +39,8 @@ uses the lab the user has open. `list_labs` shows the open labs. Start with `get
 (nodes, addresses, links) and `get_lab_status`; read the actual lab instead of \
 guessing. `run_show_command` runs one read-only command on many nodes at once. Answers \
 are concise by default; pass `detail: "full"` where offered only when you need more. \
+`read_lab_notes` has what earlier sessions (possibly other agents) learned about the lab: read it \
+first, and `save_lab_note` what a later session should know (decisions, gotchas, not live state). \
 `write_workspace_file` writes files in the lab's directory immediately, without review.
 
 Changes to an open topology go through `propose_topology_edit`: the user reviews the \
@@ -79,7 +81,12 @@ Lab monitoring (the netlab `monitoring` plugin): `get_monitoring` gives the heal
 against the topology (what the topology defines but is not up) and the Grafana \
 dashboards; `query_metrics` (now) and `query_metrics_range` (over time, or over a fault \
 test run) run PromQL on the `netlab_*` metrics (labels: lab, node, ifname, link, \
-peer_node). `ui_show_grafana` puts a dashboard link on the user's screen.
+peer_node). `ui_show_grafana` puts a dashboard link on the user's screen. For the \
+user's own views: `list_metrics` (what exists), test the PromQL with `query_metrics`, \
+then `create_dashboard` (YAML spec, appears in Grafana's "My dashboards") or \
+`create_alert_rules` (Prometheus rule file, evaluated by vmalert). Always filter \
+dashboard queries on `lab="$lab"`. When the lab has logs enabled, `query_logs` searches \
+them (LogQL, labels lab/node/severity/source): use it to explain a flap the metrics show.
 
 Fault tests flap links on a schedule and measure reaction and recovery; they can also run \
 the lab's own `netlab validate` tests while the link is down and after it recovers, and \
@@ -148,7 +155,8 @@ _TOOLS: tuple[tuple[Callable[..., Awaitable[Any]], ToolAnnotations, str], ...] =
         tools.run_show_command,
         _RUN,
         "Run a read-only command (show …, ping, traceroute, ip …) on running nodes in parallel; nodes omitted = "
-        "all. Identical answers are merged. Writes and config changes are rejected.",
+        "all. `nodes` takes names or patterns (r1-r3, r[1-3,5], leaf*, h#, a regex), handy in big labs. "
+        "Identical answers are merged. Writes and config changes are rejected.",
     ),
     (
         tools.get_config_changes,
@@ -221,6 +229,31 @@ _TOOLS: tuple[tuple[Callable[..., Awaitable[Any]], ToolAnnotations, str], ...] =
         "E.g. 'sum(netlab_ospf_neighbor_up)', 'increase(netlab_ospf_spf_runs_total[1m])'.",
     ),
     (
+        guide.query_logs,
+        _READ,
+        "Search the lab's logs (docker logs of the nodes and syslog from devices; needs monitoring.logs.enabled). "
+        'LogQL, e.g. \'{node="r1"} |= "Hold Timer"\' or \'{lab="demo",severity="err"}\'; newest first, last N minutes.',
+    ),
+    (
+        guide.list_metrics,
+        _READ,
+        "The metrics the lab exports (name, type, meaning) and the labels to slice by. Call it before writing a "
+        "dashboard or alert; without a search it also returns the dashboard spec format and an alert example.",
+    ),
+    (
+        guide.create_dashboard,
+        _WRITE,
+        "Add a Grafana dashboard to the lab's 'My dashboards' folder from a short YAML spec (title, rows of "
+        "stat/timeseries/table panels with PromQL). Check queries with query_metrics first. Validated; appears "
+        "in Grafana within ~10 seconds. The built-in dashboards are read-only.",
+    ),
+    (
+        guide.create_alert_rules,
+        _WRITE,
+        "Add alert or recording rules (Prometheus rule-file YAML) to the lab; vmalert evaluates them and "
+        "firing alerts become the ALERTS metric. Validated, live within ~10 seconds.",
+    ),
+    (
         guide.list_fault_tests,
         _READ,
         "The lab's fault tests (monitoring.faults) with their last verdict, its netlab validation tests, the "
@@ -271,6 +304,24 @@ _TOOLS: tuple[tuple[Callable[..., Awaitable[Any]], ToolAnnotations, str], ...] =
         _UI,
         "Fill in a fault test (flap a link: cycles, seconds down/up) in the Monitoring dialog for the user "
         "to review and start. Nothing runs until the user presses Run.",
+    ),
+    (
+        notes.read_lab_notes,
+        _READ,
+        "Notes agents saved about this lab in earlier sessions (decisions, gotchas, what was tried). "
+        "Read them at the start of a session; they are hints with dates, so verify against the live lab.",
+    ),
+    (
+        notes.save_lab_note,
+        _UI,
+        "Save one lasting fact for later sessions, any agent: a decision and why, a gotcha, a fix that worked. "
+        "Not live state (what is up, counters): that is read from the lab. Pass your own name as `agent`; "
+        "`note_id` replaces an existing note instead of adding one. Keep the notes short and current.",
+    ),
+    (
+        notes.delete_lab_note,
+        _UI,
+        "Delete a lab note that turned out wrong or is no longer true.",
     ),
     (
         tools.netlab_show,

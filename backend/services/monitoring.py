@@ -113,6 +113,72 @@ def set_enabled(attrs: dict[str, Any], on: bool, where: str | None = None) -> No
             attrs.pop("monitoring", None)
 
 
+def _section(attrs: dict[str, Any], *path: str) -> Any:
+    """``attrs['monitoring'][path...]``, also reading netlab's dotted-key spelling of the same."""
+    node: Any = attrs.get("monitoring")
+    for key in path:
+        node = node.get(key) if isinstance(node, dict) else None
+    return node if node is not None else attrs.get(".".join(("monitoring", *path)))
+
+
+def logs_enabled(attrs: dict[str, Any]) -> bool:
+    return bool(_section(attrs, "logs", "enabled"))
+
+
+def notify_targets(attrs: dict[str, Any]) -> dict[str, Any]:
+    """Where firing alerts are sent: ``webhook`` and ``slack`` URLs (empty when unset), and
+    whether an ``email`` target exists (edited in the topology, not in the UI)."""
+    notify = _section(attrs, "alerts", "notify")
+    notify = notify if isinstance(notify, dict) else {}
+    return {
+        "webhook": str(notify.get("webhook") or ""),
+        "slack": str(notify.get("slack") or ""),
+        "email": bool(notify.get("email")),
+    }
+
+
+def set_options(
+    attrs: dict[str, Any], logs: bool | None = None, webhook: str | None = None, slack: str | None = None
+) -> None:
+    """Set the opt-in parts of the stack. ``None`` leaves a setting as it is; an empty URL removes it."""
+    for name, url in (("webhook", webhook), ("slack", slack)):
+        if url and not url.startswith(("http://", "https://")):
+            raise ValueError(f"the {name} address must be an http(s) URL")
+    cfg = attrs.get("monitoring") if isinstance(attrs.get("monitoring"), dict) else {}
+    if logs is not None:
+        attrs.pop("monitoring.logs.enabled", None)
+        section = cfg.get("logs") if isinstance(cfg.get("logs"), dict) else {}
+        if logs:
+            section["enabled"] = True
+        else:
+            section.pop("enabled", None)
+        cfg["logs"] = section
+    if webhook is not None or slack is not None:
+        attrs.pop("monitoring.alerts.notify", None)
+        alerts = cfg.get("alerts") if isinstance(cfg.get("alerts"), dict) else {}
+        notify = alerts.get("notify") if isinstance(alerts.get("notify"), dict) else {}
+        for name, url in (("webhook", webhook), ("slack", slack)):
+            if url is None:
+                continue
+            if url:
+                notify[name] = url
+            else:
+                notify.pop(name, None)
+        alerts["notify"] = notify
+        cfg["alerts"] = alerts
+    # Leave no empty containers behind in the user's topology file.
+    if not cfg.get("logs"):
+        cfg.pop("logs", None)
+    if not (cfg.get("alerts") or {}).get("notify"):
+        (cfg.get("alerts") or {}).pop("notify", None)
+    if not cfg.get("alerts"):
+        cfg.pop("alerts", None)
+    if cfg:
+        attrs["monitoring"] = cfg
+    else:
+        attrs.pop("monitoring", None)
+
+
 # ------------------------------------------------------------------ running stack
 
 
@@ -221,6 +287,33 @@ async def query(lab_dir: Path, promql: str) -> list[dict[str, Any]]:
         for item in result
         if isinstance(item, dict) and isinstance(item.get("value"), list)
     ]
+
+
+async def query_logs(lab_dir: Path, logql: str, minutes: float = 15, limit: int = 100) -> list[dict[str, Any]]:
+    """LogQL query against the lab's log store (newest first). Needs ``monitoring.logs.enabled``."""
+    loki = str(stack(lab_dir).get("loki_url") or "")
+    if not loki.startswith(("http://", "https://")):
+        raise RuntimeError("logs are not enabled for this lab (monitoring.logs.enabled: true)")
+    now = time.time()
+    params = {
+        "query": logql,
+        "limit": max(1, min(int(limit), 500)),
+        "start": int((now - minutes * 60) * 1e9),
+        "end": int(now * 1e9),
+        "direction": "backward",
+    }
+    try:
+        data = await asyncio.to_thread(_http_json, f"{loki}/loki/api/v1/query_range?{urllib.parse.urlencode(params)}")
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        raise RuntimeError(f"log store not reachable: {exc}") from exc
+    if not isinstance(data, dict) or data.get("status") != "success":
+        raise RuntimeError(str((data or {}).get("message") or "query failed"))
+    lines = [
+        {"time": float(ts) / 1e9, "node": (s.get("stream") or {}).get("node", ""), "line": line}
+        for s in (data.get("data") or {}).get("result") or []
+        for ts, line in s.get("values") or []
+    ]
+    return sorted(lines, key=lambda x: -x["time"])[: params["limit"]]
 
 
 async def query_range(lab_dir: Path, promql: str, start: float, end: float, step: float) -> list[dict[str, Any]]:

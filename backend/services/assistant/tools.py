@@ -23,6 +23,7 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+from services import nodeset
 from services.assistant import exec_tool, proposals
 from services.assistant.config import MAX_FILE_BYTES, MAX_OUTPUT_BYTES
 from services.netlab import runner
@@ -317,6 +318,27 @@ async def run_fcli_report(report: str, lab: str | None = None) -> str:
     return _untrusted(_cap(result.stdout))
 
 
+def _expand_nodes(requested: list[str], running: dict[str, Any]) -> list[str]:
+    """Names stay as they are; patterns (r1-r3, r[1-3,5], leaf*, h#, a regex) expand over the running nodes."""
+    known = sorted(running)
+    result: list[str] = []
+    for item in requested:
+        if item in running:
+            result.append(item)
+            continue
+        try:
+            matched = nodeset.select(item, known)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        if matched is None:
+            result.append(item)  # an unknown name: reported with the list of running nodes below
+        elif not matched:
+            raise ToolError(f"{item!r} matches none of the running nodes: {', '.join(known)}")
+        else:
+            result.extend(matched)
+    return list(dict.fromkeys(result))
+
+
 async def run_show_command(command: str, nodes: list[str] | None = None, lab: str | None = None) -> str:
     """Run a read-only command (show …, ping, traceroute, ip …) on running nodes,
     all of them in parallel. ``nodes`` defaults to every running node; nodes that
@@ -331,7 +353,7 @@ async def run_show_command(command: str, nodes: list[str] | None = None, lab: st
         raise ToolError(
             f"lab {_lab_name(session)!r} is not deployed — deploy it first (the user does that in netlab-ui)"
         )
-    targets = list(nodes) if nodes else sorted(running)
+    targets = _expand_nodes(nodes, running) if nodes else sorted(running)
     unknown = [n for n in targets if n not in running]
     if unknown:
         raise ToolError(f"not running in this lab: {', '.join(unknown)}; running nodes: {', '.join(sorted(running))}")

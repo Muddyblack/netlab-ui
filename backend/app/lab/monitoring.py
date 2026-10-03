@@ -43,6 +43,11 @@ class MonitoringState(BaseModel):
     pluginPath: str
     enabled: bool
     placement: Literal["tool", "node"] = "tool"
+    logs: bool = False
+    webhook: str = ""
+    slack: str = ""
+    # An email alert target exists in the topology (edited there, not in the UI).
+    email: bool = False
     labDeployed: bool
     rendered: bool
     running: dict[str, bool] = {}
@@ -57,6 +62,10 @@ class MonitoringToggle(BaseModel):
     sessionId: str
     enabled: bool
     placement: Literal["tool", "node"] | None = None
+    # Opt-in parts of the stack; left as they are when omitted, an empty address removes a target.
+    logs: bool | None = None
+    webhook: str | None = None
+    slack: str | None = None
 
 
 class MissingItem(BaseModel):
@@ -112,6 +121,8 @@ async def _state(path: str) -> MonitoringState:
         pluginPath=plugin["path"],
         enabled=monitoring.enabled(topo.attrs),
         placement=monitoring.placement(topo.attrs),
+        logs=monitoring.logs_enabled(topo.attrs),
+        **monitoring.notify_targets(topo.attrs),
         labDeployed=tools.is_deployed(lab_dir),
         rendered=bool(info),
         running=running,
@@ -141,7 +152,11 @@ async def toggle_monitoring(body: MonitoringToggle):
         except (OSError, RuntimeError) as exc:
             raise HTTPException(409, f"Cannot install the monitoring plugin: {exc}") from exc
     topo = commands.load_topology(session.topology_path)
-    monitoring.set_enabled(topo.attrs, body.enabled, body.placement)
+    try:
+        monitoring.set_enabled(topo.attrs, body.enabled, body.placement)
+        monitoring.set_options(topo.attrs, body.logs, body.webhook, body.slack)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     with session.host.transaction():
         commands.save_topology(session.topology_path, topo)
     return await _state(session.topology_path)

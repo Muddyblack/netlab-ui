@@ -5,7 +5,8 @@
 | Keys | Opens |
 |---|---|
 | **Ctrl+P** | everything: labs, nodes, actions, and search inside the lab. Context actions (run on nodes, live traffic, running configs) come first while a lab runs. |
-| **Ctrl+`** | Run command on nodes (canvas selection preselected) |
+| **Ctrl+`** (the key can be changed in Settings → General, e.g. for a German layout) | Show or hide the bottom panel; with nothing open in it, start a terminal |
+| **Ctrl+Shift+`** (same key as above) | Another terminal: your normal shell in the lab's folder (on your host when netlab-ui runs in a container). The **+** in the panel does the same. |
 | **Ctrl+I** | AI agents panel (connect your agent over MCP, review its proposals) |
 
 ## Run a command on many nodes
@@ -19,6 +20,13 @@ mix of nodes, groups and `all`, in parallel:
   (`netlab exec`; pipes work); Linux hosts always get the shell. **Shell** /
   **Show** force one.
 - Nodes selected on the canvas are preselected; `all` means the running nodes.
+- **Patterns, for labs too big to click through.** Type into *Run on* and press Enter: `r1-r3` or `r1-3`
+  (a numeric range), `r[1-3,5]` (the list form shown on result cards), `leaf*` / `h?` / `pc#` (`*` any text,
+  `?` one character, `#` digits, as in the bulk-link dialog), `leaf01-leaf16` (zero-padded), or a regular
+  expression such as `(spine|border)-[ab]` (must match the whole name). Patterns can be mixed with names and
+  groups, a line under the field shows how many nodes they match, and the backend does the matching, so a range
+  over a hundred thousand nodes is one request. A name that exists always wins over reading it as a range. The
+  AI assistant's `run_show_command` takes the same patterns.
 - **Quick** chips offer your last commands plus the ones that fit this lab
   (`show ip ospf neighbor` only if it runs OSPF…). One click runs one;
   Shift-click puts it in the command box to edit first.

@@ -15,11 +15,14 @@ import asyncio
 import contextlib
 import json
 import os
+import time
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
+from app import auth
 from app.lab import common
+from services import host
 from services.netlab import runner
 from services.netlab import runtime as runtime_state
 
@@ -50,6 +53,62 @@ async def node_shell(websocket: WebSocket, node: str, sessionId: str):
         return
 
     await bridge_pty(websocket, argv, topology_path.parent)
+
+
+# Settings of netlab-ui itself that a terminal started from it must not inherit.
+_NOT_FOR_TERMINALS = ("NETLAB_UI_AUTH", "NETLAB_UI_AUTH_FILE", "NETLAB_APP_ASSISTANT_TOKEN")
+
+
+@router.websocket("/api/shell/local")
+async def local_shell(websocket: WebSocket, sessionId: str):
+    """A normal terminal in the lab's folder, as the user. In a container that can reach its host
+    (see services.host) it is the host's shell, not the container's, so it is the terminal the user
+    would open themselves. Same rule as agent terminals: only from this machine, unless there is a login."""
+    await websocket.accept()
+    if not auth.local_process_allowed(websocket.client.host if websocket.client else None):
+        await websocket.send_text(
+            "\r\n[terminals are only available from the netlab-ui machine itself unless a login is "
+            "configured (NETLAB_UI_AUTH)]\r\n"
+        )
+        await websocket.close()
+        return
+    try:
+        lab_dir = Path(common.session_path(sessionId)).parent
+    except HTTPException as exc:
+        await websocket.send_text(f"\r\n[unknown session: {exc.detail}]\r\n")
+        await websocket.close()
+        return
+    shell = await asyncio.to_thread(host.login_shell)
+    argv, env = host.wrap([shell, "-i"], {}, lab_dir)
+    # Native mode runs in this process's environment: do not hand the login to the terminal.
+    env = {**dict.fromkeys(_NOT_FOR_TERMINALS, ""), **env}
+    await bridge_pty(websocket, argv, lab_dir, env)
+
+
+_IMAGE_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+_MAX_IMAGE_BYTES = 20 * 1024 * 1024
+
+
+@router.post("/api/shell/paste-image")
+async def paste_image(request: Request, sessionId: str) -> dict[str, str]:
+    """Save an image pasted or dropped into a terminal in the lab's folder and return its path.
+    The agent CLIs read the *backend's* clipboard, which a browser paste never reaches, so the UI
+    uploads the image here and types the file's path into the terminal instead."""
+    if not auth.local_process_allowed(request.client.host if request.client else None):
+        raise HTTPException(
+            403, "terminals are only available from the netlab-ui machine itself unless a login is configured"
+        )
+    extension = _IMAGE_TYPES.get(request.headers.get("content-type", "").split(";")[0].strip().lower())
+    if extension is None:
+        raise HTTPException(415, "only png, jpeg, gif and webp images can be pasted")
+    data = await request.body()
+    if not data or len(data) > _MAX_IMAGE_BYTES:
+        raise HTTPException(413, "the image is empty or larger than 20 MB")
+    folder = Path(common.session_path(sessionId)).parent / ".pasted-images"
+    await asyncio.to_thread(folder.mkdir, parents=True, exist_ok=True)
+    target = folder / f"paste-{time.strftime('%Y%m%d-%H%M%S')}-{os.urandom(2).hex()}.{extension}"
+    await asyncio.to_thread(target.write_bytes, data)
+    return {"path": str(target)}
 
 
 async def bridge_pty(websocket: WebSocket, argv: list[str], cwd: Path, env: dict[str, str] | None = None) -> None:

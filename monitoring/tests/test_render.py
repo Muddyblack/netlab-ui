@@ -70,7 +70,7 @@ def test_dashboards_are_valid_and_use_canonical_metrics(topology):
 def test_node_placement_components(topology):
     cfg = dict(topology["monitoring"], placement="node")
     nodes = render.component_nodes(cfg, needs_gnmi=False, needs_snmp=False)
-    assert set(nodes) == {"mon-collector", "mon-tsdb", "mon-grafana"}
+    assert set(nodes) == {"mon-collector", "mon-tsdb", "mon-vmalert", "mon-grafana"}
     assert "/proc:/host/proc:ro" in nodes["mon-collector"]["binds"]
     topology["monitoring"]["placement"] = "node"
     files = render.render_all(
@@ -87,6 +87,7 @@ def test_stack_info_tells_tools_where_the_stack_is(topology):
     assert info["containers"] == {
         "collector": "lab3_mon_collector",
         "tsdb": "lab3_mon_tsdb",
+        "vmalert": "lab3_mon_vmalert",
         "grafana": "lab3_mon_grafana",
     }
     assert info["tsdb_url"] == "http://127.0.0.1:8428" and info["grafana_url"] == "http://127.0.0.1:3000"

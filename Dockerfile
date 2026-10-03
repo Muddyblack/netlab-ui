@@ -50,7 +50,7 @@ COPY backend/services ./services
 COPY monitoring/plugin/monitoring ./monitoring_plugin
 ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # The base install includes the MCP server that the user's own AI agent
-# (Claude Code, Codex, Gemini CLI, Cursor, …) connects to; it is served on the
+# (Claude Code, Codex, Copilot, Cursor, Kiro, …) connects to; it is served on the
 # same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.
 #
 # setuptools-scm has no .git here; the version comes from the build arg below.

@@ -96,6 +96,28 @@ def test_query_metrics_caps_the_answer(session, monkeypatch):
     assert len(result["series"]) == guide.MAX_SERIES and "truncated" in result
 
 
+def test_query_logs_needs_logs_to_be_enabled(session):
+    with pytest.raises(ToolError, match="logs are not enabled"):
+        asyncio.run(guide.query_logs())
+
+
+def test_query_logs_asks_loki_and_returns_newest_first(session, tmp_path, monkeypatch):
+    (tmp_path / "monitoring" / "stack.json").write_text(json.dumps({"loki_url": "http://127.0.0.1:3100"}))
+    asked = []
+
+    def fake_http(url, **_kw):
+        asked.append(url)
+        stream = {"stream": {"node": "r1"}, "values": [["1000000000", "old"], ["3000000000", "new"]]}
+        return {"status": "success", "data": {"result": [stream]}}
+
+    monkeypatch.setattr(monitoring, "_http_json", fake_http)
+    result = asyncio.run(guide.query_logs('{node="r1"}', minutes=5, limit=1))
+    assert [x["line"] for x in result["lines"]] == ["new"] and result["lines"][0]["node"] == "r1"
+    assert "/loki/api/v1/query_range?" in asked[0] and "limit=1" in asked[0] and "direction=backward" in asked[0]
+    default = asyncio.run(guide.query_logs())
+    assert default["query"].startswith('{lab="') and "not instructions" in default["note"]
+
+
 def test_get_monitoring_says_how_to_turn_it_on(session):
     result = asyncio.run(guide.get_monitoring())
     assert result["enabled"] is False and "setup" in result["hint"]
@@ -104,6 +126,51 @@ def test_get_monitoring_says_how_to_turn_it_on(session):
 def test_the_tools_are_on_the_mcp_server():
     names = set(mcp_server.tool_names())
     assert {"get_monitoring", "query_metrics", "ui_show_nodes", "ui_prepare_fault_test", "ui_run_action"} <= names
+    assert {"list_metrics", "create_dashboard", "create_alert_rules", "query_logs"} <= names
+
+
+SPEC = """\
+title: My BGP board
+rows:
+  - panels:
+      - {type: stat, title: Up, expr: 'sum(netlab_bgp_session_up{lab="$lab"})'}
+"""
+
+
+def test_list_metrics_gives_the_catalog_and_authoring_examples(session):
+    result = asyncio.run(guide.list_metrics())
+    names = {m["name"] for m in result["metrics"]}
+    assert "netlab_bgp_session_up" in names and "node" in result["labels"]
+    assert "dashboard_spec_example" in result and "alert_rules_example" in result
+    narrowed = asyncio.run(guide.list_metrics("ospf"))
+    assert narrowed["count"] and "dashboard_spec_example" not in narrowed
+
+
+def test_create_dashboard_writes_json_and_keeps_the_spec(session, tmp_path):
+    result = asyncio.run(guide.create_dashboard(SPEC))
+    assert result["ok"] and result["uid"] == "my-bgp-board"
+    folder = tmp_path / "monitoring" / "dashboards"
+    board = json.loads((folder / "my-bgp-board.json").read_text())
+    assert board["title"] == "My BGP board" and (folder / "my-bgp-board.spec.yml").read_text() == SPEC
+
+
+def test_create_dashboard_reports_a_bad_spec_without_writing(session, tmp_path):
+    with pytest.raises(ToolError, match="rows"):
+        asyncio.run(guide.create_dashboard("title: x\n"))
+    with pytest.raises(ToolError, match="not valid YAML"):
+        asyncio.run(guide.create_dashboard("a: ["))
+    assert not (tmp_path / "monitoring" / "dashboards").exists()
+
+
+def test_create_alert_rules_validates_then_writes(session, tmp_path):
+    rules = "groups:\n- name: g\n  rules:\n  - alert: NodeDown\n    expr: netlab_node_up == 0\n    for: 1m\n"
+    result = asyncio.run(guide.create_alert_rules("My Rules!", rules))
+    assert result["file"] == "monitoring/alerts/my-rules.yml" and "warnings" not in result
+    assert (tmp_path / "monitoring" / "alerts" / "my-rules.yml").read_text() == rules
+    with pytest.raises(ToolError, match="expr"):
+        asyncio.run(guide.create_alert_rules("bad", "groups:\n- name: g\n  rules:\n  - alert: A\n"))
+    typo = asyncio.run(guide.create_alert_rules("typo", rules.replace("netlab_node_up", "netlab_nope")))
+    assert any("netlab_nope" in w for w in typo["warnings"])
 
 
 FAULTS = """

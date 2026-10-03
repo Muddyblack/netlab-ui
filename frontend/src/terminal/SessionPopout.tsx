@@ -14,6 +14,7 @@ const Shell = lazy(() => import("./Shell").then((m) => ({ default: m.Shell })));
 const MultiExecPanel = lazy(() => import("./multi-exec/MultiExecPanel").then((m) => ({ default: m.MultiExecPanel })));
 const NodeLogsPanel = lazy(() => import("./NodeLogsPanel").then((m) => ({ default: m.NodeLogsPanel })));
 const AgentTerminal = lazy(() => import("../components/agents/AgentTerminal").then((m) => ({ default: m.AgentTerminal })));
+const LocalTerminal = lazy(() => import("./LocalTerminal").then((m) => ({ default: m.LocalTerminal })));
 
 /** Standalone page for a single shell or log stream, rendered when the app is
  * opened with ?popout=… — the "move to its own window" target of the session
@@ -23,6 +24,7 @@ export function SessionPopout({ kind, node, sessionId }: { kind: SessionKind; no
   useEffect(() => {
     if (kind === "multi") document.title = "Run on nodes";
     else if (kind === "agent") document.title = agentName(node);
+    else if (kind === "terminal") document.title = "Terminal";
     else document.title = `${kind === "shell" ? "Shell" : "Logs"} — ${node}`;
   }, [kind, node]);
 
@@ -42,7 +44,8 @@ export function SessionPopout({ kind, node, sessionId }: { kind: SessionKind; no
           {kind === "shell" && <Shell node={node} sessionId={sessionId} onClose={() => window.close()} />}
           {kind === "multi" && <MultiExecPanel sessionId={sessionId} />}
           {kind === "agent" && <AgentTerminal agentId={node} sessionId={sessionId} onClose={() => window.close()} />}
-          {kind !== "shell" && kind !== "multi" && kind !== "agent" && <NodeLogsPanel node={node} sessionId={sessionId} />}
+          {kind === "terminal" && <LocalTerminal sessionId={sessionId} onClose={() => window.close()} />}
+          {kind !== "shell" && kind !== "multi" && kind !== "agent" && kind !== "terminal" && <NodeLogsPanel node={node} sessionId={sessionId} />}
         </Suspense>
       </Box>
     </MuiThemeProvider>

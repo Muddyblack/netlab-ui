@@ -78,7 +78,7 @@ Screenshots and videos generated from the running app by [`run.sh`](run.sh). See
 <a href="#showcase-ai-agents">
 <img src="media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change, shown as a diff to apply or reject" />
 </a>
-<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
+<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
 </td>
 </tr>
 </table>
@@ -192,7 +192,7 @@ Screenshots and videos generated from the running app by [`run.sh`](run.sh). See
 </details>
 
 <details id="showcase-ai-agents">
-<summary><b>Bring your own AI agent</b> — Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.</summary>
+<summary><b>Bring your own AI agent</b> — Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.</summary>
 
 <img src="media/ai-agents/panel-dark.webp" alt="The AI agents panel: start Claude Code or Codex, or connect another tool" width="900" />
 

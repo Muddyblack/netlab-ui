@@ -44,6 +44,16 @@ def _parse_entry(entry: str) -> tuple[str, str]:
     return user, password
 
 
+def local_process_allowed(client_host: str | None) -> bool:
+    """May this client start a program on the machine the backend runs on (an agent, a terminal)?
+
+    That program runs as the user, with their files and logins. Without a login in front of
+    netlab-ui, only the same machine may ask: anyone else who can reach the port would get it."""
+    if configured_users():
+        return True
+    return client_host in {"127.0.0.1", "::1", "localhost"}
+
+
 def configured_users() -> dict[str, str]:
     """``{user: password}`` from NETLAB_UI_AUTH and NETLAB_UI_AUTH_FILE."""
     users: dict[str, str] = {}

@@ -56,14 +56,15 @@ if (typeof window !== "undefined") {
   }
 }
 
-// ?popout=shell|logs|multi|agent renders a single session in its own window instead of the
+// ?popout=shell|logs|multi|agent|terminal renders a single session in its own window instead of the
 // full app — the session dock's "move to its own window" target.
-function resolvePopout(): { kind: "shell" | "logs" | "multi" | "agent"; node: string; sessionId: string } | null {
+const POPOUT_KINDS = ["shell", "logs", "multi", "agent", "terminal"] as const;
+function resolvePopout(): { kind: (typeof POPOUT_KINDS)[number]; node: string; sessionId: string } | null {
   const params = new URLSearchParams(window.location.search);
-  const kind = params.get("popout");
+  const kind = POPOUT_KINDS.find((candidate) => candidate === params.get("popout"));
   const node = params.get("node");
   const sessionId = params.get("sessionId");
-  if ((kind !== "shell" && kind !== "logs" && kind !== "multi" && kind !== "agent") || !node || !sessionId) return null;
+  if (!kind || !node || !sessionId) return null;
   return { kind, node, sessionId };
 }
 
