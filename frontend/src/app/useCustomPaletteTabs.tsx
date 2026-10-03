@@ -20,6 +20,7 @@ interface UseCustomPaletteTabsOptions {
   sessionId: string | null;
   activeUnitPath: string | null;
   activeTabId: string | null;
+  activeLabRunning: boolean;
   multiserverEnabled: boolean;
   assistantCapabilities: AssistantCapabilities | null;
   assistantOpen: boolean;
@@ -39,6 +40,7 @@ export function useCustomPaletteTabs({
   sessionId,
   activeUnitPath,
   activeTabId,
+  activeLabRunning,
   multiserverEnabled,
   assistantCapabilities,
   assistantOpen,
@@ -67,7 +69,7 @@ export function useCustomPaletteTabs({
     tabs.push({
       id: "netlab-lenses",
       label: PANEL_TAB_LABELS.lenses,
-      render: () => <LensesPanel state={netlabLenses} validationIssues={validationIssues} onToast={addToast} onRerunDeployment={handleRerunDeployment} />
+      render: () => <LensesPanel state={netlabLenses} validationIssues={validationIssues} labRunning={activeLabRunning} onToast={addToast} onRerunDeployment={handleRerunDeployment} />
     });
     if (!DEMO_MODE) {
       tabs.push(
@@ -103,5 +105,5 @@ export function useCustomPaletteTabs({
       });
     }
     return tabs;
-  }, [sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal, closeAgentTerminal]);
+  }, [sessionId, activeUnitPath, activeTabId, activeLabRunning, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal, closeAgentTerminal]);
 }

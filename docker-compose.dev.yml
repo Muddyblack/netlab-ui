@@ -15,7 +15,9 @@
 
 services:
   netlab-ui:
-    command: ["uvicorn", "app.main:app", "--reload", "--reload-dir", "/app/app", "--reload-dir", "/app/services"]
+    # --timeout-graceful-shutdown: the UI keeps event streams open, and without a limit a reload waits for
+    # them forever ("Waiting for connections to close") and the backend stays down until the container is restarted.
+    command: ["uvicorn", "app.main:app", "--reload", "--reload-dir", "/app/app", "--reload-dir", "/app/services", "--timeout-graceful-shutdown", "2"]
     volumes:
       - ./backend/app:/app/app
       - ./backend/services:/app/services

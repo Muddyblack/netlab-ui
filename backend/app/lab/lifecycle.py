@@ -130,6 +130,7 @@ async def lab_up(body: LabAction, request: Request):
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
     if res.code == 0:
+        validation_store.clear(path)
         deploy_diff.record(path)
         owners.record(Path(path).parent, request_user(request), lab_limits.lease_expiry())
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
@@ -506,6 +507,9 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                     if tracker:
                         tracker.finish(int(line))
                         done_payload["progress"] = tracker.payload(delta=True)
+                    if body.action in {"up", "restart", "down"} and int(line) == 0:
+                        # Diagnostics of the previous run (or of a failed transform) are history now.
+                        validation_store.clear(path)
                     if body.action in {"up", "restart"} and int(line) == 0:
                         deploy_diff.record(path)
                         owners.record(Path(path).parent, user, lab_limits.lease_expiry())
@@ -621,6 +625,7 @@ async def lab_down(body: LabAction):
         raise HTTPException(503, str(exc)) from exc
     if res.code == 0:
         owners.forget(Path(path).parent)
+        validation_store.clear(path)
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
 
 

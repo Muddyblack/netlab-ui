@@ -1114,6 +1114,7 @@ export function useAppController() {
     sessionId,
     activeUnitPath,
     activeTabId,
+    activeLabRunning,
     multiserverEnabled,
     assistantCapabilities,
     assistantOpen,
