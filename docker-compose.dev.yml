@@ -40,14 +40,15 @@ services:
       - frontend-node-modules:/app/frontend/node_modules
       # Build output goes to a volume, not frontend/dist, so the host's own builds never fight over ownership.
       - frontend-dist:/dist-out
-    # Install only when the lockfile changed since the last install, then keep the built UI current and
+    # Install only when the lockfile or patches/ changed since the last install, then keep the built UI current and
     # start Vite.
     command:
       - sh
       - -c
       - |
-        if ! cmp -s package-lock.json node_modules/.installed-lock; then
-          npm ci --no-audit --no-fund && cp package-lock.json node_modules/.installed-lock
+        stamp=$$(cat package-lock.json patches/* | sha256sum)
+        if [ "$$stamp" != "$$(cat node_modules/.installed-stamp 2>/dev/null)" ]; then
+          npm ci --no-audit --no-fund && echo "$$stamp" > node_modules/.installed-stamp
         fi
         npm run build -- --watch --outDir /dist-out --emptyOutDir &
         exec npm run dev -- --host 127.0.0.1 --port 5173

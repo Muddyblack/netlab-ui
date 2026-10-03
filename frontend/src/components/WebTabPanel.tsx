@@ -52,6 +52,19 @@ function useRightPanelInset(panel: React.RefObject<HTMLElement | null>, active: 
   return inset;
 }
 
+/** Grafana's kiosk mode drops its own top bar and side menu but keeps the dashboard's variables,
+ * time range and links. Only inside this tab: "open in browser" still gets the full Grafana. */
+function embeddedUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.pathname.startsWith("/d/")) return url;
+    parsed.searchParams.set("kiosk", "");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 /** A web page (Grafana) filling the canvas area left of the right-hand panel. Its tab in the
  * tab bar has the open-in-browser and close buttons, so the page itself is left alone. */
 export function WebTabPanel({ tab, active }: { tab: OpenWebTab; active: boolean }): React.JSX.Element {
@@ -75,7 +88,7 @@ export function WebTabPanel({ tab, active }: { tab: OpenWebTab; active: boolean 
     >
       <iframe
         title={tab.title}
-        src={tab.url}
+        src={embeddedUrl(tab.url)}
         style={{ flex: 1, width: "100%", border: 0, background: "#fff" }}
       />
     </div>

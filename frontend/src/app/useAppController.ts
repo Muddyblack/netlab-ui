@@ -528,6 +528,26 @@ export function useAppController() {
     handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession
   } = useTabManager({ host, fetchFiles, addToast, runtimeRef });
 
+  // A web tab (Grafana) wants the full width: fold clab-ui's side panel away
+  // while one is shown, and reopen it on the way back if it was folded here.
+  // clab-ui owns the panel's state, so this goes through its own toggle.
+  const webTabShown = Boolean(activeWebTab);
+  const panelFoldedForWebTabRef = useRef(false);
+  useEffect(() => {
+    const toggle = document.querySelector<HTMLElement>("[data-testid='panel-toggle-btn']");
+    const paper = document.querySelector<HTMLElement>("[data-testid='context-panel'] .MuiDrawer-paper");
+    const open = paper ? getComputedStyle(paper).visibility !== "hidden" : false;
+    if (webTabShown) {
+      if (open && toggle) {
+        toggle.click();
+        panelFoldedForWebTabRef.current = true;
+      }
+    } else if (panelFoldedForWebTabRef.current) {
+      panelFoldedForWebTabRef.current = false;
+      if (!open) toggle?.click();
+    }
+  }, [webTabShown]);
+
   // ── Session dock (node shells + log streams) ────────────────────────────────
   const sessionDock = useSessionDock(sessionId);
   const terminalShortcut = useTerminalShortcut();

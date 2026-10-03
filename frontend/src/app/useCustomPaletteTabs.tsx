@@ -11,7 +11,6 @@ import { WorkersPanel } from "../panels/Workers";
 import { AgentsPanel } from "../components/agents/AgentsPanel";
 import { pendingProposals, useProposals } from "../components/agents/proposalsStore";
 import { MonitoringPanel } from "../components/dialogs/MonitoringDialog";
-import { useMonitoringEnabled } from "../hooks/useMonitoringEnabled";
 import { LensesPanel } from "../components/lenses/LensesPanel";
 
 type Toast = (message: string, severity?: "info" | "success" | "warning" | "error") => void;
@@ -51,7 +50,6 @@ export function useCustomPaletteTabs({
   openAgentTerminal,
   closeAgentTerminal,
 }: UseCustomPaletteTabsOptions): CustomPaletteTab[] {
-  const monitoring = useMonitoringEnabled(sessionId);
   const waiting = pendingProposals(useProposals().proposals).length;
   return useMemo<CustomPaletteTab[]>(() => {
     if (!sessionId) return [];
@@ -76,7 +74,9 @@ export function useCustomPaletteTabs({
         { id: "netlab-plugins", label: "Plugins", render: () => <PluginsPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> }
       );
     }
-    if (monitoring && !DEMO_MODE) {
+    // Always present (the panel has its own on/off switch): a tab that comes and goes with an async
+    // "is it on" check makes the strip jump to another tab whenever the check is pending.
+    if (!DEMO_MODE) {
       tabs.push({ id: "netlab-monitoring", label: "Monitoring", render: () => <MonitoringPanel sessionId={sessionId} /> });
     }
     if (multiserverEnabled) {
@@ -102,5 +102,5 @@ export function useCustomPaletteTabs({
       });
     }
     return tabs;
-  }, [monitoring, sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal, closeAgentTerminal]);
+  }, [sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal, closeAgentTerminal]);
 }
