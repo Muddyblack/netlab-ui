@@ -100,15 +100,24 @@ def test_stack_info_tells_tools_where_the_stack_is(topology):
     assert info["tsdb_url"] == "http://10.0.0.6:8428" and info["grafana_url"] == "http://10.0.0.7:3000"
 
 
-def test_dashboard_markers_are_toggles(topology):
+def test_dashboard_markers_are_picked_in_one_dropdown(topology):
     files = rendered(topology)
     routing = json.loads(files["grafana/dashboards/netlab-routing.json"])
+    # every marker is always enabled and hidden from the controls bar; the Markers dropdown picks them
     markers = {a["name"]: a for a in routing["annotations"]["list"]}
-    assert markers["🟧 Link outages"]["enable"] and markers["🟪 Fault tests"]["enable"]
-    # device-timestamp markers are opt-in, follow the node filter and sit at the device's time
-    for name in ("🟦 SPF runs", "🟥 Neighbor changes"):
-        assert markers[name]["enable"] is False and markers[name]["useValueForTime"]
+    assert all(a["enable"] and a["hide"] for a in markers.values())
+    dropdown = next(v for v in routing["templating"]["list"] if v["name"] == "markers")
+    assert {o["value"]: o["selected"] for o in dropdown["options"]} == {
+        "link": True,
+        "scenario": True,
+        "spf": False,
+        "neighbor": False,
+    }
+    # device-timestamp markers follow the node filter, sit at the device's time and only show while picked
+    for name, kind in (("🟦 SPF runs", "spf"), ("🟥 Neighbor changes", "neighbor")):
+        assert markers[name]["useValueForTime"]
         assert 'node=~"$node"' in markers[name]["expr"]
+        assert f".*{kind}.*" in markers[name]["expr"] and "${markers:csv}" in markers[name]["expr"]
     overview = json.loads(files["grafana/dashboards/netlab-overview.json"])
     spf = next(a for a in overview["annotations"]["list"] if a["name"] == "🟦 SPF runs")
     assert "$node" not in spf["expr"]  # the overview has no node variable

@@ -1,0 +1,205 @@
+# Routing and convergence: flaps, neighbor states, BGP per peer, SPF, VXLAN.
+#
+# A built-in dashboard in the same format as the dashboards users write (see spec.py): rows of
+# panels with plain queries. `@NAME@` is a macro from `macros`. Queries use netlab_* metrics and
+# netlab labels only, so one board serves FRR, gNMI, SNMP and host-only nodes alike.
+---
+uid: netlab-routing
+title: netlab / Routing & convergence
+description: 'Control-plane churn: SPF runs, adjacency and session changes, convergence indicators'
+node_variable: true
+macros:
+  MISSING_BGP: netlab_expected_bgp_session{lab="$lab"} unless on(lab,node,peer,vrf) (netlab_bgp_session_up{lab="$lab"} == 1)
+  MISSING_VXLAN: netlab_expected_vxlan_vni{lab="$lab"} unless on(lab,node,vni) (netlab_vxlan_vni_up{lab="$lab"} == 1)
+  MISSING_OSPF: netlab_expected_ospf_adjacency{lab="$lab"} unless on(lab,node,peer_node,ifname) (netlab_ospf_neighbor_up{lab="$lab"} == 1)
+  MISSING_ISIS: netlab_expected_isis_adjacency{lab="$lab"} unless on(lab,node,peer_node,ifname) (netlab_isis_adjacency_up{lab="$lab"} == 1)
+rows:
+
+  - title: Convergence indicators
+    panels:
+      - type: timeseries
+        title: Not up vs topology
+        description: Drops back to zero when the lab has converged; the width of a bump is the convergence time
+        queries:
+          - expr: count(@MISSING_BGP@) or vector(0)
+            legend: BGP sessions missing
+          - expr: count(@MISSING_OSPF@) or vector(0)
+            legend: OSPF adjacencies missing
+          - expr: count(@MISSING_ISIS@) or vector(0)
+            legend: IS-IS adjacencies missing
+          - expr: count(@MISSING_VXLAN@) or vector(0)
+            legend: VXLAN VNIs missing
+        width: 12
+        height: 8
+      - type: timeseries
+        title: Control-plane events per minute
+        queries:
+          - expr: sum(increase(netlab_ospf_spf_runs_total{lab="$lab",node=~"$node"}[1m]))
+            legend: OSPF SPF runs
+          - expr: sum(increase(netlab_isis_spf_runs_total{lab="$lab",node=~"$node"}[1m]))
+            legend: IS-IS SPF runs
+          - expr: sum(increase(netlab_ospf_neighbor_changes_total{lab="$lab",node=~"$node"}[1m]))
+            legend: OSPF neighbor changes
+          - expr: sum(increase(netlab_isis_adjacency_changes_total{lab="$lab",node=~"$node"}[1m]))
+            legend: IS-IS adjacency changes
+          - expr: sum(increase(netlab_bgp_session_dropped_total{lab="$lab",node=~"$node"}[1m]))
+            legend: BGP session drops
+        width: 12
+        height: 8
+      - type: timeseries
+        title: Session and adjacency changes per router (5 min)
+        description: 'Flaps: routers whose adjacencies, sessions or links changed. Repeated bumps on one router = unstable link'
+        expr: sum by (node) (increase(netlab_ospf_neighbor_changes_total{lab="$lab",node=~"$node"}[5m]) or increase(netlab_isis_adjacency_changes_total{lab="$lab",node=~"$node"}[5m]) or increase(netlab_bgp_session_dropped_total{lab="$lab",node=~"$node"}[5m]) or increase(netlab_if_carrier_changes_total{lab="$lab",node=~"$node",link!="mgmt"}[5m])) > 0
+        legend: '{{node}}'
+        legend_mode: table
+        width: 12
+        height: 8
+      - type: timeseries
+        title: OSPF neighbor states
+        description: All neighbors settle in Full (2-Way is normal between DROthers); time outside Full = convergence
+        queries:
+          - expr: count(netlab_ospf_neighbor_state{lab="$lab",node=~"$node"} == 8) or vector(0)
+            legend: Full
+          - expr: count(netlab_ospf_neighbor_state{lab="$lab",node=~"$node"} == 4) or vector(0)
+            legend: 2-Way
+          - expr: count(netlab_ospf_neighbor_state{lab="$lab",node=~"$node"} >= 5 < 8) or vector(0)
+            legend: ExStart/Exchange/Loading
+          - expr: count(netlab_ospf_neighbor_state{lab="$lab",node=~"$node"} <= 3) or vector(0)
+            legend: Down/Init
+        stack: true
+        width: 12
+        height: 8
+
+  - title: SPF
+    panels:
+      - type: timeseries
+        title: OSPF SPF runs per minute
+        expr: sum by (node) (increase(netlab_ospf_spf_runs_total{lab="$lab",node=~"$node"}[1m]))
+        legend: '{{node}}'
+        width: 12
+        height: 7
+      - type: timeseries
+        title: SPF duration
+        queries:
+          - expr: netlab_ospf_spf_last_duration_seconds{lab="$lab",node=~"$node"}
+            legend: OSPF {{node}}
+          - expr: netlab_isis_spf_last_duration_seconds{lab="$lab",node=~"$node"}
+            legend: IS-IS {{node}} L{{level}}
+        unit: s
+        width: 12
+        height: 7
+
+  - title: BGP
+    panels:
+      - type: table
+        title: BGP sessions
+        queries:
+          - netlab_bgp_session_state{lab="$lab",node=~"$node"}
+          - sum without (afi, safi) (netlab_bgp_prefixes_received{lab="$lab",node=~"$node"})
+          - netlab_bgp_session_dropped_total{lab="$lab",node=~"$node"}
+          - time() - netlab_bgp_session_last_change_timestamp_seconds{lab="$lab",node=~"$node"}
+        rename:
+          node: Node
+          peer: Peer
+          peer_node: Peer node
+          peer_as: Peer AS
+          vrf: VRF
+          type: Type
+          'Value #A': State
+          'Value #B': Prefixes in
+          'Value #C': Drops
+          'Value #D': Since last change
+        overrides:
+          - field: State
+            colors: bgp_state
+          - matcher:
+              id: byName
+              options: Since last change
+            properties:
+              - id: unit
+                value: s
+        width: 24
+        height: 8
+      - type: timeseries
+        title: BGP UPDATEs received per second
+        expr: sum by (node) (rate(netlab_bgp_updates_received_total{lab="$lab",node=~"$node"}[$__rate_interval]))
+        legend: '{{node}}'
+        width: 12
+        height: 7
+      - type: timeseries
+        title: Routes in RIB by protocol
+        expr: sum by (protocol) (netlab_routes{lab="$lab",node=~"$node",table="rib",afi="ipv4"})
+        legend: '{{protocol}}'
+        stack: true
+        width: 12
+        height: 7
+
+  - title: IGP adjacencies
+    panels:
+      - type: table
+        title: OSPF neighbors
+        queries:
+          - netlab_ospf_neighbor_state{lab="$lab",node=~"$node"}
+        rename:
+          node: Node
+          peer_node: Peer
+          peer_id: Router ID
+          ifname: Interface
+          peer_ifname: Peer interface
+          area: Area
+          Value: State
+        overrides:
+          - field: State
+            colors: ospf_state
+        width: 12
+        height: 8
+      - type: table
+        title: IS-IS adjacencies
+        queries:
+          - netlab_isis_adjacency_up{lab="$lab",node=~"$node"}
+        rename:
+          node: Node
+          peer_node: Peer
+          ifname: Interface
+          peer_ifname: Peer interface
+          area: Area
+          level: Level
+          Value: State
+          peer_id: System ID
+        overrides:
+          - field: State
+            colors: up_down
+        width: 12
+        height: 8
+
+  - title: VXLAN / EVPN
+    panels:
+      - type: table
+        title: VXLAN VNIs
+        queries:
+          - netlab_vxlan_vni_up{lab="$lab",node=~"$node"}
+          - netlab_vxlan_vni_macs{lab="$lab",node=~"$node"}
+          - netlab_vxlan_vni_neighbors{lab="$lab",node=~"$node"}
+          - netlab_vxlan_vni_remote_vteps{lab="$lab",node=~"$node"}
+        rename:
+          node: Node
+          vni: VNI
+          type: Type
+          vrf: VRF
+          vxlan_if: VXLAN interface
+          'Value #A': State
+          'Value #B': MACs
+          'Value #C': ARP/ND
+          'Value #D': Remote VTEPs
+        overrides:
+          - field: State
+            colors: up_down
+        width: 12
+        height: 8
+      - type: timeseries
+        title: MAC addresses per VNI
+        description: Learned or EVPN-advertised MACs, summed over the selected routers
+        expr: sum by (vni) (netlab_vxlan_vni_macs{lab="$lab",node=~"$node",type="l2"})
+        legend: VNI {{vni}}
+        width: 12
+        height: 8

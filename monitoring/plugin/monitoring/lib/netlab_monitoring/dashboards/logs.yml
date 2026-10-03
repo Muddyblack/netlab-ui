@@ -1,0 +1,28 @@
+# Device and container logs (Loki). Only built when `monitoring.logs.enabled` is set.
+#
+# A built-in dashboard in the same format as the dashboards users write (see spec.py): rows of
+# panels with plain queries. `@NAME@` is a macro from `macros`.
+---
+uid: netlab-logs
+title: netlab logs
+description: Container logs and syslog of the lab's nodes
+node_variable: true
+search_variable: true
+macros:
+  SELECTOR: '{lab="$lab",node=~"$node"} |~ "(?i)$search"'
+rows:
+  - panels:
+      - type: timeseries
+        title: Log volume
+        description: Lines per interval; spikes line up with flaps and config changes.
+        datasource: loki
+        expr: sum by (severity) (count_over_time(@SELECTOR@ [$__auto]))
+        legend: '{{severity}}'
+        stack: true
+        width: 24
+        height: 6
+      - type: logs
+        title: Logs
+        expr: '@SELECTOR@'
+        width: 24
+        height: 18

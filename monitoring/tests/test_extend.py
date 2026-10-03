@@ -35,6 +35,112 @@ def test_catalog_lists_every_collector_metric():
     assert [m["name"] for m in catalog.listing("ospf")] and all("ospf" in m["name"] for m in catalog.listing("ospf"))
 
 
+def test_builtin_boards_are_yaml_files_that_all_compile():
+    from pathlib import Path
+
+    from netlab_monitoring import dashboards
+
+    files = sorted(p.name for p in Path(dashboards.__file__).parent.glob("*.yml"))
+    registered = [*dashboards.BOARDS.values(), dashboards.LOGS_BOARD[1]]
+    assert files == sorted(registered), "every dashboard file must be registered in dashboards.BOARDS"
+    boards = dashboards.build({}, {"logs": {"enabled": True}})
+    assert set(boards) == {*dashboards.BOARDS, dashboards.LOGS_BOARD[0]}
+    assert set(dashboards.build({}, {})) == set(dashboards.BOARDS)  # logs only when turned on
+    for uid, board in boards.items():
+        assert board["uid"] == uid and board["tags"] == ["netlab"]
+        json.dumps(board)
+    # the built-in boards are held to the same rules as user boards: only known metrics, followed lab filter
+    for filename in registered:
+        board_spec = yaml.safe_load((Path(dashboards.__file__).parent / filename).read_text(encoding="utf-8"))
+        assert [w for w in spec.warnings(board_spec) if "unknown metric" in w] == [], filename
+
+
+def test_spec_macros_collapsed_rows_and_colored_cells():
+    board = spec.compile_spec(
+        {
+            "title": "Macros",
+            "macros": {"SEL": 'lab="$lab"'},
+            "rows": [
+                {
+                    "title": "Table",
+                    "panels": [
+                        {
+                            "type": "table",
+                            "title": "Sessions",
+                            "queries": ["netlab_bgp_session_up{@SEL@}"],
+                            "rename": {"node": "Node", "Value": "State"},
+                            "overrides": [{"field": "State", "colors": "up_down"}],
+                        }
+                    ],
+                },
+                {"title": "Folded", "collapsed": True, "panels": [{"type": "topology"}]},
+            ],
+        }
+    )
+    table = board["panels"][1]
+    assert table["targets"][0]["expr"] == '(netlab_bgp_session_up{lab="$lab"}) + 0'
+    assert table["fieldConfig"]["overrides"][0]["matcher"]["options"] == "State"
+    folded = board["panels"][2]
+    assert folded["collapsed"] and folded["panels"][0]["type"] == "nodeGraph"
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"rows": [{"panels": [{"type": "stat", "title": "x", "expr": "up{@NOPE@}"}]}]}, "unknown macro @NOPE@"),
+        (
+            {"rows": [{"title": "R", "collapsed": True, "panels": [{"title": "a", "expr": "x"}] * 2}]},
+            "exactly one panel",
+        ),
+        (
+            {
+                "rows": [
+                    {
+                        "panels": [
+                            {
+                                "type": "table",
+                                "title": "t",
+                                "queries": ["x"],
+                                "overrides": [{"field": "A", "colors": "?"}],
+                            }
+                        ]
+                    }
+                ]
+            },
+            "colors needs a field",
+        ),
+    ],
+)
+def test_spec_extension_errors_name_the_problem(change, message):
+    with pytest.raises(spec.SpecError, match=message):
+        spec.compile_spec({"title": "Bad", **change})
+
+
+def _board(**panel):
+    return {"title": "T", "rows": [{"panels": [{"type": "stat", "title": "x", "expr": "up", **panel}]}]}
+
+
+@pytest.mark.parametrize(
+    ("bad", "message"),
+    [
+        (_board(untis="bytes"), r"unknown option 'untis' \(did you mean 'unit'\?\)"),
+        (
+            {**_board(), "node_variabel": True},
+            r"the board: unknown option 'node_variabel' \(did you mean 'node_variable'",
+        ),
+        (
+            {"title": "T", "rows": [{"titel": "R", "panels": [{"title": "x", "expr": "up"}]}]},
+            "row 1: unknown option 'titel'",
+        ),
+        (_board(rename={"a": "b"}), r"\(stat\): unknown option 'rename'"),  # a table option on a stat
+        ({"title": "T", "rows": [{"panels": [{"title": "x", "queries": [{"expr": "up", "lenged": "a"}]}]}]}, "query 1"),
+    ],
+)
+def test_unknown_options_are_errors_not_silently_ignored(bad, message):
+    with pytest.raises(spec.SpecError, match=message):
+        spec.compile_spec(bad)
+
+
 def test_unknown_metrics_are_found():
     assert catalog.unknown_metrics('netlab_node_up{lab="x"} + netlab_nope') == ["netlab_nope"]
     assert catalog.unknown_metrics("rate(netlab_if_rx_bytes_total[1m])") == []
@@ -44,7 +150,14 @@ def test_spec_compiles_to_a_grafana_dashboard():
     board = spec.compile_spec(GOOD)
     assert board["uid"] == "bgp-at-a-glance" and board["tags"] == ["netlab", "user"]
     assert [p["type"] for p in board["panels"]] == ["row", "stat", "timeseries"]
-    assert {v["name"] for v in board["templating"]["list"]} == {"lab", "node"}
+    # the lab and node pickers, and the Markers dropdown with its hidden helper variables
+    assert {v["name"] for v in board["templating"]["list"]} == {
+        "lab",
+        "node",
+        "markers",
+        "marker_link",
+        "marker_scenario",
+    }
     json.dumps(board)  # serializable
     assert spec.warnings(GOOD) == []
 

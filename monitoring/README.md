@@ -165,6 +165,12 @@ Panel types are `stat`, `timeseries` and `table`; options are `unit`, `descripti
 the lab picker. The compiler rejects a broken spec with a message naming the panel, and warns
 about unknown `netlab_*` metrics.
 
+The built-in dashboards are written in this same format: `plugin/monitoring/lib/netlab_monitoring/dashboards/*.yml`
+(overview, routing, node detail, logs). Copy one as a starting point. Tables also take `rename`, `hide`
+and `overrides` (colour a state column with `{field: State, colors: up_down}`), a board takes `macros`
+(`NAME: text`, used as `@NAME@` in queries), and a row can be `collapsed`; the options are listed at the top of
+`spec.py`.
+
 **Alerts.** Put Prometheus-format rule files in `monitoring/alerts/*.yml`; [vmalert](https://docs.victoriametrics.com/victoriametrics/vmalert/)
 evaluates them together with the built-in rules (BGP sessions and OSPF/IS-IS adjacencies the topology
 defines but that are not up, node down, collector failing). Firing alerts are listed at
@@ -284,8 +290,8 @@ only with `monitoring.alerts.notify`; **Loki + Vector** only with `monitoring.lo
 |---|---|
 | What is collected from a device type | `defaults.yml` (profiles), then `collector/nlmon/` for new parsing |
 | A metric (name, type, help) | `collector/nlmon/metrics.py` `FAMILIES`: dashboards, alerts, `METRICS.md` and the assistant's `list_metrics` all read it |
-| A built-in dashboard | `lib/netlab_monitoring/dashboards/` one module per board; builders in `panels.py` |
-| User dashboards (YAML spec) | `lib/netlab_monitoring/spec.py` (same builders as the built-in boards) |
+| A built-in dashboard | `lib/netlab_monitoring/dashboards/*.yml`, one file per board, in the same format as your own (a new file is listed in `dashboards/__init__.py`); the renderer is `panels.py` |
+| User dashboards (YAML spec) | `lib/netlab_monitoring/spec.py` (compiles the format the built-in boards use) |
 | Alert rules, notification targets | `alerts.py`, `notify.py` |
 | Logs (Loki, Vector, syslog) | `logs.py` |
 | Which containers run, and how | `containers.py` (`up.sh` for placement `tool`, lab nodes for `node`); ports in `endpoints.py` |

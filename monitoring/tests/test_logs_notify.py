@@ -47,7 +47,14 @@ def test_logs_add_loki_vector_and_a_dashboard(topology):
     board = json.loads(files["grafana/dashboards/netlab-logs.json"])
     assert [p["type"] for p in board["panels"]] == ["timeseries", "logs"]
     assert all(p["datasource"]["uid"] == "netlab-logs" for p in board["panels"])
-    assert {v["name"] for v in board["templating"]["list"]} == {"lab", "node", "search"}
+    assert {v["name"] for v in board["templating"]["list"]} == {
+        "lab",
+        "node",
+        "search",
+        "markers",
+        "marker_link",
+        "marker_scenario",
+    }
     info = json.loads(files["stack.json"])
     assert info["syslog"] == "udp/1514" and info["dashboards"]["logs"] == "netlab-logs"
     assert info["containers"]["loki"] == "lab3_mon_loki"

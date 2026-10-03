@@ -5,20 +5,8 @@ from __future__ import annotations
 import typing
 
 DS = {"type": "prometheus", "uid": "netlab"}
+LOKI = {"type": "loki", "uid": "netlab-logs"}
 LAB = 'lab="$lab"'
-NODE = 'lab="$lab",node=~"$node"'
-
-# Expected-but-missing sessions: the topology says they should exist, they are not up.
-MISSING_BGP = f"netlab_expected_bgp_session{{{LAB}}} unless on(lab,node,peer,vrf) (netlab_bgp_session_up{{{LAB}}} == 1)"
-MISSING_VXLAN = f"netlab_expected_vxlan_vni{{{LAB}}} unless on(lab,node,vni) (netlab_vxlan_vni_up{{{LAB}}} == 1)"
-MISSING_OSPF = (
-    f"netlab_expected_ospf_adjacency{{{LAB}}} unless on(lab,node,peer_node,ifname) "
-    f"(netlab_ospf_neighbor_up{{{LAB}}} == 1)"
-)
-MISSING_ISIS = (
-    f"netlab_expected_isis_adjacency{{{LAB}}} unless on(lab,node,peer_node,ifname) "
-    f"(netlab_isis_adjacency_up{{{LAB}}} == 1)"
-)
 
 
 # The markers on the graphs: (value, label in the Markers dropdown, picked by default).
@@ -332,6 +320,36 @@ def table(
     }
 
 
+def logs_panel(title: str, expr: str) -> dict:
+    """The Loki log lines for a selector (the logs dashboard)."""
+    return {
+        "type": "logs",
+        "title": title,
+        "datasource": LOKI,
+        "targets": [{"expr": expr, "queryType": "range", "datasource": LOKI}],
+        "options": {
+            "showTime": True,
+            "wrapLogMessage": True,
+            "sortOrder": "Descending",
+            "enableLogDetails": True,
+            "dedupStrategy": "none",
+        },
+    }
+
+
+def use_loki(panel: dict) -> dict:
+    """Point a panel and its queries at Loki instead of the metrics store."""
+    panel["datasource"] = LOKI
+    for target in panel.get("targets", []):
+        target["datasource"] = LOKI
+    return panel
+
+
+def search_variable() -> dict:
+    """The free-text filter of the logs dashboard."""
+    return {"name": "search", "label": "Search", "type": "textbox", "query": "", "current": {"text": "", "value": ""}}
+
+
 def node_graph() -> dict:
     """The lab as a graph: nodes ringed green when up and red when down, links labelled with traffic."""
     nodes = (
@@ -440,6 +458,10 @@ OSPF_STATE = [
         },
     }
 ]
+
+
+# The value mappings a table column can be coloured with, by the name a dashboard file uses.
+MAPPINGS = {"up_down": UP_DOWN, "bgp_state": BGP_STATE, "ospf_state": OSPF_STATE}
 
 
 def color_cell(field: str, mappings: list) -> dict:
