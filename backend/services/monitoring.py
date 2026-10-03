@@ -53,6 +53,22 @@ def plugin_state() -> dict[str, Any]:
     return {"available": source is not None, "installed": installed, "managed": ours, "path": str(link)}
 
 
+def repair_plugin_link() -> bool:
+    """Re-point a dangling plugin link at this installation's copy.
+
+    ``~/.netlab`` is shared by everything that runs netlab as this user, e.g. the UI in a
+    container and the UI or CLI on the host, while the link target is a path of whichever
+    one made it. Left alone, the other one would fail every lab that lists the plugin
+    ("Cannot find plugin monitoring"), so each backend fixes the link when it starts. A link
+    that works, and a plugin directory the user put there, are left alone; nothing is created
+    for someone who never turned monitoring on."""
+    link = plugin_link()
+    if not link.is_symlink() or link.exists() or plugin_source() is None:
+        return False
+    install_plugin()
+    return True
+
+
 def install_plugin() -> dict[str, Any]:
     """Symlink the shipped plugin into ~/.netlab. A plugin directory the user put
     there themselves is left alone (it wins, like any user plugin)."""

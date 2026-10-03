@@ -46,6 +46,18 @@ def test_switching_off_takes_the_settings_out_of_the_topology_and_on_restores_th
     assert attrs["monitoring"] == {"interval": 5}
 
 
+def test_startup_repairs_only_a_dangling_plugin_link(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    link = tmp_path / ".netlab" / "monitoring"
+    assert monitoring.repair_plugin_link() is False and not link.exists()  # never turned on: nothing created
+
+    link.parent.mkdir()
+    link.symlink_to(tmp_path / "gone" / "monitoring")  # made by another environment
+    assert monitoring.repair_plugin_link() is True
+    assert (link / "__init__.py").is_file()
+    assert monitoring.repair_plugin_link() is False  # a working link is left alone
+
+
 def test_install_links_the_shipped_plugin_into_netlab_user_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     assert monitoring.plugin_source() is not None
