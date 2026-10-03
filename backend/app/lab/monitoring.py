@@ -16,10 +16,13 @@ from pydantic import BaseModel
 from app.contract import commands
 from app.lab import common
 from app.sessions.store import store
+from services import annotations as ann_store
 from services import fault_tests, monitoring, monitoring_scenarios
 from services.netlab import tools
 
 router = APIRouter()
+
+_SETTINGS_KEY = "monitoringSettings"
 
 
 class MonitoringNode(BaseModel):
@@ -152,13 +155,26 @@ async def toggle_monitoring(body: MonitoringToggle):
         except (OSError, RuntimeError) as exc:
             raise HTTPException(409, f"Cannot install the monitoring plugin: {exc}") from exc
     topo = commands.load_topology(session.topology_path)
+    # Settings of a lab with monitoring off wait in the sidecar: netlab rejects a
+    # `monitoring:` block in a topology that does not list the plugin.
+    sidecar = ann_store.load(session.topology_path)
     try:
-        monitoring.set_enabled(topo.attrs, body.enabled, body.placement)
-        monitoring.set_options(topo.attrs, body.logs, body.webhook, body.slack)
+        if body.enabled:
+            saved = sidecar.pop(_SETTINGS_KEY, None)
+            monitoring.set_enabled(topo.attrs, True, body.placement, restore=saved)
+            monitoring.set_options(topo.attrs, body.logs, body.webhook, body.slack)
+            changed = saved is not None
+        else:
+            stash = monitoring.set_enabled(topo.attrs, False)
+            if stash:
+                sidecar[_SETTINGS_KEY] = stash
+            changed = bool(stash)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     with session.host.transaction():
         commands.save_topology(session.topology_path, topo)
+    if changed:
+        ann_store.save(session.topology_path, sidecar)
     return await _state(session.topology_path)
 
 

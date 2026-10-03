@@ -1,11 +1,13 @@
 import { useEffect } from "react";
+import { PANEL_TAB_LABELS } from "../app/panelTabLabels";
 
 // Persist and restore clab-ui's right-hand panel tab (Nodes / Annotations /
 // Lenses / Groups / Plugins / Workers / Composer / AI agents) across reloads.
 //
-// A tab missing from PANEL_TAB_LABELS below is not merely un-remembered: the
-// observer restores the saved tab whenever the selection changes, so clicking
-// an unlisted tab snaps straight back. Add new panel tabs here.
+// Tabs are recognised by their label: clab-ui's own (below) plus the ones this
+// app adds, which come from PANEL_TAB_LABELS so they cannot drift apart. A tab
+// that is not recognised is not merely un-remembered: the observer restores the
+// saved tab whenever the selection changes, so clicking it snaps straight back.
 //
 // clab-ui owns that active tab in internal component state and exposes no prop
 // or callback for it, so there is no React seam to hook. We bridge it at the DOM
@@ -14,26 +16,23 @@ import { useEffect } from "react";
 // changes and the tabs aren't found, it simply does nothing.
 
 const STORAGE_KEY = "netlab-right-panel-tab";
-const PANEL_TAB_LABELS = new Set([
+const PANEL_TAB_LABEL_SET = new Set([
+  // clab-ui's own tabs
   "nodes",
   "annotations",
   "yaml",
   "annotation json",
   "json",
-  "lenses",
-  "groups",
-  "plugins",
-  "workers",
-  "composer",
-  "ai agents",
+  ...Object.values(PANEL_TAB_LABELS).map((label) => label.toLowerCase()),
 ]);
 
+/** The tab's text without a trailing live count, e.g. "AI agents (2)" -> "AI agents". */
 function tabLabel(element: Element | null): string {
-  return (element?.textContent ?? "").trim();
+  return (element?.textContent ?? "").trim().replace(/\s*\(\d+\)$/, "");
 }
 
 function isPanelTab(element: Element | null): boolean {
-  if (!PANEL_TAB_LABELS.has(tabLabel(element).toLowerCase())) return false;
+  if (!PANEL_TAB_LABEL_SET.has(tabLabel(element).toLowerCase())) return false;
   // clab-ui's palette lives in the main canvas chrome, never inside a modal.
   // Settings (and any other dialog) can have its own unrelated tab strip
   // that happens to share a label (e.g. "Assistant") — without this guard

@@ -89,8 +89,19 @@ def placement(attrs: dict[str, Any]) -> str:
     return value if value in PLACEMENTS else "tool"
 
 
-def set_enabled(attrs: dict[str, Any], on: bool, where: str | None = None) -> None:
-    """Add/remove the plugin in ``plugin:``; ``where`` sets ``monitoring.placement``."""
+def _settings_keys(attrs: dict[str, Any]) -> list[str]:
+    return [key for key in attrs if key == "monitoring" or key.startswith("monitoring.")]
+
+
+def set_enabled(
+    attrs: dict[str, Any], on: bool, where: str | None = None, restore: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Add/remove the plugin in ``plugin:``; ``where`` sets ``monitoring.placement``.
+
+    netlab only accepts the ``monitoring:`` settings while the plugin is listed (the plugin
+    registers the attribute), so switching it off takes them out of the topology and returns
+    them for the caller to keep; switching it on puts back what ``restore`` holds, unless the
+    topology already has settings of its own."""
     plugins = [p for p in _plugins(attrs) if p != PLUGIN]
     if on:
         plugins.append(PLUGIN)
@@ -98,6 +109,10 @@ def set_enabled(attrs: dict[str, Any], on: bool, where: str | None = None) -> No
         attrs["plugin"] = plugins
     else:
         attrs.pop("plugin", None)
+    if not on:
+        return {key: attrs.pop(key) for key in _settings_keys(attrs)}
+    if restore and not _settings_keys(attrs):
+        attrs.update(restore)
     if where is not None:
         if where not in PLACEMENTS:
             raise ValueError(f"placement must be one of {', '.join(PLACEMENTS)}")
@@ -111,6 +126,7 @@ def set_enabled(attrs: dict[str, Any], on: bool, where: str | None = None) -> No
             attrs["monitoring"] = cfg
         else:
             attrs.pop("monitoring", None)
+    return {}
 
 
 def _section(attrs: dict[str, Any], *path: str) -> Any:

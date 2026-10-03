@@ -12,6 +12,7 @@ import { AgentsPanel } from "../components/agents/AgentsPanel";
 import { pendingProposals, useProposals } from "../components/agents/proposalsStore";
 import { MonitoringPanel } from "../components/dialogs/MonitoringDialog";
 import { LensesPanel } from "../components/lenses/LensesPanel";
+import { PANEL_TAB_LABELS } from "./panelTabLabels";
 
 type Toast = (message: string, severity?: "info" | "success" | "warning" | "error") => void;
 
@@ -57,7 +58,7 @@ export function useCustomPaletteTabs({
     if (activeUnitPath) {
       tabs.push({
         id: "netlab-composer",
-        label: "Composer",
+        label: PANEL_TAB_LABELS.composer,
         render: () => (
           <UnitComposer sessionId={sessionId} unitPath={activeUnitPath} refreshKey={activeTabId ?? undefined} onSaved={refreshCanvas} onToast={addToast} />
         )
@@ -65,22 +66,22 @@ export function useCustomPaletteTabs({
     }
     tabs.push({
       id: "netlab-lenses",
-      label: "Lenses",
+      label: PANEL_TAB_LABELS.lenses,
       render: () => <LensesPanel state={netlabLenses} validationIssues={validationIssues} onToast={addToast} onRerunDeployment={handleRerunDeployment} />
     });
     if (!DEMO_MODE) {
       tabs.push(
-        { id: "netlab-groups", label: "Groups", render: () => <GroupsPanel sessionId={sessionId} onChanged={refreshCanvas} /> },
-        { id: "netlab-plugins", label: "Plugins", render: () => <PluginsPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> }
+        { id: "netlab-groups", label: PANEL_TAB_LABELS.groups, render: () => <GroupsPanel sessionId={sessionId} onChanged={refreshCanvas} /> },
+        { id: "netlab-plugins", label: PANEL_TAB_LABELS.plugins, render: () => <PluginsPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> }
       );
     }
     // Always present (the panel has its own on/off switch): a tab that comes and goes with an async
     // "is it on" check makes the strip jump to another tab whenever the check is pending.
     if (!DEMO_MODE) {
-      tabs.push({ id: "netlab-monitoring", label: "Monitoring", render: () => <MonitoringPanel sessionId={sessionId} /> });
+      tabs.push({ id: "netlab-monitoring", label: PANEL_TAB_LABELS.monitoring, render: () => <MonitoringPanel sessionId={sessionId} /> });
     }
     if (multiserverEnabled) {
-      tabs.push({ id: "netlab-workers", label: "Workers", render: () => <WorkersPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> });
+      tabs.push({ id: "netlab-workers", label: PANEL_TAB_LABELS.workers, render: () => <WorkersPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> });
     }
     // The AI agents tab only exists in the strip while toggled on from the
     // toolbar button — clab-ui owns which palette tab is active and
@@ -89,7 +90,7 @@ export function useCustomPaletteTabs({
     if (assistantCapabilities && assistantOpen) {
       tabs.push({
         id: "netlab-assistant",
-        label: waiting ? `AI agents (${waiting})` : "AI agents",
+        label: waiting ? `${PANEL_TAB_LABELS.agents} (${waiting})` : PANEL_TAB_LABELS.agents,
         render: () => (
           <AgentsPanel
             capabilities={assistantCapabilities}

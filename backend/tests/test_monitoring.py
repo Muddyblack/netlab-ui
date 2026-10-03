@@ -26,6 +26,26 @@ def test_toggle_adds_and_removes_the_plugin_and_placement():
     assert "plugin" not in attrs
 
 
+def test_switching_off_takes_the_settings_out_of_the_topology_and_on_restores_them():
+    # netlab rejects a `monitoring:` block unless the plugin is listed, so a disabled lab keeps none.
+    attrs = {"plugin": ["monitoring"], "monitoring": {"placement": "node", "logs": {"enabled": True}}}
+    stash = monitoring.set_enabled(attrs, False)
+    assert "monitoring" not in attrs and "plugin" not in attrs
+    assert stash == {"monitoring": {"placement": "node", "logs": {"enabled": True}}}
+
+    monitoring.set_enabled(attrs, True, restore=stash)
+    assert attrs["plugin"] == ["monitoring"]
+    assert attrs["monitoring"]["placement"] == "node" and attrs["monitoring"]["logs"] == {"enabled": True}
+
+    # Settings written by hand win over the saved ones; dotted spellings are taken out too.
+    attrs = {"plugin": ["monitoring"], "monitoring.placement": "node"}
+    assert monitoring.set_enabled(attrs, False) == {"monitoring.placement": "node"}
+    assert attrs == {}
+    attrs = {"monitoring": {"interval": 5}}
+    monitoring.set_enabled(attrs, True, restore={"monitoring": {"placement": "node"}})
+    assert attrs["monitoring"] == {"interval": 5}
+
+
 def test_install_links_the_shipped_plugin_into_netlab_user_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     assert monitoring.plugin_source() is not None
