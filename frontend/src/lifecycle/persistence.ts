@@ -1,11 +1,12 @@
 import { blurActiveElement } from "../utils/focus";
+import { readUserState, writeUserState } from "../api/userState";
+import { loadBuffers, saveBuffers, type FileBuffer } from "../utils/bufferStore";
+import { readJson, readStored, removeStored, writeJson, writeStored } from "../utils/storage";
 import type { LabFileEntry } from "../api/client";
 
 const LAST_OPEN_LAB_KEY = "netlab:last-open-lab";
 const EXPLORER_UI_STATE_KEY = "netlab:explorer-ui-state";
 const OPEN_TABS_KEY = "netlab:open-tabs-v1";
-const RECENT_LABS_KEY = "netlab:recent-labs-v1";
-const PINNED_LABS_KEY = "netlab:pinned-labs-v1";
 
 export type PersistedTab =
   | {
@@ -61,83 +62,96 @@ export function buildWebTabId(url: string): string {
 }
 
 export function persistLastOpenLabPath(yamlPath: string | null) {
-  try {
-    if (yamlPath) {
-      window.localStorage.setItem(LAST_OPEN_LAB_KEY, yamlPath);
-      const recent = readRecentLabPaths().filter((path) => path !== yamlPath);
-      window.localStorage.setItem(RECENT_LABS_KEY, JSON.stringify([yamlPath, ...recent].slice(0, 12)));
-    } else {
-      window.localStorage.removeItem(LAST_OPEN_LAB_KEY);
-    }
-  } catch {
-    // ignore storage failures
+  if (!yamlPath) {
+    removeStored(LAST_OPEN_LAB_KEY);
+    return;
   }
-}
-
-function readStringArray(key: string): string[] {
-  try {
-    const value = JSON.parse(window.localStorage.getItem(key) ?? "[]");
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
+  writeStored(LAST_OPEN_LAB_KEY, yamlPath);
+  const recent = readRecentLabPaths().filter((path) => path !== yamlPath);
+  writeUserState("recentLabs", [yamlPath, ...recent].slice(0, 12));
 }
 
 export function readRecentLabPaths(): string[] {
-  return readStringArray(RECENT_LABS_KEY);
+  return readUserState("recentLabs");
 }
 
 export function readPinnedLabPaths(): string[] {
-  return readStringArray(PINNED_LABS_KEY);
+  return readUserState("pinnedLabs");
 }
 
 export function togglePinnedLabPath(path: string): string[] {
   const current = readPinnedLabPaths();
   const next = current.includes(path) ? current.filter((item) => item !== path) : [...current, path];
-  try { window.localStorage.setItem(PINNED_LABS_KEY, JSON.stringify(next)); } catch { /* best-effort */ }
+  writeUserState("pinnedLabs", next);
   return next;
 }
 
 export function readLastOpenLabPath(): string | null {
-  try {
-    return window.localStorage.getItem(LAST_OPEN_LAB_KEY);
-  } catch {
-    return null;
-  }
+  return readStored(LAST_OPEN_LAB_KEY);
 }
 
-export function persistOpenTabSession(session: PersistedTabSession) {
-  try {
-    if (session.tabs.length === 0) {
-      window.localStorage.removeItem(OPEN_TABS_KEY);
-      return;
+/** What the tab session says about a file tab. The text normally lives in
+ * IndexedDB (see bufferStore.ts); `content` is only inlined when that is
+ * unavailable, and by sessions saved before buffers moved there. */
+type StoredFileTab = Omit<Extract<PersistedTab, { kind: "file" }>, "content" | "originalContent"> &
+  Partial<FileBuffer>;
+type StoredTab = Exclude<PersistedTab, { kind: "file" }> | StoredFileTab;
+
+/** How a save went: "ok" in IndexedDB, "inline" when it had to fall back to
+ * localStorage, "failed" when neither could hold the unsaved edits. */
+export type SessionSaveResult = "ok" | "inline" | "failed";
+
+export async function persistOpenTabSession(session: PersistedTabSession): Promise<SessionSaveResult> {
+  if (session.tabs.length === 0) {
+    removeStored(OPEN_TABS_KEY);
+    await saveBuffers({});
+    return "ok";
+  }
+  const buffers: Record<string, FileBuffer> = {};
+  const light: StoredTab[] = session.tabs.map((tab) => {
+    if (tab.kind !== "file") return tab;
+    buffers[tab.id] = { content: tab.content, originalContent: tab.originalContent };
+    const { content: _content, originalContent: _original, ...rest } = tab;
+    return rest;
+  });
+  if (await saveBuffers(buffers)) {
+    return writeJson(OPEN_TABS_KEY, { tabs: light, activeTabId: session.activeTabId }) ? "ok" : "failed";
+  }
+  // IndexedDB is unavailable (some private modes): keep the old behavior.
+  return writeJson(OPEN_TABS_KEY, session) ? "inline" : "failed";
+}
+
+function isStoredTab(tab: unknown): tab is StoredTab {
+  if (!tab || typeof tab !== "object" || typeof (tab as { id?: unknown }).id !== "string") return false;
+  const candidate = tab as { kind?: unknown; topologyRef?: { yamlPath?: unknown }; path?: unknown; endpointId?: unknown; url?: unknown };
+  if (candidate.kind === "web") return typeof candidate.url === "string";
+  if (candidate.kind === "topology") return typeof candidate.topologyRef?.yamlPath === "string";
+  return candidate.kind === "file" && typeof candidate.path === "string" && typeof candidate.endpointId === "string";
+}
+
+export async function readOpenTabSession(): Promise<PersistedTabSession | null> {
+  const parsed = readJson<{ tabs?: unknown; activeTabId?: unknown } | null>(OPEN_TABS_KEY, null);
+  if (!Array.isArray(parsed?.tabs)) return null;
+  const stored = (parsed.tabs as unknown[]).filter(isStoredTab);
+  const buffers = stored.some((tab) => tab.kind === "file") ? await loadBuffers() : new Map<string, FileBuffer>();
+  const tabs: PersistedTab[] = [];
+  for (const tab of stored) {
+    if (tab.kind !== "file") {
+      tabs.push(tab);
+      continue;
     }
-    window.localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(session));
-  } catch {
-    // Storage can be disabled or full; tab persistence is best-effort.
+    const inline =
+      typeof tab.content === "string" && typeof tab.originalContent === "string"
+        ? { content: tab.content, originalContent: tab.originalContent }
+        : null;
+    const buffer = buffers.get(tab.id) ?? inline;
+    // A file tab whose text is gone cannot be restored; the file can be reopened from disk.
+    if (buffer) tabs.push({ ...tab, ...buffer });
   }
-}
-
-export function readOpenTabSession(): PersistedTabSession | null {
-  try {
-    const raw = window.localStorage.getItem(OPEN_TABS_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed?.tabs)) return null;
-    const tabs = (parsed.tabs as unknown[]).filter((tab): tab is PersistedTab => {
-      if (!tab || typeof tab !== "object" || typeof (tab as { id?: unknown }).id !== "string") return false;
-      const candidate = tab as { kind?: unknown; topologyRef?: { yamlPath?: unknown }; path?: unknown; endpointId?: unknown; url?: unknown };
-      if (candidate.kind === "web") return typeof candidate.url === "string";
-      if (candidate.kind === "topology") return typeof candidate.topologyRef?.yamlPath === "string";
-      return candidate.kind === "file" && typeof candidate.path === "string" && typeof candidate.endpointId === "string";
-    });
-    return {
-      tabs,
-      activeTabId: typeof parsed.activeTabId === "string" ? parsed.activeTabId : null
-    };
-  } catch {
-    return null;
-  }
+  return {
+    tabs,
+    activeTabId: typeof parsed.activeTabId === "string" ? parsed.activeTabId : null
+  };
 }
 
 function defaultExplorerUiState() {
@@ -161,10 +175,9 @@ function defaultExplorerUiState() {
 
 export function readPersistedExplorerUiState() {
   try {
-    const raw = window.localStorage.getItem(EXPLORER_UI_STATE_KEY);
-    if (!raw) return defaultExplorerUiState();
+    const parsed = readJson<any>(EXPLORER_UI_STATE_KEY, null);
+    if (!parsed) return defaultExplorerUiState();
 
-    const parsed = JSON.parse(raw);
     const expandedBySection = {
       ...defaultExplorerUiState().expandedBySection,
       ...(parsed?.expandedBySection ?? {})
@@ -203,11 +216,7 @@ export function readPersistedExplorerUiState() {
 }
 
 export function persistExplorerUiState(state: unknown) {
-  try {
-    window.localStorage.setItem(EXPLORER_UI_STATE_KEY, JSON.stringify(state ?? defaultExplorerUiState()));
-  } catch {
-    // ignore storage failures
-  }
+  writeJson(EXPLORER_UI_STATE_KEY, state ?? defaultExplorerUiState());
 }
 
 export function closeExplorerTransientUi() {

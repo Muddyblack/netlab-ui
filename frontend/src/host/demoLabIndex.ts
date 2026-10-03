@@ -1,5 +1,6 @@
 import type { FileSystemAdapter, TopologyRef } from "@containerlab/clab-ui/session";
 import type { LabFileEntry } from "../api/client";
+import { readJson, writeJson } from "../utils/storage";
 import { basename, normalizePath } from "./demoFs";
 
 export type DemoLabRecord = {
@@ -44,22 +45,16 @@ function slugify(value: string): string {
 }
 
 export function readLabIndex(): DemoLabRecord[] {
-  try {
-    const raw = window.localStorage.getItem(DEMO_LABS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry): entry is DemoLabRecord =>
-        entry && typeof entry.labName === "string" && typeof entry.yamlPath === "string"
-    );
-  } catch {
-    return [];
-  }
+  const parsed = readJson<unknown>(DEMO_LABS_KEY, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (entry): entry is DemoLabRecord =>
+      entry && typeof entry.labName === "string" && typeof entry.yamlPath === "string"
+  );
 }
 
 export function writeLabIndex(labs: DemoLabRecord[]): void {
-  window.localStorage.setItem(DEMO_LABS_KEY, JSON.stringify(labs));
+  writeJson(DEMO_LABS_KEY, labs);
 }
 
 export async function ensureSeedDemoLab(

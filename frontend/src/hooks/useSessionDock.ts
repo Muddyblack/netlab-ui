@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { isStringArray, readJson, writeJson } from "../utils/storage";
 
 export type SessionKind = "shell" | "logs" | "drawio" | "multi" | "agent" | "terminal";
 export type SessionTab = { key: string; kind: SessionKind; node: string; sessionId?: string | null };
@@ -9,21 +10,11 @@ const RECENT_NODES_KEY = "netlab:shell-recent-nodes";
 const MAX_RECENT_NODES = 12;
 
 export function loadRecentShellNodes(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(RECENT_NODES_KEY) ?? "[]");
-    return Array.isArray(value) ? value.filter((node): node is string => typeof node === "string") : [];
-  } catch {
-    return [];
-  }
+  return readJson<string[]>(RECENT_NODES_KEY, [], isStringArray);
 }
 
 function recordRecentShellNode(node: string): void {
-  try {
-    const next = [node, ...loadRecentShellNodes().filter((item) => item !== node)].slice(0, MAX_RECENT_NODES);
-    localStorage.setItem(RECENT_NODES_KEY, JSON.stringify(next));
-  } catch {
-    // best-effort; ignore storage failures.
-  }
+  writeJson(RECENT_NODES_KEY, [node, ...loadRecentShellNodes().filter((item) => item !== node)].slice(0, MAX_RECENT_NODES));
 }
 
 /** Tab state for the bottom session dock (node shells + log streams). Tabs stay

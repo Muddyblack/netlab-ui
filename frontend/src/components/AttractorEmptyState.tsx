@@ -1,19 +1,21 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import HistoryIcon from "@mui/icons-material/History";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { Box, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
-import { readPinnedLabPaths, readRecentLabPaths, togglePinnedLabPath } from "../lifecycle/persistence";
+import { togglePinnedLabPath } from "../lifecycle/persistence";
+import { useUserState } from "../api/userState";
 import type { LabFileEntry } from "../api/client";
 import { terminalShortcutLabel, useQuickOpenShortcut } from "../app/terminalShortcut";
 
 export function AttractorEmptyState({ labs, onOpenLab }: { labs: LabFileEntry[]; onOpenLab: (topologyRef: LabFileEntry["topologyRef"]) => void }) {
-  const [pinned, setPinned] = useState(readPinnedLabPaths);
+  const pinned = useUserState("pinnedLabs");
+  const recent = useUserState("recentLabs");
   const quickOpenShortcut = useQuickOpenShortcut();
   const animatedLogoSrc = `${import.meta.env.BASE_URL}netlab-full-lockup_animated.svg`;
   const byPath = useMemo(() => new Map(labs.map((lab) => [lab.path, lab])), [labs]);
   const pinnedLabs = pinned.map((path) => byPath.get(path)).filter((lab): lab is LabFileEntry => Boolean(lab));
-  const recentLabs = readRecentLabPaths().filter((path) => !pinned.includes(path)).map((path) => byPath.get(path)).filter((lab): lab is LabFileEntry => Boolean(lab)).slice(0, 5);
+  const recentLabs = recent.filter((path) => !pinned.includes(path)).map((path) => byPath.get(path)).filter((lab): lab is LabFileEntry => Boolean(lab)).slice(0, 5);
   const visible = [...pinnedLabs, ...recentLabs];
 
   return (
@@ -51,7 +53,7 @@ export function AttractorEmptyState({ labs, onOpenLab }: { labs: LabFileEntry[];
                       <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>{lab.path}</Typography>
                     </Box>
                     <Tooltip title={isPinned ? "Unpin" : "Pin"}>
-                      <IconButton size="small" onClick={(event) => { event.stopPropagation(); setPinned(togglePinnedLabPath(lab.path)); }}>
+                      <IconButton size="small" onClick={(event) => { event.stopPropagation(); togglePinnedLabPath(lab.path); }}>
                         {isPinned ? <PushPinIcon sx={{ fontSize: 17 }} /> : <PushPinOutlinedIcon sx={{ fontSize: 17 }} />}
                       </IconButton>
                     </Tooltip>

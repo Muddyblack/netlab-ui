@@ -342,9 +342,27 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     setRestoreComplete(true);
   }, [activateLabTab, restoreComplete]);
 
+  // Saved a moment after the last change (typing in an editor changes the tabs on
+  // every keystroke), and flushed when the page is hidden or closed.
+  const pendingSession = useRef<PersistedTabSession | null>(null);
+  const warnedUnsaved = useRef(false);
+  const flushSession = useCallback(() => {
+    const session = pendingSession.current;
+    if (!session) return;
+    pendingSession.current = null;
+    void persistOpenTabSession(session).then((result) => {
+      if (result === "failed" && !warnedUnsaved.current) {
+        warnedUnsaved.current = true;
+        addToast("Browser storage is full or blocked: unsaved edits in open files may not survive a reload. Save your files.", "warning");
+      } else if (result !== "failed") {
+        warnedUnsaved.current = false;
+      }
+    });
+  }, [addToast]);
+
   useEffect(() => {
     if (!restoreComplete) return;
-    persistOpenTabSession({
+    pendingSession.current = {
       activeTabId,
       tabs: openTabs.map((tab) =>
         tab.kind === "file"
@@ -360,8 +378,20 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
             }
           : tab
       )
-    });
-  }, [activeTabId, openTabs, restoreComplete]);
+    };
+    const timer = window.setTimeout(flushSession, 400);
+    return () => window.clearTimeout(timer);
+  }, [activeTabId, openTabs, restoreComplete, flushSession]);
+
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flushSession(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushSession);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushSession);
+    };
+  }, [flushSession]);
 
   const activeFileTab = openTabs.find((t): t is OpenFileTab => t.kind === "file" && t.id === activeTabId) ?? null;
 

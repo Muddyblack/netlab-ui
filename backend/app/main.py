@@ -29,6 +29,7 @@ from app.lenses.router import router as lenses_router
 from app.plugins.router import router as plugins_router
 from app.schema.router import router as schema_router
 from app.shell.ws import router as shell_router
+from app.user_state import router as user_state_router
 from services import assistant, events, lab_limits
 from services.netlab import runner
 
@@ -155,6 +156,7 @@ app.include_router(plugins_router)
 app.include_router(schema_router)
 app.include_router(docs_router)
 app.include_router(environment_router)
+app.include_router(user_state_router)
 
 if _assistant_router is not None and _assistant_mcp is not None:
     app.include_router(_assistant_router)

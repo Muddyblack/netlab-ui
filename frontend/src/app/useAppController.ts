@@ -20,6 +20,7 @@ import { type DeploymentProgress } from "../components/CanvasDeploymentProgress"
 import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
+import { loadUserState } from "../api/userState";
 import { rememberAgents } from "../components/agents/agentNames";
 import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
 import { matchesTerminalShortcut, quickOpenShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
@@ -982,22 +983,26 @@ export function useAppController() {
   React.useEffect(() => {
     if (startup.status !== "ready" || tabRestoreAttemptedRef.current) return;
     tabRestoreAttemptedRef.current = true;
-    const saved = readOpenTabSession();
-    if (saved?.tabs.length) {
-      void restoreTabSession(saved);
-      return;
-    }
-    const lastPath = readLastOpenLabPath();
-    if (!lastPath || labFiles.length === 0) {
-      void restoreTabSession(null);
-      return;
-    }
-    const match = labFiles.find((f) => f?.topologyRef?.yamlPath === lastPath);
-    void restoreTabSession(
-      match?.topologyRef
-        ? { tabs: [resolveOpenLabTab(match.topologyRef)], activeTabId: String(match.topologyRef.yamlPath) }
-        : null
-    );
+    void (async () => {
+      // Pinned/recent labs and exercise progress follow the login; fetch them alongside the tabs.
+      void loadUserState();
+      const saved = await readOpenTabSession();
+      if (saved?.tabs.length) {
+        await restoreTabSession(saved);
+        return;
+      }
+      const lastPath = readLastOpenLabPath();
+      if (!lastPath || labFiles.length === 0) {
+        await restoreTabSession(null);
+        return;
+      }
+      const match = labFiles.find((f) => f?.topologyRef?.yamlPath === lastPath);
+      await restoreTabSession(
+        match?.topologyRef
+          ? { tabs: [resolveOpenLabTab(match.topologyRef)], activeTabId: String(match.topologyRef.yamlPath) }
+          : null
+      );
+    })();
   }, [startup.status, labFiles, restoreTabSession]);
 
   // ── Palette tabs ─────────────────────────────────────────────────────────────

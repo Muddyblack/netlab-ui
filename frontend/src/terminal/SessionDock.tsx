@@ -1,3 +1,4 @@
+import { readNumber, writeStored } from "../utils/storage";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
@@ -28,7 +29,7 @@ const MIN_HEIGHT = 140;
 const DEFAULT_HEIGHT = 320;
 
 function loadHeight(): number {
-  const raw = Number(localStorage.getItem(HEIGHT_KEY));
+  const raw = readNumber(HEIGHT_KEY, 0);
   return Number.isFinite(raw) && raw >= MIN_HEIGHT ? Math.round(raw) : DEFAULT_HEIGHT;
 }
 
@@ -212,7 +213,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
   const [recentNodes, setRecentNodes] = useState<string[]>([]);
 
   useEffect(() => {
-    localStorage.setItem(HEIGHT_KEY, String(height));
+    writeStored(HEIGHT_KEY, String(height));
   }, [height]);
 
   const startResize = (event: React.PointerEvent) => {
