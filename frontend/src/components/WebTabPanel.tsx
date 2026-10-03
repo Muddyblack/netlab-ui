@@ -52,8 +52,9 @@ function useRightPanelInset(panel: React.RefObject<HTMLElement | null>, active: 
   return inset;
 }
 
-/** A web page (Grafana) filling the canvas area left of the right-hand panel, with a link to open it in a browser tab. */
-export function WebTabPanel({ tab, active, onClose }: { tab: OpenWebTab; active: boolean; onClose: (id: string) => void }): React.JSX.Element {
+/** A web page (Grafana) filling the canvas area left of the right-hand panel. Its tab in the
+ * tab bar has the open-in-browser and close buttons, so the page itself is left alone. */
+export function WebTabPanel({ tab, active }: { tab: OpenWebTab; active: boolean }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const inset = useRightPanelInset(ref, active);
   return (
@@ -72,23 +73,6 @@ export function WebTabPanel({ tab, active, onClose }: { tab: OpenWebTab; active:
         pointerEvents: "auto",
       }}
     >
-      <div style={{ position: "absolute", top: 6, right: 12, zIndex: 1, display: "flex", gap: 8 }}>
-        <button
-          type="button"
-          title="Open in a new browser tab"
-          onClick={() => window.open(tab.url, "_blank", "noopener,noreferrer")}
-          style={{ fontSize: 12, cursor: "pointer", background: PANEL_BG, color: "inherit", border: "1px solid rgba(128,128,128,0.5)", borderRadius: 4, padding: "2px 8px" }}
-        >
-          Open in browser tab ↗
-        </button>
-        <button
-          type="button"
-          onClick={() => onClose(tab.id)}
-          style={{ fontSize: 12, cursor: "pointer", background: PANEL_BG, color: "inherit", border: 0, borderRadius: 4 }}
-        >
-          Close
-        </button>
-      </div>
       <iframe
         title={tab.title}
         src={tab.url}

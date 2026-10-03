@@ -1,11 +1,37 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Alert, Box, Button, Card, CardActionArea, Chip, Divider, Stack, Switch, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardActionArea, Chip, Divider, Stack, Switch, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import type { AppThemeMode } from "../../theme";
 import { isReservedShortcutKey, quickOpenShortcut, terminalShortcut, terminalShortcutLabel, type ShortcutStore } from "../../app/terminalShortcut";
+import { setWebPageTarget, useWebPageTarget, type WebPageTarget } from "../../host/webTabStore";
+
+/** Where Grafana dashboards open: a tab next to the lab tabs, or a new browser tab. */
+function WebPageTargetSetting() {
+  const target = useWebPageTarget();
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={650} gutterBottom>
+        Open Dashboards In
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+        Where the Grafana dashboards from Monitoring open. A netlab tab keeps them next to the lab; a browser tab gives
+        them the whole window.
+      </Typography>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={target}
+        onChange={(_event, value: WebPageTarget | null) => value && setWebPageTarget(value)}
+      >
+        <ToggleButton value="app">netlab tab</ToggleButton>
+        <ToggleButton value="browser">New browser tab</ToggleButton>
+      </ToggleButtonGroup>
+    </Box>
+  );
+}
 
 /** Pick the key for one app shortcut: press it while this is listening. */
 function ShortcutSetting({ title, description, store }: { title: string; description: string; store: ShortcutStore }) {
@@ -157,6 +183,10 @@ export function SettingsGeneralTab({
         description="The key that opens quick open (labs, files, nodes and commands), together with Ctrl (Cmd on a Mac). The default is P; where the browser keeps Ctrl+P for printing, pick another key, such as Ö. The search button in the toolbar opens it too."
         store={quickOpenShortcut}
       />
+
+      <Divider />
+
+      <WebPageTargetSetting />
 
       <Divider />
 

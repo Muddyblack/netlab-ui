@@ -81,7 +81,7 @@ export function AppCanvasOverlays({
       {portalContainer && webTabs.length > 0 && createPortal(
         <Suspense fallback={null}>
           {webTabs.map((tab) => (
-            <WebTabPanel key={tab.id} tab={tab} active={tab.id === activeWebTab?.id} onClose={(id) => void handleCloseLab(id)} />
+            <WebTabPanel key={tab.id} tab={tab} active={tab.id === activeWebTab?.id} />
           ))}
         </Suspense>,
         portalContainer

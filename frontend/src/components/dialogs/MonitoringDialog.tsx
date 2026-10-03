@@ -80,7 +80,8 @@ function grafanaUrl(port: number, uid: string, vars: Record<string, string> = {}
   return url.toString();
 }
 
-/** Grafana as a tab of this app; a plain browser tab when the app cannot host one. */
+/** Grafana as a tab of this app; a plain browser tab when the user prefers that
+ * (Settings → General) or the app cannot host one. */
 function showGrafana(url: string, title: string): void {
   if (openWebTab({ url, title, subtitle: "Grafana" })) openMonitoringDialog(null);
   else window.open(url, "_blank", "noopener,noreferrer");
