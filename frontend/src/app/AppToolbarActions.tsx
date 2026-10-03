@@ -1,8 +1,10 @@
 import { IconButton, Stack, Tooltip } from "@mui/material";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import SearchIcon from "@mui/icons-material/Search";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { NetlabMascot } from "../components/agents/NetlabMascot";
+import { terminalShortcutLabel, useQuickOpenShortcut } from "./terminalShortcut";
 
 import { blurTrigger } from "../utils/focus";
 
@@ -12,6 +14,7 @@ interface AppToolbarActionsProps {
   notificationPermission: NotificationPermission | "unavailable";
   onToggleNotifications: () => void;
   onOpenSettings: () => void;
+  onQuickOpen: () => void;
   assistantAvailable: boolean;
   assistantOpen: boolean;
   onToggleAssistant: () => void;
@@ -29,14 +32,29 @@ export function AppToolbarActions({
   notificationPermission,
   onToggleNotifications,
   onOpenSettings,
+  onQuickOpen,
   assistantAvailable,
   assistantOpen,
   onToggleAssistant
 }: AppToolbarActionsProps) {
   const notificationTooltip = notificationTooltipFor(notificationsEnabled, notificationPermission);
+  const quickOpenShortcut = useQuickOpenShortcut();
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
+      <Tooltip title={`Quick open: labs, files, nodes and commands (${terminalShortcutLabel(quickOpenShortcut)})`} arrow>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            blurTrigger(e.currentTarget);
+            onQuickOpen();
+          }}
+          aria-label="Quick open"
+        >
+          <SearchIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+
       {assistantAvailable && (
         <Tooltip title={`${assistantOpen ? "Close" : "Open"} AI agents: connect your own agent over MCP (Ctrl+I)`} arrow>
           <IconButton

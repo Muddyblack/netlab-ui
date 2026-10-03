@@ -54,6 +54,28 @@ class AssistantCapabilities(BaseModel):
     agentsNote: str = ""
 
 
+class AssistantGhostNode(BaseModel):
+    name: str
+    device: str | None = None
+
+
+class AssistantGhostLink(BaseModel):
+    source: str
+    target: str
+    # Every node the link joins; more than source and target for a multi-access link.
+    endpoints: list[str] = []
+
+
+class AssistantProposalChanges(BaseModel):
+    """What an edit proposal does to the canvas, for drawing it as a ghost."""
+
+    nodesAdded: list[AssistantGhostNode] = []
+    nodesRemoved: list[str] = []
+    nodesChanged: list[str] = []
+    linksAdded: list[AssistantGhostLink] = []
+    linksRemoved: list[str] = []
+
+
 class AssistantProposal(BaseModel):
     id: str
     sessionId: str
@@ -63,8 +85,20 @@ class AssistantProposal(BaseModel):
     summary: str = ""
     status: Literal["pending", "applied", "rejected", "stale"]
     diff: str = ""
+    changes: AssistantProposalChanges | None = None
     action: dict[str, Any] | None = None
     createdAt: float = 0.0
+
+
+class AssistantPoint(BaseModel):
+    x: float
+    y: float
+
+
+class AssistantApplyRequest(BaseModel):
+    """Optional body of an apply: where the UI drew the nodes the proposal adds."""
+
+    positions: dict[str, AssistantPoint] = {}
 
 
 class AssistantProposalList(BaseModel):

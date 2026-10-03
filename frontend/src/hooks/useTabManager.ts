@@ -154,9 +154,11 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     if (!tab) return;
     setActiveTabId(tabId);
     if (tab.kind !== "topology") return;
-    if (activeTabId === tabId && sessionId) return;
+    // The session survives visits to file/web tabs; coming back to the lab it
+    // belongs to must not dispose and rebuild it (that reloads the canvas).
+    if (sessionId && activePathRef.current === tab.topologyRef.yamlPath) return;
     await activateLabTab(tab);
-  }, [activeTabId, activateLabTab, openTabs, sessionId]);
+  }, [activateLabTab, openTabs, sessionId]);
 
   const handleCloseLab = useCallback(async (tabId?: string) => {
     const targetId = tabId ?? activeTabId;

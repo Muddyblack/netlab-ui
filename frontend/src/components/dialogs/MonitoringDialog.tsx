@@ -143,6 +143,8 @@ function HealthTab({
   const port = state.grafanaPort ?? null;
   const dash = state.dashboards ?? {};
   const nodes = state.coverage.map((item) => item.node);
+  // Grafana is part of the stack that starts with the lab: before a deploy there is nothing to open.
+  const live = state.enabled && state.labDeployed && state.rendered && Object.values(state.running).some(Boolean);
   return (
     <Stack spacing={2}>
       {summary ? (
@@ -202,6 +204,7 @@ function HealthTab({
             <Button
               size="small"
               variant="outlined"
+              disabled={!live}
               endIcon={<ShowChartIcon fontSize="small" />}
               onClick={() => showGrafana(grafanaUrl(port, dash.overview), "Lab overview")}
             >
@@ -212,6 +215,7 @@ function HealthTab({
             <Button
               size="small"
               variant="outlined"
+              disabled={!live}
               endIcon={<ShowChartIcon fontSize="small" />}
               onClick={() => showGrafana(grafanaUrl(port, dash.routing), "Routing and convergence")}
             >
@@ -237,12 +241,18 @@ function HealthTab({
               <Button
                 size="small"
                 variant="outlined"
+                disabled={!live}
                 endIcon={<ShowChartIcon fontSize="small" />}
                 onClick={() => showGrafana(grafanaUrl(port, dash.node, { node }), `Node detail: ${node}`)}
               >
                 Node
               </Button>
             </Stack>
+          )}
+          {!live && (
+            <Typography variant="caption" color="text.secondary" sx={{ flexBasis: "100%" }}>
+              Grafana runs with the lab: deploy it to open the dashboards.
+            </Typography>
           )}
         </Stack>
       )}

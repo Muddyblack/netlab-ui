@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import {
-  Accordion, AccordionDetails, AccordionSummary, Box, ButtonBase, Chip, FormControlLabel, IconButton, Link, Menu, MenuItem, Select, Stack, Switch,
+  Accordion, AccordionDetails, AccordionSummary, Box, ButtonBase, Chip, Divider, FormControlLabel, IconButton, Link, Menu, MenuItem, Select, Stack, Switch,
   ToggleButton, ToggleButtonGroup, Tooltip, Typography
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -14,6 +14,7 @@ import { agentBase, agentName } from "./agentNames";
 import { TerminalSlot, focusAgent, setAgentPlacement, useAgentSurface } from "./AgentSurface";
 import { persistAgentConnect, persistAgentSkipPermissions, readAgentConnect, readAgentSkipPermissions, type AgentPlacement } from "./preferences";
 import { terminalShortcutLabel, useTerminalShortcut } from "../../app/terminalShortcut";
+import { ProposalBar } from "./ProposalBar";
 import { ProposalCard } from "./ProposalCard";
 import { pendingProposals, refreshProposals, useProposals } from "./proposalsStore";
 
@@ -93,12 +94,21 @@ function connectNote(item: Harness, connect: boolean): string {
   return "connected";
 }
 
+/** Sort key within the installed agents: connected first, then the ones that need setup. */
+function connectRank(item: Harness): number {
+  if (item.mcp === "register") return 1;
+  if (item.mcp === "manual") return 2;
+  return 0;
+}
+
 const cardSx = {
   display: "flex",
   alignItems: "center",
+  justifyContent: "flex-start",
   gap: 1,
   width: "100%",
   minWidth: 0,
+  height: 52,
   p: 1,
   border: 1,
   borderColor: "divider",
@@ -203,7 +213,8 @@ function StartAgent({ capabilities, onStartAgent }: {
   }
   const harnesses = capabilities.harnesses ?? [];
   // Installed first; the backend's order within each group.
-  const ordered = [...harnesses.filter((item) => item.available), ...harnesses.filter((item) => !item.available)];
+  const ordered = [...harnesses].sort((a, b) =>
+    Number(b.available) - Number(a.available) || connectRank(a) - connectRank(b) || a.name.localeCompare(b.name));
   return (
     <Stack spacing={1.25}>
       <Tooltip
@@ -251,7 +262,7 @@ function StartAgent({ capabilities, onStartAgent }: {
           <ToggleButton value="here" sx={{ textTransform: "none", py: 0.25 }}>In this panel</ToggleButton>
         </ToggleButtonGroup>
       </Stack>
-      <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
+      <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", alignItems: "stretch" }}>
         {ordered.map((item) => (
           <AgentCard key={item.id} item={item} connect={connect} running={running.filter((node) => agentBase(node) === item.id).length} onStart={onStartAgent} />
         ))}
@@ -266,12 +277,20 @@ function StartAgent({ capabilities, onStartAgent }: {
   );
 }
 
-/** Pending proposals from the agent; nothing at all when there are none. */
-function Proposals({ sessionId, onApplied }: { sessionId: string; onApplied: () => void }) {
+/** Pending proposals from the agent; nothing at all when there are none. `compact` is one line each, for
+ * above a terminal: the change itself is drawn on the canvas. */
+function Proposals({ sessionId, onApplied, compact }: { sessionId: string; onApplied: () => void; compact?: boolean }) {
   const { proposals } = useProposals();
   const load = useCallback(() => { void refreshProposals(sessionId); }, [sessionId]);
   const pending = pendingProposals(proposals);
   if (pending.length === 0) return null;
+  if (compact) {
+    return (
+      <Stack spacing={0.5} sx={{ py: 0.5 }}>
+        {pending.map((proposal) => <ProposalBar key={proposal.id} proposal={proposal} onApplied={onApplied} />)}
+      </Stack>
+    );
+  }
   return (
     <Box>
       <SectionLabel>Review · {pending.length}</SectionLabel>
@@ -327,7 +346,9 @@ function AgentInPanel({ agentId, sessionId, harnesses, onApplied, onStartAgent, 
   onStartAgent: (agentId: string, another?: boolean) => void;
   onCloseAgent: (agentId: string) => void;
 }) {
-  const { running } = useAgentSurface();
+  const { running, placement } = useAgentSurface();
+  const [connect, setConnect] = useState(readAgentConnect);
+  const [skipPermissions, setSkipPermissions] = useState(readAgentSkipPermissions);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const installed = harnesses.filter((item) => item.available);
   return (
@@ -375,12 +396,25 @@ function AgentInPanel({ agentId, sessionId, harnesses, onApplied, onStartAgent, 
                   {item.name}
                 </MenuItem>
               ))}
+              <Divider />
+              <MenuItem onClick={() => { setConnect(!connect); persistAgentConnect(!connect); }}>
+                <Switch size="small" checked={connect} sx={{ mr: 1 }} />
+                <Typography variant="body2">Connect to this lab (MCP)</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { setSkipPermissions(!skipPermissions); persistAgentSkipPermissions(!skipPermissions); }}>
+                <Switch size="small" color="warning" checked={skipPermissions} sx={{ mr: 1 }} />
+                <Typography variant="body2">Start without permission prompts</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setAgentPlacement(placement === "here" ? "below" : "here"); }}>
+                <Switch size="small" checked={placement === "here"} sx={{ mr: 1 }} />
+                <Typography variant="body2">Show the terminal in this panel</Typography>
+              </MenuItem>
             </Menu>
           </>
         )}
       </Stack>
       <Box sx={{ flexShrink: 0, maxHeight: "35%", overflow: "auto", px: 1 }}>
-        <Proposals sessionId={sessionId} onApplied={onApplied} />
+        <Proposals sessionId={sessionId} onApplied={onApplied} compact />
       </Box>
       <Box sx={{ flex: 1, minHeight: 0 }}>
         <TerminalSlot holderKey={`${sessionId}:agent:${agentId}`} />

@@ -807,8 +807,12 @@ export const api = {
       { cache: "no-store" }
     ),
 
-  applyAssistantProposal: (proposalId: string) =>
-    http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/apply`, { method: "POST" }, 1, 20000),
+  /** `positions` is where the canvas drew the nodes the proposal adds, so they land there. */
+  applyAssistantProposal: (proposalId: string, positions?: Record<string, { x: number; y: number }>) =>
+    http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/apply`, {
+      method: "POST",
+      body: JSON.stringify({ positions: positions ?? {} }),
+    }, 1, 20000),
 
   rejectAssistantProposal: (proposalId: string) =>
     http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/reject`, { method: "POST" }),

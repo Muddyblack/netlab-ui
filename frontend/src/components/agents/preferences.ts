@@ -19,15 +19,15 @@ export function persistAgentsPanelOpen(open: boolean): void {
   }
 }
 
-/** Where an agent's terminal is shown: in the bottom panel (default), or inside the AI agents tab. */
+/** Where an agent's terminal is shown: inside the AI agents tab (default), or in the bottom panel. */
 export type AgentPlacement = "below" | "here";
 const PLACEMENT_KEY = "netlab.assistant.terminal";
 
 export function readAgentPlacement(): AgentPlacement {
   try {
-    return window.localStorage.getItem(PLACEMENT_KEY) === "here" ? "here" : "below";
+    return window.localStorage.getItem(PLACEMENT_KEY) === "below" ? "below" : "here";
   } catch {
-    return "below";
+    return "here";
   }
 }
 

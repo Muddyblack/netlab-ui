@@ -20,12 +20,13 @@ MISSING_ISIS = (
 )
 
 
-# Colours match the annotation toggles below (orange, purple, blue, red).
+# The markers on the graphs: (value, label in the Markers dropdown, picked by default).
+# Colours are the annotations' below (orange, purple, blue, red).
 MARKERS = [
-    ("🟧", "link outage"),
-    ("🟪", "fault test"),
-    ("🟦", "SPF run"),
-    ("🟥", "neighbor change"),
+    ("link", "🟧 Link outages", True),
+    ("scenario", "🟪 Fault tests", True),
+    ("spf", "🟦 SPF runs", False),
+    ("neighbor", "🟥 Neighbor changes", False),
 ]
 
 
@@ -83,24 +84,8 @@ class Board:
             target.setdefault("datasource", DS)
         self.panels.append(panel)
 
-    def marker_key(self) -> dict:
-        """What the coloured lines and bands on the graphs mean. Grafana lists annotations in no
-        legend, so this is the legend; the toggles at the top decide which of them are drawn."""
-        key = " &nbsp;·&nbsp; ".join(f"{icon} {name}" for icon, name in MARKERS)
-        return {
-            "type": "text",
-            "title": "",
-            "transparent": True,
-            "options": {"mode": "markdown", "content": f"**Markers on the graphs** (switch on above): {key}"},
-            "id": self._id(),
-            "gridPos": {"x": 0, "y": 0, "w": 24, "h": 2},
-        }
 
     def build(self, variables: list[dict], links: list[dict]) -> dict:
-        key = self.marker_key()
-        for panel in self.panels:
-            panel["gridPos"]["y"] += 2
-        self.panels.insert(0, key)
         return {
             "uid": self.uid,
             "title": self.title,
@@ -112,10 +97,12 @@ class Board:
             "refresh": "15s",
             "time": {"from": "now-30m", "to": "now"},
             "schemaVersion": 39,
-            "templating": {"list": variables},
+            "templating": {"list": [*variables, *marker_variables()]},
             "links": links,
             "panels": self.panels,
-            # Events netlab-ui marks on the dashboards; each is a toggle at the top.
+            # Events netlab-ui marks on the dashboards, and the devices' own timestamps.
+            # All are on and hidden from the controls bar: the Markers dropdown picks them,
+            # one control instead of four toggles that wrap the bar in a narrow window.
             # A link down/up pair shows as one shaded region (the outage).
             "annotations": {
                 "list": [
@@ -127,8 +114,49 @@ class Board:
         }
 
 
+def marker_variables() -> list[dict]:
+    """The Markers dropdown, plus one hidden variable per netlab-ui event kind that is
+    its tag while picked and "off" (a tag nothing carries) otherwise: Grafana's tag
+    annotations cannot test a multi-value variable any other way."""
+    result: list[dict] = [
+        {
+            "name": "markers",
+            "label": "Markers",
+            "type": "custom",
+            "multi": True,
+            "includeAll": False,
+            "query": ", ".join(f"{label} : {value}" for value, label, _on in MARKERS),
+            "options": [{"text": label, "value": value, "selected": on} for value, label, on in MARKERS],
+            "current": {
+                "text": [label for _value, label, on in MARKERS if on],
+                "value": [value for value, _label, on in MARKERS if on],
+            },
+        }
+    ]
+    for tag in ("link", "scenario"):
+        expr = f'label_replace(label_set(vector(1), "t", "${{markers:csv}}", "x", "off"), "x", "{tag}", "t", ".*{tag}.*")'
+        result.append(
+            {
+                "name": f"marker_{tag}",
+                "type": "query",
+                "hide": 2,
+                "datasource": DS,
+                "refresh": 1,
+                "query": {"query": f"query_result({expr})", "refId": f"marker_{tag}"},
+                "definition": f"query_result({expr})",
+                "regex": '/x="([^"]+)"/',
+            }
+        )
+    return result
+
+
+def picked(marker: str) -> str:
+    """MetricsQL suffix that keeps a query's result only while `marker` is picked in Markers."""
+    return f' and on() label_match(label_set(vector(1), "m", "${{markers:csv}}"), "m", ".*{marker}.*")'
+
+
 def device_markers(node_filter: bool) -> list[dict]:
-    """Markers from the devices' own timestamps (off by default, toggles at the top):
+    """Markers from the devices' own timestamps (off by default in the Markers dropdown):
     when each router ran SPF, and when a neighbor/session last changed. Grafana places
     each at the time the value says (the series value is the timestamp), and a value
     repeated scrape after scrape is one marker."""
@@ -137,14 +165,14 @@ def device_markers(node_filter: bool) -> list[dict]:
     def when(metric: str, by: str, proto: str) -> str:
         return f'label_replace(round(max by ({by}) ({metric}{{{sel}}})) * 1000, "proto", "{proto}", "", "")'
 
-    def marker(name: str, color: str, expr: str, title: str) -> dict:
+    def marker(name: str, color: str, expr: str, title: str, kind: str) -> dict:
         return {
             "datasource": DS,
-            "enable": False,
-            "hide": False,
+            "enable": True,
+            "hide": True,
             "iconColor": color,
             "name": name,
-            "expr": expr,
+            "expr": f"({expr}){picked(kind)}",
             "step": "$__interval",
             "useValueForTime": True,
             "titleFormat": title,
@@ -165,20 +193,21 @@ def device_markers(node_filter: bool) -> list[dict]:
         ]
     )
     return [
-        marker("🟦 SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}"),
-        marker("🟥 Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed"),
+        marker("🟦 SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}", "spf"),
+        marker("🟥 Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed", "neighbor"),
     ]
 
 
 def events(name: str, tag: str, color: str) -> dict:
-    """Annotation toggle for events netlab-ui posts with the tags `netlab` and `tag`."""
+    """Events netlab-ui posts with the tags `netlab` and `tag`, shown while `tag` is picked
+    in the Markers dropdown (`$marker_<tag>` is the tag then, "off" otherwise)."""
     return {
         "datasource": {"type": "grafana", "uid": "-- Grafana --"},
         "enable": True,
-        "hide": False,
+        "hide": True,
         "iconColor": color,
         "name": name,
-        "target": {"type": "tags", "tags": ["netlab", tag], "limit": 200, "matchAny": False},
+        "target": {"type": "tags", "tags": ["netlab", f"$marker_{tag}"], "limit": 200, "matchAny": False},
     }
 
 
@@ -451,9 +480,11 @@ LINKS = [
     {
         "type": "dashboards",
         "tags": ["netlab"],
-        "asDropdown": False,
+        # One dropdown, not a button per other dashboard: the controls bar then looks the
+        # same on every dashboard and wraps less in a narrow tab.
+        "asDropdown": True,
         "includeVars": True,
         "keepTime": True,
-        "title": "netlab",
+        "title": "netlab dashboards",
     }
 ]

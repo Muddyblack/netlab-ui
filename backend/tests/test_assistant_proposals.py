@@ -168,3 +168,54 @@ def test_store_is_capped():
         )
     assert store_.get("0") is None
     assert store_.get("2") is not None
+
+
+def test_topology_changes_lists_what_the_canvas_should_ghost():
+    after = TOPOLOGY.replace("links:\n- r1-r2\n", "  r3:\n    device: frr\nlinks:\n- r2-r3\n")
+    changes = proposals.topology_changes(TOPOLOGY, after)
+    assert changes == {
+        "nodesAdded": [{"name": "r3", "device": "frr"}],
+        "nodesRemoved": [],
+        "nodesChanged": [],
+        "linksAdded": [{"source": "r2", "target": "r3", "endpoints": ["r2", "r3"]}],
+        "linksRemoved": ["r1--r2"],
+    }
+
+
+def test_topology_changes_is_none_for_unparseable_text():
+    assert proposals.topology_changes(TOPOLOGY, "nodes: [unclosed") is None
+
+
+def test_topology_changes_covers_multi_access_links():
+    lan = TOPOLOGY.replace("  r2:\n    device: frr\n", "  r2:\n    device: frr\n  r3:\n    device: frr\n")
+    before = lan
+    after = lan.replace("links:\n- r1-r2\n", "links:\n- r1-r2\n- interfaces: [{node: r1}, {node: r2}, {node: r3}]\n")
+    changes = proposals.topology_changes(before, after)
+    assert changes["linksAdded"] == [{"source": "r1", "target": "r2", "endpoints": ["r1", "r2", "r3"]}]
+    assert changes["linksRemoved"] == []
+    # A parallel link between a pair that is already joined still counts as added.
+    parallel = proposals.topology_changes(TOPOLOGY, TOPOLOGY.replace("- r1-r2\n", "- r1-r2\n- r1-r2\n"))
+    assert parallel["linksAdded"] == [{"source": "r1", "target": "r2", "endpoints": ["r1", "r2"]}]
+
+
+def test_apply_places_new_nodes_where_the_ghosts_were_shown(session, client):
+    from services.annotations import store as ann_store
+
+    proposal = proposals.create_edit(
+        session_id=session.id,
+        topology_path=session.topology_path,
+        base_revision=session.revision,
+        commands_list=[{"type": "addNode", "id": "r3", "device": "frr"}],
+        rationale="scale out",
+    )
+    positions = {"r3": {"x": 240, "y": 120}, "r1": {"x": 9, "y": 9}}  # r1 is not added: ignored
+    response = client.post(f"/api/assistant/proposals/{proposal.id}/apply", json={"positions": positions})
+    assert response.status_code == 200, response.text
+
+    annotations = ann_store.load(session.topology_path)
+    assert ann_store.get_node_annotation(annotations, "r3")["position"] == {"x": 240, "y": 120}
+    assert ann_store.get_node_annotation(annotations, "r1") is None
+
+    # Placement is part of the same undo step as the nodes.
+    session.host.apply_command({"type": "undo"})
+    assert "r3" not in Path(session.topology_path).read_text()

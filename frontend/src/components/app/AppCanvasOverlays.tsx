@@ -24,6 +24,7 @@ interface AppCanvasOverlaysProps {
   portalContainer: Element | null;
   activeFileTab: OpenFileTab | null;
   activeWebTab: OpenWebTab | null;
+  webTabs: OpenWebTab[];
   themeMode: AppThemeMode;
   handleFileTabChange: (tabId: string, content: string) => void;
   handleCloseLab: (id: string) => Promise<void>;
@@ -47,6 +48,7 @@ export function AppCanvasOverlays({
   portalContainer,
   activeFileTab,
   activeWebTab,
+  webTabs,
   themeMode,
   handleFileTabChange,
   handleCloseLab,
@@ -75,15 +77,19 @@ export function AppCanvasOverlays({
         portalContainer
       )}
 
-      {portalContainer && activeWebTab && createPortal(
+      {/* Web tabs stay mounted while hidden so Grafana keeps its state. */}
+      {portalContainer && webTabs.length > 0 && createPortal(
         <Suspense fallback={null}>
-          <WebTabPanel tab={activeWebTab} onClose={(id) => void handleCloseLab(id)} />
+          {webTabs.map((tab) => (
+            <WebTabPanel key={tab.id} tab={tab} active={tab.id === activeWebTab?.id} onClose={(id) => void handleCloseLab(id)} />
+          ))}
         </Suspense>,
         portalContainer
       )}
 
-      {portalContainer && sessionId && !activeFileTab && !activeWebTab && !DEMO_MODE && createPortal(
-        <>
+      {/* Lab overlays (agents, lenses, units) stay mounted but hidden on file/web tabs. */}
+      {portalContainer && sessionId && !DEMO_MODE && createPortal(
+        <div style={{ display: activeFileTab || activeWebTab ? "none" : "contents" }}>
           <CanvasValidationSummary issues={validationIssues} onClose={() => setValidationIssues([])} />
           <CanvasDeploymentProgress progress={deploymentProgress} />
           <UnitsDock
@@ -105,7 +111,7 @@ export function AppCanvasOverlays({
               )
             }
           />
-          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} />
+          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} onRefresh={refreshCanvas} />
           <NetlabLenses
             sessionId={sessionId}
             container={portalContainer as HTMLElement}
@@ -113,7 +119,7 @@ export function AppCanvasOverlays({
             themeMode={themeMode}
             onToast={addToast}
           />
-        </>,
+        </div>,
         portalContainer
       )}
 

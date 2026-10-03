@@ -20,7 +20,7 @@ import shutil
 import tempfile
 import time
 import uuid
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -47,6 +47,8 @@ class Proposal:
     # kind="edit"
     commands: list[dict[str, Any]] = field(default_factory=list)
     diff: str = ""
+    # kind="edit": what the diff does to the canvas (see ``topology_changes``).
+    changes: dict[str, Any] | None = None
     # kind="action" (e.g. fault injection): described rather than diffed.
     action: dict[str, Any] | None = None
     created_at: float = field(default_factory=time.time)
@@ -61,6 +63,7 @@ class Proposal:
             "summary": self.summary,
             "status": self.status,
             "diff": self.diff,
+            "changes": self.changes,
             "action": self.action,
             "createdAt": self.created_at,
         }
@@ -134,6 +137,66 @@ def preview_edit(topology_path: str, commands_list: list[dict[str, Any]]) -> tup
     return after_text, diff
 
 
+def topology_changes(before_text: str, after_text: str) -> dict[str, Any] | None:
+    """What an edit does to the canvas: nodes and links added, removed or changed.
+
+    The UI draws this over the topology (ghost nodes and links) so a change is
+    reviewed where it happens. ``None`` when either side does not parse. Links
+    are matched as endpoint pairs; removed ones come back as canvas edge ids.
+    """
+    from services.model import edge_ids, serialize
+
+    try:
+        before = serialize.from_yaml(before_text)
+        after = serialize.from_yaml(after_text)
+    except Exception:  # noqa: BLE001 - a preview that cannot be drawn is still reviewable as a diff
+        return None
+
+    old_nodes = {n.name: n for n in before.nodes}
+    new_nodes = {n.name: n for n in after.nodes}
+
+    def links_of(topology: Any) -> list[tuple[tuple[str, ...], list[str], str]]:
+        """(sorted endpoints, endpoints as written, canvas edge id) per link. The canvas draws a link
+        with more than two endpoints as first-to-second only, so that is the id it carries."""
+        seen: edge_ids.EdgeIdCounter = {}
+        return [
+            (
+                tuple(sorted(link.endpoints)),
+                list(link.endpoints),
+                edge_ids.edge_id(link.endpoints[0], link.endpoints[1], seen),
+            )
+            for link in topology.links
+            if len(link.endpoints) >= 2
+        ]
+
+    old_links, new_links = links_of(before), links_of(after)
+    # Compared as endpoint sets, with counts: a second r1-r2 is an addition and a third endpoint on
+    # a LAN changes that link.
+    to_add = Counter(key for key, _, _ in new_links) - Counter(key for key, _, _ in old_links)
+    to_remove = Counter(key for key, _, _ in old_links) - Counter(key for key, _, _ in new_links)
+    links_added: list[dict[str, Any]] = []
+    for key, endpoints, _ in new_links:
+        if to_add[key] > 0:
+            to_add[key] -= 1
+            links_added.append({"source": endpoints[0], "target": endpoints[1], "endpoints": endpoints})
+    links_removed: list[str] = []
+    for key, _, link_id in old_links:
+        if to_remove[key] > 0:
+            to_remove[key] -= 1
+            links_removed.append(link_id)
+    return {
+        "nodesAdded": [{"name": n.name, "device": n.device} for name, n in new_nodes.items() if name not in old_nodes],
+        "nodesRemoved": [name for name in old_nodes if name not in new_nodes],
+        "nodesChanged": [
+            name
+            for name, n in new_nodes.items()
+            if name in old_nodes and (n.device, n.attrs) != (old_nodes[name].device, old_nodes[name].attrs)
+        ],
+        "linksAdded": links_added,
+        "linksRemoved": links_removed,
+    }
+
+
 def create_edit(
     *,
     session_id: str,
@@ -142,9 +205,11 @@ def create_edit(
     commands_list: list[dict[str, Any]],
     rationale: str,
 ) -> Proposal:
-    _, diff = preview_edit(topology_path, commands_list)
+    after_text, diff = preview_edit(topology_path, commands_list)
     if not diff:
         raise ValueError("commands produce no change to the topology")
+    source = Path(topology_path)
+    before_text = source.read_text() if source.exists() else ""
     return store.add(
         Proposal(
             id=uuid.uuid4().hex,
@@ -155,6 +220,7 @@ def create_edit(
             summary=summarize(commands_list),
             commands=commands_list,
             diff=diff,
+            changes=topology_changes(before_text, after_text),
         )
     )
 

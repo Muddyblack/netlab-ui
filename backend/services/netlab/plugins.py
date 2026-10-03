@@ -249,6 +249,17 @@ def read_metadata(entry_file: Path) -> PluginMeta:
     return meta
 
 
+def _is_bystander_package(root: Path, source: Path, meta: PluginMeta) -> bool:
+    """A Python package nested in the lab folder that netlab would never call.
+
+    The lab folder holds more than plugins: the monitoring plugin, for one,
+    writes its collector package to ``monitoring/collector/nlmon/``. A nested
+    package with no plugin hook, ``_generator`` or ``_config_name`` is such
+    an artifact, not a ``plugin:`` entry."""
+    nested = source.is_dir() and len(source.relative_to(root).parts) > 1
+    return nested and not (meta.hooks or meta.generator or meta.config_name or meta.error)
+
+
 def discover(
     topology_dir: Path | None = None,
     *,
@@ -276,6 +287,8 @@ def discover(
                 existing.shadows.append(str(source))
                 continue
             meta = read_metadata(entry_file) if entry_file else PluginMeta()
+            if origin == ORIGIN_TOPOLOGY and _is_bystander_package(root, source, meta):
+                continue
             found[plugin_id] = DiscoveredPlugin(
                 id=plugin_id,
                 origin=origin,

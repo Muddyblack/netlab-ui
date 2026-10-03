@@ -214,18 +214,16 @@ def test_vm_lan_link_impairment_runs_netlab_tc(vm_lab, monkeypatch):
     assert res.json()["code"] == 1
 
 
-def test_runtime_collect_hides_netlab_tool_entries(monkeypatch):
-    async def status_for(_path):
-        return {
-            "nodes": {
-                "r1": {"device": "frr", "provider": "clab", "status": "Up 1 minute"},
-                "monitoring": {"device": "(tool)", "provider": "clab", "status": "Not running"},
-            }
+def test_status_drops_netlab_tool_entries():
+    # netlab lists external tools (the monitoring stack) as fake nodes with a
+    # "<lab>_<tool>" container that never exists; they must not reach the UI.
+    detail = {
+        "nodes": {
+            "r1": {"device": "frr", "provider": "clab", "status": "Up 1 minute"},
+            "monitoring": {"device": "(tool)", "provider": "clab", "status": "Not running"},
         }
-
-    monkeypatch.setattr(runner, "status_for", status_for)
-    containers = asyncio.run(runtime.collect("lab.yml", Topology(name="lab")))
-    assert [c["nodeName"] for c in containers] == ["r1"]
+    }
+    assert list(runner._without_tools(detail)["nodes"]) == ["r1"]
 
 
 def test_netem_set_ignores_containerlab_readback_error(monkeypatch):

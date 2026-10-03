@@ -3125,6 +3125,59 @@ export interface components {
              */
             clientConfig: string;
         };
+        /**
+         * AssistantGhostLink
+         * @description Both ends of a link a proposal adds.
+         */
+        AssistantGhostLink: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /**
+             * Endpoints
+             * @default []
+             */
+            endpoints: string[];
+        };
+        /** AssistantGhostNode */
+        AssistantGhostNode: {
+            /** Name */
+            name: string;
+            /** Device */
+            device?: string | null;
+        };
+        /**
+         * AssistantProposalChanges
+         * @description What an edit proposal does to the canvas, for drawing it as a ghost.
+         */
+        AssistantProposalChanges: {
+            /**
+             * Nodesadded
+             * @default []
+             */
+            nodesAdded: components["schemas"]["AssistantGhostNode"][];
+            /**
+             * Nodesremoved
+             * @default []
+             */
+            nodesRemoved: string[];
+            /**
+             * Nodeschanged
+             * @default []
+             */
+            nodesChanged: string[];
+            /**
+             * Linksadded
+             * @default []
+             */
+            linksAdded: components["schemas"]["AssistantGhostLink"][];
+            /**
+             * Linksremoved
+             * @default []
+             */
+            linksRemoved: string[];
+        };
         /** AssistantProposal */
         AssistantProposal: {
             /** Id */
@@ -3158,6 +3211,7 @@ export interface components {
              * @default
              */
             diff: string;
+            changes?: components["schemas"]["AssistantProposalChanges"] | null;
             /** Action */
             action?: {
                 [key: string]: unknown;

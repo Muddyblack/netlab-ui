@@ -35,6 +35,7 @@ export function PluginsPanel({
     activePlugins,
     filteredPlugins,
     customPlugins,
+    uiPlugins,
     builtinPlugins,
     loadPlugins,
     reloadYaml,
@@ -113,7 +114,18 @@ export function PluginsPanel({
         <PluginSection
           heading="Custom plugins"
           group={customPlugins}
-          showHeading={builtinPlugins.length > 0}
+          showHeading={builtinPlugins.length + uiPlugins.length > 0}
+          activePlugins={activePlugins}
+          expandedPlugin={expandedPlugin}
+          loadingPluginReference={loadingPluginReference}
+          onToggleEnabled={(plugin, enabled) => void handleTogglePlugin(plugin.id, enabled)}
+          onExpandedChange={(plugin, expanded) => void handlePluginReferenceChange(plugin, expanded)}
+          onOpenDocs={(plugin, view) => void handleOpenPluginDocs(plugin, view)}
+        />
+        <PluginSection
+          heading="Installed with netlab-ui"
+          group={uiPlugins}
+          showHeading
           activePlugins={activePlugins}
           expandedPlugin={expandedPlugin}
           loadingPluginReference={loadingPluginReference}
@@ -124,7 +136,7 @@ export function PluginsPanel({
         <PluginSection
           heading="Installed with netlab"
           group={builtinPlugins}
-          showHeading={customPlugins.length > 0}
+          showHeading={customPlugins.length + uiPlugins.length > 0}
           activePlugins={activePlugins}
           expandedPlugin={expandedPlugin}
           loadingPluginReference={loadingPluginReference}

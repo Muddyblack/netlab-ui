@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from app import auth
 from app.assistant.responses import (
     AssistantAck,
+    AssistantApplyRequest,
     AssistantCapabilities,
     AssistantProposalList,
     AssistantProposalResult,
@@ -186,7 +187,7 @@ def list_proposals(session_id: str = Query(alias="sessionId")):
 
 
 @router.post("/proposals/{proposal_id}/apply", response_model=AssistantProposalResult)
-async def apply_proposal(proposal_id: str):
+async def apply_proposal(proposal_id: str, body: AssistantApplyRequest | None = None):
     """Apply an approved proposal — an agent's only path to a topology write."""
     proposal = _require_proposal(proposal_id)
     if proposal.status != "pending":
@@ -210,10 +211,20 @@ async def apply_proposal(proposal_id: str):
         tools.notify_proposals(proposal.session_id)
         return {"ok": True, "proposal": proposal.as_dict(), "revision": session.revision}
 
+    # New nodes land where the user saw their ghosts, not at the canvas default. Part of the same batch,
+    # so undo reverses the placement with the proposal.
+    commands = list(proposal.commands)
+    added = {node["name"] for node in (proposal.changes or {}).get("nodesAdded", [])}
+    placed = [
+        {"id": name, "position": {"x": point.x, "y": point.y}}
+        for name, point in (body.positions if body else {}).items()
+        if name in added
+    ]
+    if placed:
+        commands.append({"type": "savePositions", "payload": {"positions": placed}})
+
     # Multiple commands go in as one batch so undo reverses the whole proposal.
-    command: dict[str, Any] = (
-        proposal.commands[0] if len(proposal.commands) == 1 else {"type": "batch", "commands": proposal.commands}
-    )
+    command: dict[str, Any] = commands[0] if len(commands) == 1 else {"type": "batch", "commands": commands}
     result = session.host.apply_command(command)
     if not result.ok:
         return {

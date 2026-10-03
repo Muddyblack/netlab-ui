@@ -507,6 +507,18 @@ async def status() -> Any:
     return result
 
 
+def _without_tools(detail: Any) -> Any:
+    """Drop the external tools netlab lists beside the nodes (device ``(tool)``).
+
+    netlab guesses one ``<lab>_<tool>`` container per tool, which a plugin
+    stack such as monitoring never has: as nodes they show as stopped and
+    offer start/stop actions that cannot work."""
+    if isinstance(detail, dict) and isinstance(detail.get("nodes"), dict):
+        nodes = {n: i for n, i in detail["nodes"].items() if not (isinstance(i, dict) and i.get("device") == "(tool)")}
+        return {**detail, "nodes": nodes}
+    return detail
+
+
 async def _full_status() -> Any:
     status_result = await _run(["status", "--format", "json", "--all"])
     if status_result.code != 0:
@@ -531,7 +543,7 @@ async def _full_status() -> Any:
                     ["status", "--format", "json"],
                     cwd=Path(str(summary["dir"])),
                 )
-                detail = json.loads(detail_out)
+                detail = _without_tools(json.loads(detail_out))
                 return key, {**summary, **detail} if isinstance(detail, dict) else summary
             except (NetlabError, NetlabNotInstalled, OSError, json.JSONDecodeError):
                 return key, summary
@@ -745,7 +757,7 @@ async def status_for(topology_path: str | Path, max_age: float = 4.0) -> Any:
         if cached and time.monotonic() - cached[0] < max_age:
             return cached[1]
         out = await _run_checked(["status", "--format", "json"], cwd=Path(topology_path).parent)
-        result = json.loads(out)
+        result = _without_tools(json.loads(out))
         _lab_status_cache[key] = (time.monotonic(), result)
         return result
 

@@ -5,9 +5,11 @@ import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import { Box, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { readPinnedLabPaths, readRecentLabPaths, togglePinnedLabPath } from "../lifecycle/persistence";
 import type { LabFileEntry } from "../api/client";
+import { terminalShortcutLabel, useQuickOpenShortcut } from "../app/terminalShortcut";
 
 export function AttractorEmptyState({ labs, onOpenLab }: { labs: LabFileEntry[]; onOpenLab: (topologyRef: LabFileEntry["topologyRef"]) => void }) {
   const [pinned, setPinned] = useState(readPinnedLabPaths);
+  const quickOpenShortcut = useQuickOpenShortcut();
   const animatedLogoSrc = `${import.meta.env.BASE_URL}netlab-full-lockup_animated.svg`;
   const byPath = useMemo(() => new Map(labs.map((lab) => [lab.path, lab])), [labs]);
   const pinnedLabs = pinned.map((path) => byPath.get(path)).filter((lab): lab is LabFileEntry => Boolean(lab));
@@ -25,7 +27,7 @@ export function AttractorEmptyState({ labs, onOpenLab }: { labs: LabFileEntry[];
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, mt: 1.25 }}>
             Press
-            <Box component="kbd" sx={{ px: 0.75, py: 0.2, border: 1, borderColor: "divider", borderRadius: 0.75, bgcolor: "action.hover", color: "text.primary", fontFamily: "inherit", fontSize: "0.72rem", lineHeight: 1.5 }}>Ctrl+P</Box>
+            <Box component="kbd" sx={{ px: 0.75, py: 0.2, border: 1, borderColor: "divider", borderRadius: 0.75, bgcolor: "action.hover", color: "text.primary", fontFamily: "inherit", fontSize: "0.72rem", lineHeight: 1.5 }}>{terminalShortcutLabel(quickOpenShortcut)}</Box>
             for quick open
           </Typography>
         </Box>

@@ -22,7 +22,7 @@ import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackba
 import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
 import { rememberAgents } from "../components/agents/agentNames";
 import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
-import { matchesTerminalShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
+import { matchesTerminalShortcut, quickOpenShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
 import { useProposalWatcher } from "../components/agents/proposalsStore";
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
 import type { TopologyRef } from "../hooks/useTabManager";
@@ -70,8 +70,9 @@ function globalShortcut(event: KeyboardEvent): "toggle-terminal" | "new-terminal
   if (!(event.ctrlKey || event.metaKey)) return null;
   // The terminal key (Settings → General; the backtick by default) shows or hides the panel, with Shift it opens another terminal.
   if (matchesTerminalShortcut(event)) return event.shiftKey ? "new-terminal" : "toggle-terminal";
+  // The quick-open key (Settings → General; P by default).
+  if (!event.shiftKey && quickOpenShortcut.matches(event)) return "quick-open";
   const key = event.key.toLowerCase();
-  if (key === "p") return "quick-open";
   if (key !== "i" || event.altKey) return null;
   const target = event.target as HTMLElement | null;
   const editable = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
@@ -546,7 +547,10 @@ export function useAppController() {
 
   // Owned here (not inside the palette tab) so lens/inspector state survives
   // switching to another dock tab and back.
-  const netlabLenses = useNetlabLenses(sessionId ?? "", activeTabId ?? undefined);
+  // Keyed by the last lab tab so visiting a file/web tab does not refetch lenses.
+  const lastLabTabId = useRef<string | undefined>(undefined);
+  if (openTabs.some((t) => t.id === activeTabId && t.kind === "topology")) lastLabTabId.current = activeTabId ?? undefined;
+  const netlabLenses = useNetlabLenses(sessionId ?? "", lastLabTabId.current);
   const { applyDeploymentProgress } = netlabLenses;
   invalidateLensesRef.current = netlabLenses.invalidate;
   useRightPanelTabMemory();

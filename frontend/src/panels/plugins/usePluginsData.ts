@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { parse } from "yaml";
 import { api } from "../../api/client";
-import { isCustomPlugin, type PluginInfo, type PluginPipelineInfo } from "./types";
+import { isCustomPlugin, isNetlabUiPlugin, type PluginInfo, type PluginPipelineInfo } from "./types";
 import { togglePluginInYaml } from "./pluginYaml";
 
 /** Owns the topology YAML, the plugin catalog, and the derived enabled/pipeline
@@ -108,7 +108,8 @@ export function usePluginsData(sessionId: string, base: string, onChanged: () =>
   // Custom plugins first — they're the ones the user is iterating on, and
   // there are a handful of them against ~25 builtins.
   const customPlugins = useMemo(() => filteredPlugins.filter(isCustomPlugin), [filteredPlugins]);
-  const builtinPlugins = useMemo(() => filteredPlugins.filter((p) => !isCustomPlugin(p)), [filteredPlugins]);
+  const uiPlugins = useMemo(() => filteredPlugins.filter(isNetlabUiPlugin), [filteredPlugins]);
+  const builtinPlugins = useMemo(() => filteredPlugins.filter((p) => !isCustomPlugin(p) && !isNetlabUiPlugin(p)), [filteredPlugins]);
 
   const handleTogglePlugin = useCallback(async (pluginId: string, enabled: boolean) => {
     try {
@@ -131,6 +132,7 @@ export function usePluginsData(sessionId: string, base: string, onChanged: () =>
     activePlugins,
     filteredPlugins,
     customPlugins,
+    uiPlugins,
     builtinPlugins,
     loadPlugins,
     reloadYaml,
