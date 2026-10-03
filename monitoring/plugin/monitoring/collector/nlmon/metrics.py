@@ -16,6 +16,7 @@ FAMILIES: dict[str, tuple[str, str]] = {
     "netlab_collector_cycle_seconds": ("gauge", "Duration of the last full collection cycle"),
     "netlab_collector_nodes": ("gauge", "Nodes in the collection plan"),
     "netlab_expected_bgp_session": ("gauge", "BGP session the netlab topology expects (value 1)"),
+    "netlab_expected_vxlan_vni": ("gauge", "VXLAN VNI the netlab topology expects on a node (value 1)"),
     "netlab_expected_ospf_adjacency": ("gauge", "OSPF adjacency the netlab topology expects (value 1)"),
     "netlab_expected_isis_adjacency": ("gauge", "IS-IS adjacency the netlab topology expects (value 1)"),
     # node resources
@@ -69,6 +70,11 @@ FAMILIES: dict[str, tuple[str, str]] = {
     # BFD
     "netlab_bfd_session_up": ("gauge", "1 when the BFD session is up"),
     "netlab_bfd_session_down_total": ("counter", "BFD session down events"),
+    # VXLAN / EVPN (FRR zebra's view of each VNI)
+    "netlab_vxlan_vni_up": ("gauge", "1 for every VNI the router's EVPN control plane has up (type=l2|l3)"),
+    "netlab_vxlan_vni_macs": ("gauge", "MAC addresses learned in the VNI"),
+    "netlab_vxlan_vni_neighbors": ("gauge", "ARP/ND entries in the VNI"),
+    "netlab_vxlan_vni_remote_vteps": ("gauge", "Remote VTEPs the router knows for the L2 VNI"),
     # routing table
     "netlab_routes": ("gauge", "Routes in the routing table by protocol (table=rib|fib)"),
 }

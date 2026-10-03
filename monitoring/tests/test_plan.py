@@ -38,6 +38,22 @@ def test_expected_state_comes_from_the_topology(topology):
     assert {(e["node"], e["peer_node"]) for e in expected["isis"]} == {("r1", "r2"), ("r2", "r1")}
 
 
+def test_expected_vnis_come_from_the_vxlan_and_evpn_settings(topology):
+    r1 = topology["nodes"]["r1"]
+    r1["vxlan"] = {"vlans": ["red"], "l3vnis": ["tenant"]}
+    r1["vlans"] = {"red": {"vni": 101000}}
+    r1["vrfs"] = {"tenant": {"evpn": {"transit_vni": 5000}}}
+    topology["nodes"]["h1"]["vxlan"] = {"vlans": ["red"]}  # a host collected by 'host' only: nothing reads its VNIs
+    topology["nodes"]["h1"]["vlans"] = {"red": {"vni": 101000}}
+    p = plan.build(topology)
+    assert "vxlan" in p["nodes"]["r1"]["frr"]["protocols"]
+    assert "vxlan" not in p["nodes"]["r2"]["frr"]["protocols"]
+    assert p["expected"]["vxlan"] == [
+        {"node": "r1", "vni": "101000", "type": "l2", "vlan": "red"},
+        {"node": "r1", "vni": "5000", "type": "l3", "vrf": "tenant"},
+    ]
+
+
 def test_node_selection_and_opt_out(topology):
     topology["monitoring"]["nodes"] = ["r1", "r2"]
     assert plan.selected_nodes(topology) == ["r1", "r2"]

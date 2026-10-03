@@ -121,6 +121,8 @@ class Collector:
             sink.add("netlab_link_info", 1, **{k: v for k, v in link.items() if isinstance(v, (str, int))})
         for item in self.plan.expected.get("bgp", []):
             sink.add("netlab_expected_bgp_session", 1, **item)
+        for item in self.plan.expected.get("vxlan", []):
+            sink.add("netlab_expected_vxlan_vni", 1, **item)
         for item in self.plan.expected.get("ospf", []):
             sink.add("netlab_expected_ospf_adjacency", 1, **item)
         for item in self.plan.expected.get("isis", []):

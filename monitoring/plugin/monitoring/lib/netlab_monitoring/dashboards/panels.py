@@ -10,6 +10,7 @@ NODE = 'lab="$lab",node=~"$node"'
 
 # Expected-but-missing sessions: the topology says they should exist, they are not up.
 MISSING_BGP = f"netlab_expected_bgp_session{{{LAB}}} unless on(lab,node,peer,vrf) (netlab_bgp_session_up{{{LAB}}} == 1)"
+MISSING_VXLAN = f"netlab_expected_vxlan_vni{{{LAB}}} unless on(lab,node,vni) (netlab_vxlan_vni_up{{{LAB}}} == 1)"
 MISSING_OSPF = (
     f"netlab_expected_ospf_adjacency{{{LAB}}} unless on(lab,node,peer_node,ifname) "
     f"(netlab_ospf_neighbor_up{{{LAB}}} == 1)"
@@ -84,7 +85,6 @@ class Board:
             target.setdefault("datasource", DS)
         self.panels.append(panel)
 
-
     def build(self, variables: list[dict], links: list[dict]) -> dict:
         return {
             "uid": self.uid,
@@ -134,7 +134,9 @@ def marker_variables() -> list[dict]:
         }
     ]
     for tag in ("link", "scenario"):
-        expr = f'label_replace(label_set(vector(1), "t", "${{markers:csv}}", "x", "off"), "x", "{tag}", "t", ".*{tag}.*")'
+        expr = (
+            f'label_replace(label_set(vector(1), "t", "${{markers:csv}}", "x", "off"), "x", "{tag}", "t", ".*{tag}.*")'
+        )
         result.append(
             {
                 "name": f"marker_{tag}",
@@ -194,7 +196,13 @@ def device_markers(node_filter: bool) -> list[dict]:
     )
     return [
         marker("🟦 SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}", "spf"),
-        marker("🟥 Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed", "neighbor"),
+        marker(
+            "🟥 Neighbor changes",
+            "rgba(242, 73, 92, 0.7)",
+            neighbors,
+            "{{proto}} {{node}} - {{peer_node}} changed",
+            "neighbor",
+        ),
     ]
 
 

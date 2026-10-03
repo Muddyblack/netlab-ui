@@ -2942,6 +2942,16 @@ export interface components {
              */
             isisExpected: number;
             /**
+             * Vxlanup
+             * @default 0
+             */
+            vxlanUp: number;
+            /**
+             * Vxlanexpected
+             * @default 0
+             */
+            vxlanExpected: number;
+            /**
              * Missing
              * @default []
              */

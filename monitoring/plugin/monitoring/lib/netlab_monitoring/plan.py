@@ -11,6 +11,8 @@ from __future__ import annotations
 import typing
 
 PROTOCOLS = ("ospf", "isis", "bgp", "bfd")
+# Not a netlab module to ask for: a node speaks VXLAN when netlab gave it VNIs.
+VXLAN = "vxlan"
 COMPONENT_FLAG = "_monitoring_component"
 
 
@@ -180,7 +182,8 @@ def build(topology: dict) -> dict:
             plan_node["domain"] = domain_name(topology, name)
         if method == "frr":
             plan_node["frr"] = {
-                "protocols": [m for m in node.get("module") or [] if m in PROTOCOLS],
+                "protocols": [m for m in node.get("module") or [] if m in PROTOCOLS]
+                + ([VXLAN] if vxlan_vnis(node) else []),
                 "socket_dirs": get(profile, "frr.socket_dirs") or ["run/frr", "var/run/frr"],
             }
         elif method in ("gnmi", "snmp"):
@@ -208,7 +211,7 @@ def build(topology: dict) -> dict:
         "links": _links(topology, link_names, monitored_set),
         "addresses": addresses,
         "router_ids": router_ids,
-        "expected": _expected(topology, monitored_set),
+        "expected": _expected(topology, monitored_set, plan_nodes),
         "exporters": exporters,
     }
 
@@ -234,9 +237,23 @@ def _peer_interface(nodes: dict, peer: str, linkindex: typing.Any) -> dict:
     return {}
 
 
-def _expected(topology: dict, monitored: set[str]) -> dict[str, list[dict]]:
+def vxlan_vnis(node: dict) -> list[dict]:
+    """The VNIs netlab configured on a node: one per VXLAN VLAN (type l2) and per
+    symmetric-IRB VRF (type l3)."""
+    found: list[dict] = []
+    for vlan in get(node, "vxlan.vlans", []) or []:
+        if vni := get(node, f"vlans.{vlan}.vni"):
+            found.append({"vni": str(vni), "type": "l2", "vlan": vlan})
+    for vrf in get(node, "vxlan.l3vnis", []) or []:
+        if vni := get(node, f"vrfs.{vrf}.evpn.transit_vni"):
+            found.append({"vni": str(vni), "type": "l3", "vrf": vrf})
+    return found
+
+
+def _expected(topology: dict, monitored: set[str], plan_nodes: dict[str, dict]) -> dict[str, list[dict]]:
     nodes = topology.get("nodes") or {}
     bgp: list[dict] = []
+    vxlan: list[dict] = []
     igp: dict[str, list[dict]] = {"ospf": [], "isis": []}
     for name in sorted(monitored):
         node = nodes[name]
@@ -263,6 +280,9 @@ def _expected(topology: dict, monitored: set[str]) -> dict[str, list[dict]]:
                             "vrf": vrf,
                         }
                     )
+        # Only where something reads VNIs from the device (FRR), or "expected" would always read "missing".
+        if VXLAN in (plan_nodes.get(name, {}).get("frr") or {}).get("protocols", []):
+            vxlan += [{"node": name, **vni} for vni in vxlan_vnis(node)]
         for proto in ("ospf", "isis"):
             if proto not in modules:
                 continue
@@ -280,4 +300,4 @@ def _expected(topology: dict, monitored: set[str]) -> dict[str, list[dict]]:
                     if proto == "ospf":
                         item["area"] = str(get(intf, "ospf.area", get(node, "ospf.area", "0.0.0.0")))
                     igp[proto].append(item)
-    return {"bgp": bgp, "ospf": igp["ospf"], "isis": igp["isis"]}
+    return {"bgp": bgp, "vxlan": vxlan, "ospf": igp["ospf"], "isis": igp["isis"]}

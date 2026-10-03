@@ -37,6 +37,11 @@ BUILTIN = {
                     "{{ $labels.node }}: BGP session to {{ $labels.peer }} is not established",
                 ),
                 _rule(
+                    "NetlabVxlanVniMissing",
+                    "netlab_expected_vxlan_vni unless on(lab,node,vni) (netlab_vxlan_vni_up == 1)",
+                    "{{ $labels.node }}: VXLAN VNI {{ $labels.vni }} is not up",
+                ),
+                _rule(
                     "NetlabOspfAdjacencyDown",
                     "netlab_expected_ospf_adjacency unless on(lab,node,peer_node,ifname)"
                     " (netlab_ospf_neighbor_up == 1)",

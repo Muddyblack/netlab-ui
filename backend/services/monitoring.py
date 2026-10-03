@@ -443,6 +443,8 @@ async def summary(lab_dir: Path) -> dict[str, Any]:
         "ospfExpected": f"count(netlab_expected_ospf_adjacency{{{sel}}})",
         "isisUp": f"sum(netlab_isis_adjacency_up{{{sel}}})",
         "isisExpected": f"count(netlab_expected_isis_adjacency{{{sel}}})",
+        "vxlanUp": f"count(netlab_vxlan_vni_up{{{sel}}} == 1)",
+        "vxlanExpected": f"count(netlab_expected_vxlan_vni{{{sel}}})",
     }
     results = await asyncio.gather(*(query(lab_dir, q) for q in queries.values()))
     counts = {key: int(res[0]["value"]) if res else 0 for key, res in zip(queries, results, strict=True)}
@@ -453,6 +455,7 @@ async def summary(lab_dir: Path) -> dict[str, Any]:
         f"(netlab_ospf_neighbor_up{{{sel}}} == 1)",
         "IS-IS": f"netlab_expected_isis_adjacency{{{sel}}} unless on(lab,node,peer_node,ifname) "
         f"(netlab_isis_adjacency_up{{{sel}}} == 1)",
+        "VXLAN": f"netlab_expected_vxlan_vni{{{sel}}} unless on(lab,node,vni) (netlab_vxlan_vni_up{{{sel}}} == 1)",
     }
     missing_results = await asyncio.gather(*(query(lab_dir, q) for q in missing_queries.values()))
     missing = [
@@ -460,7 +463,11 @@ async def summary(lab_dir: Path) -> dict[str, Any]:
             "protocol": proto,
             "node": str(item["labels"].get("node", "")),
             "peer": str(item["labels"].get("peer_node") or item["labels"].get("peer") or ""),
-            "detail": str(item["labels"].get("ifname") or item["labels"].get("peer") or ""),
+            "detail": str(
+                item["labels"].get("ifname")
+                or item["labels"].get("peer")
+                or (f"VNI {item['labels']['vni']}" if item["labels"].get("vni") else "")
+            ),
         }
         for proto, res in zip(missing_queries, missing_results, strict=True)
         for item in res

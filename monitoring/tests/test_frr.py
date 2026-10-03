@@ -119,3 +119,33 @@ def test_real_vty_socket_protocol():
     server.close()
     assert received == ["enable", "show ip route summary json"]
     assert os.path.exists(path)
+
+
+def test_evpn_vnis_from_a_real_frr_reply(tmp_path):
+    """show evpn vni json from FRR 10.7.1: an L2 VNI and an L3 (symmetric IRB) VNI in a VRF."""
+    import json
+
+    from conftest import FIXTURES
+
+    reply = json.loads((FIXTURES / "frr" / "evpn.json").read_text())
+    reply.update({"show ip route summary json": "{}", "show ipv6 route summary json": "{}"})  # asked of zebra too
+    rundir = tmp_path / "run" / "frr"
+    rundir.mkdir(parents=True)
+    (rundir / "zebra.vty").touch()
+    sink = Sink({"node": "r1"})
+    assert frr.collect(sink, str(tmp_path), ["vxlan"], ["run/frr"], RESOLVER, {}, query=fake_query(reply))
+
+    up = {labels["vni"]: labels for labels, value in samples(sink, "netlab_vxlan_vni_up") if value == 1}
+    assert up["10"]["type"] == "l2" and up["10"]["vxlan_if"] == "vxlan10" and "vrf" not in up["10"]
+    assert up["5000"]["type"] == "l3" and up["5000"]["vrf"] == "tenant"
+    # FRR reports "n/a" remote VTEPs for an L3 VNI: no sample rather than a made-up zero
+    remote = {labels["vni"] for labels, _ in samples(sink, "netlab_vxlan_vni_remote_vteps")}
+    assert remote == {"10"}
+    assert {labels["vni"] for labels, _ in samples(sink, "netlab_vxlan_vni_macs")} == {"10", "5000"}
+
+
+def test_evpn_vnis_ignore_unexpected_replies():
+    sink = Sink()
+    frr.evpn_vnis(sink, [])
+    frr.evpn_vnis(sink, {"10": "oops"})
+    assert sink.samples == []

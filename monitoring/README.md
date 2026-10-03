@@ -5,10 +5,10 @@ installed in the devices and no change to netlab itself:
 
 * **Every container and libvirt VM**: CPU, memory and per-interface traffic, errors, drops,
   link state and link flaps -- read on the lab host (`/proc`, cgroups, libvirt state).
-* **Routing protocol state**: OSPF, IS-IS, BGP, BFD and routing-table size, chosen per device:
+* **Routing protocol state**: OSPF, IS-IS, BGP (including EVPN sessions), BFD, VXLAN VNIs (FRR) and routing-table size, chosen per device:
   FRR-based devices through the FRR daemons' own sockets, gNMI devices (SR Linux, Arista,
   Juniper) through gnmic, SNMP devices through snmp_exporter.
-* **What the topology intends**: every BGP session and OSPF/IS-IS adjacency netlab configured,
+* **What the topology intends**: every BGP session, OSPF/IS-IS adjacency and VXLAN VNI netlab configured,
   so "defined but not up" works the same for every vendor.
 * **Storage and dashboards**: VictoriaMetrics (Prometheus-compatible, light at scale) and
   Grafana with three dashboards: lab overview (a topology graph is folded at the bottom, for
@@ -44,7 +44,7 @@ prints the Grafana URL (`http://<host>:3000`, anonymous read-only; `admin`/`admi
 Lab context menu or Ctrl+P → **Monitoring…** → switch it on. The UI installs the plugin in
 `~/.netlab` and edits the topology for you. The dialog has three tabs:
 
-* **Health**: nodes, BGP sessions and OSPF/IS-IS adjacencies up vs what the topology defines,
+* **Health**: nodes, BGP sessions, OSPF/IS-IS adjacencies and VXLAN VNIs up vs what the topology defines,
   what is missing, and buttons for the dashboards.
 * **Fault tests**: repeatable link flaps (see below).
 * **Setup**: where the stack runs, start/stop, the opt-in logs and alert notifications (webhook,
@@ -316,6 +316,7 @@ about 1.6 s per cycle, well inside a 15-second interval.
 | | Status |
 |---|---|
 | FRR (OSPF, IS-IS, BGP, BFD, routes) via vty sockets | Tested against live FRR 10.4 routers, incl. a link flap |
+| VXLAN / EVPN VNIs (`show evpn vni json`) | Reply captured from live FRR 10.7.1 (one L2 and one L3 VNI) and parsed in tests; MAC, ARP/ND and remote-VTEP counts are not yet checked against a running two-VTEP fabric. gNMI and SNMP devices report no VNIs yet, so no VNI is expected on them |
 | Host metrics, cgroup v1 | Tested live; cgroup v2 and libvirt with fixtures |
 | `placement: tool` and `placement: node` | Tested live (containers started from netlab's `clab.yml`) |
 | gnmic config + mapping (SR Linux native, OpenConfig) | gnmic loads the config; mapping tested with `gnmic processor` on sample events -- **needs a run against real SR Linux / cEOS** |

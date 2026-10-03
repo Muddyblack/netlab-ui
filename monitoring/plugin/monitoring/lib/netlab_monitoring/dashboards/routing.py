@@ -8,6 +8,7 @@ from .panels import (
     MISSING_BGP,
     MISSING_ISIS,
     MISSING_OSPF,
+    MISSING_VXLAN,
     NODE,
     OSPF_STATE,
     UP_DOWN,
@@ -34,6 +35,7 @@ def routing() -> dict:
                 q(f"count({MISSING_BGP}) or vector(0)", "BGP sessions missing"),
                 q(f"count({MISSING_OSPF}) or vector(0)", "OSPF adjacencies missing"),
                 q(f"count({MISSING_ISIS}) or vector(0)", "IS-IS adjacencies missing"),
+                q(f"count({MISSING_VXLAN}) or vector(0)", "VXLAN VNIs missing"),
             ],
             "none",
             "Drops back to zero when the lab has converged; the width of a bump is the convergence time",
@@ -199,6 +201,42 @@ def routing() -> dict:
                 "peer_id": "System ID",
             },
             overrides=[color_cell("State", UP_DOWN)],
+        ),
+        12,
+        8,
+    )
+    b.row("VXLAN / EVPN")
+    b.add(
+        table(
+            "VXLAN VNIs",
+            [
+                q(f"netlab_vxlan_vni_up{{{NODE}}}", instant=True, fmt="table"),
+                q(f"netlab_vxlan_vni_macs{{{NODE}}}", instant=True, fmt="table"),
+                q(f"netlab_vxlan_vni_neighbors{{{NODE}}}", instant=True, fmt="table"),
+                q(f"netlab_vxlan_vni_remote_vteps{{{NODE}}}", instant=True, fmt="table"),
+            ],
+            rename={
+                "node": "Node",
+                "vni": "VNI",
+                "type": "Type",
+                "vrf": "VRF",
+                "vxlan_if": "VXLAN interface",
+                "Value #A": "State",
+                "Value #B": "MACs",
+                "Value #C": "ARP/ND",
+                "Value #D": "Remote VTEPs",
+            },
+            overrides=[color_cell("State", UP_DOWN)],
+        ),
+        12,
+        8,
+    )
+    b.add(
+        ts(
+            "MAC addresses per VNI",
+            [q(f'sum by (vni) (netlab_vxlan_vni_macs{{{NODE},type="l2"}})', "VNI {{vni}}")],
+            "none",
+            "Learned or EVPN-advertised MACs, summed over the selected routers",
         ),
         12,
         8,

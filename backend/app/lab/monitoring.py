@@ -87,6 +87,8 @@ class MonitoringSummary(BaseModel):
     ospfExpected: int = 0
     isisUp: int = 0
     isisExpected: int = 0
+    vxlanUp: int = 0
+    vxlanExpected: int = 0
     missing: list[MissingItem] = []
 
 

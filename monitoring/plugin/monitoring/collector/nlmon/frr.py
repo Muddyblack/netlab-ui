@@ -30,7 +30,15 @@ OSPF_STATES = {
 BGP_STATES = {"idle": 1, "connect": 2, "active": 3, "opensent": 4, "openconfirm": 5, "established": 6}
 
 # daemon -> protocols that need it
-DAEMON_FOR = {"ospf": "ospfd", "ospf6": "ospf6d", "isis": "isisd", "bgp": "bgpd", "bfd": "bfdd", "routes": "zebra"}
+DAEMON_FOR = {
+    "ospf": "ospfd",
+    "ospf6": "ospf6d",
+    "isis": "isisd",
+    "bgp": "bgpd",
+    "bfd": "bfdd",
+    "vxlan": "zebra",
+    "routes": "zebra",
+}
 
 
 class VtyError(Exception):
@@ -292,6 +300,32 @@ def bfd_peers(sink: Sink, peers: object, counters: object, resolver: Resolver, i
         sink.add("netlab_bfd_session_down_total", down_events.get(key(entry)), **labels)
 
 
+def evpn_vnis(sink: Sink, data: object) -> None:
+    """VXLAN VNIs zebra knows (``show evpn vni json``, keyed by VNI): a VNI listed here has its
+    VXLAN interface up under FRR's EVPN control, so a VNI the topology defines but this does not
+    list is down or never came up. L3 VNIs (symmetric IRB) have no remote-VTEP count."""
+    if not isinstance(data, dict):
+        return
+    for key, vni in data.items():
+        if not isinstance(vni, dict):
+            continue
+        labels = {
+            "vni": vni.get("vni", key),
+            "type": str(vni.get("type") or "").lower(),
+            "vrf": vni.get("tenantVrf") if vni.get("tenantVrf") not in (None, "default") else None,
+            "vxlan_if": vni.get("vxlanIf") or vni.get("vxlanInterface"),
+        }
+        sink.add("netlab_vxlan_vni_up", 1, **labels)
+        sink.add("netlab_vxlan_vni_macs", _number(vni.get("numMacs")), **labels)
+        sink.add("netlab_vxlan_vni_neighbors", _number(vni.get("numArpNd")), **labels)
+        sink.add("netlab_vxlan_vni_remote_vteps", _number(vni.get("numRemoteVteps")), **labels)
+
+
+def _number(value: object) -> int | float | None:
+    """A count FRR reports, or None where it says "n/a" (or nothing)."""
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def route_summary(sink: Sink, data: object, afi: str) -> None:
     for route in (data or {}).get("routes", []) if isinstance(data, dict) else []:
         protocol = route.get("type")
@@ -357,6 +391,10 @@ def collect(
         res = ask("bfdd", ["show bfd peers json", "show bfd peers counters json"])
         if res:
             bfd_peers(sink, res[0], res[1], resolver, ifmap)
+    if "vxlan" in protocols:
+        res = ask("zebra", ["show evpn vni json"])
+        if res:
+            evpn_vnis(sink, res[0])
     res = ask("zebra", ["show ip route summary json", "show ipv6 route summary json"])
     if res:
         route_summary(sink, res[0], "ipv4")

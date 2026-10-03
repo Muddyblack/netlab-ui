@@ -227,7 +227,8 @@ function HealthTab({ state, summary, updatedAt }: {
     ? [
         { label: "BGP sessions", up: summary.bgpUp, expected: summary.bgpExpected },
         { label: "OSPF adjacencies", up: summary.ospfUp, expected: summary.ospfExpected },
-        { label: "IS-IS adjacencies", up: summary.isisUp, expected: summary.isisExpected }
+        { label: "IS-IS adjacencies", up: summary.isisUp, expected: summary.isisExpected },
+        { label: "VXLAN VNIs", up: summary.vxlanUp, expected: summary.vxlanExpected }
       ].filter((item) => item.expected > 0)
     : [];
   return (
@@ -245,7 +246,7 @@ function HealthTab({ state, summary, updatedAt }: {
                   key={`${item.protocol}-${item.node}-${item.peer}-${item.detail}`}
                   variant="body2"
                 >
-                  {item.protocol} · {item.node} → {item.peer}
+                  {item.protocol} · {item.node}{item.peer ? ` → ${item.peer}` : ""}
                   {item.detail ? ` (${item.detail})` : ""}
                 </Typography>
               ))}
