@@ -72,6 +72,7 @@ def overview() -> dict:
                 "area": "Area",
                 "type": "Type",
             },
+            no_value="Nothing missing: everything the topology defines is up",
         ),
         24,
         7,

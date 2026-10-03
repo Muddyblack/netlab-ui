@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { createPortal } from "react-dom";
-import { DEMO_MODE, type OpenFileTab, type RuntimeSnackbarState } from "../../lifecycle/types";
+import { DEMO_MODE, type OpenFileTab, type OpenWebTab, type RuntimeSnackbarState } from "../../lifecycle/types";
 import type { TopologyRef } from "../../hooks/useTabManager";
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { SessionTab, useSessionDock } from "../../hooks/useSessionDock";
@@ -17,11 +17,13 @@ import { CanvasLabOverlays } from "./CanvasLabOverlays";
 const FileEditorTabPanel = lazy(() =>
   import("../FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
 );
+const WebTabPanel = lazy(() => import("../WebTabPanel").then((m) => ({ default: m.WebTabPanel })));
 const SessionDock = lazy(() => import("../../terminal/SessionDock").then((m) => ({ default: m.SessionDock })));
 
 interface AppCanvasOverlaysProps {
   portalContainer: Element | null;
   activeFileTab: OpenFileTab | null;
+  activeWebTab: OpenWebTab | null;
   themeMode: AppThemeMode;
   handleFileTabChange: (tabId: string, content: string) => void;
   handleCloseLab: (id: string) => Promise<void>;
@@ -44,6 +46,7 @@ interface AppCanvasOverlaysProps {
 export function AppCanvasOverlays({
   portalContainer,
   activeFileTab,
+  activeWebTab,
   themeMode,
   handleFileTabChange,
   handleCloseLab,
@@ -72,7 +75,14 @@ export function AppCanvasOverlays({
         portalContainer
       )}
 
-      {portalContainer && sessionId && !activeFileTab && !DEMO_MODE && createPortal(
+      {portalContainer && activeWebTab && createPortal(
+        <Suspense fallback={null}>
+          <WebTabPanel tab={activeWebTab} onClose={(id) => void handleCloseLab(id)} />
+        </Suspense>,
+        portalContainer
+      )}
+
+      {portalContainer && sessionId && !activeFileTab && !activeWebTab && !DEMO_MODE && createPortal(
         <>
           <CanvasValidationSummary issues={validationIssues} onClose={() => setValidationIssues([])} />
           <CanvasDeploymentProgress progress={deploymentProgress} />

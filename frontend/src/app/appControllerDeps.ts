@@ -21,5 +21,6 @@ export { openConfigsDialog } from "../host/configsDialogStore";
 export { openMonitoringDialog } from "../host/monitoringDialogStore";
 export { openToolsDialog } from "../host/toolsDialogStore";
 export { registerFileOpener } from "../host/fileOpenStore";
+export { registerWebTabOpener } from "../host/webTabStore";
 export { openPanelTab } from "../hooks/useRightPanelTabMemory";
 export { requestCopyLab } from "../host/copyLabStore";

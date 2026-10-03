@@ -796,7 +796,17 @@ async def netem_set(
         args += ["--rate", rate.strip()]
     if corruption.strip():
         args += ["--corruption", corruption.strip()]
-    return await _run_external("containerlab", args)
+    result = await _run_external("containerlab", args)
+    if result.code and "unsupported kind: netem" in f"{result.stdout}{result.stderr}":
+        # containerlab 0.79 applies the qdisc, then fails reading it back
+        # ("extractXStats(): unsupported kind: netem"). Trust the kernel, not its exit code.
+        _ifaces, qdiscs = await container_link_snapshot(container_name)
+        applied = any(
+            line.startswith("qdisc netem") and f" dev {interface} " in f"{line} " for line in qdiscs.splitlines()
+        )
+        if applied == any((delay.strip(), jitter.strip(), loss.strip(), rate.strip(), corruption.strip())):
+            return CommandResult(0, result.stdout, "")
+    return result
 
 
 def container_runtime_binary(preferred: str = "") -> str | None:

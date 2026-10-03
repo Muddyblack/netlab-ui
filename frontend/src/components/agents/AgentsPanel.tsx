@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import {
-  Accordion, AccordionDetails, AccordionSummary, Box, ButtonBase, Chip, FormControlLabel, IconButton, Link, MenuItem, Select, Stack, Switch,
+  Accordion, AccordionDetails, AccordionSummary, Box, ButtonBase, Chip, FormControlLabel, IconButton, Link, Menu, MenuItem, Select, Stack, Switch,
   ToggleButton, ToggleButtonGroup, Tooltip, Typography
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -319,8 +319,17 @@ function ConnectTool({ mcp, harnesses }: { mcp: McpInfo; harnesses: Harness[] })
 
 /** An agent's terminal inside the tab (placement "here"): a strip to switch between running agents or go
  * back to the cards, any pending proposals, then the terminal filling the rest. */
-function AgentInPanel({ agentId, sessionId, onApplied }: { agentId: string; sessionId: string; onApplied: () => void }) {
+function AgentInPanel({ agentId, sessionId, harnesses, onApplied, onStartAgent, onCloseAgent }: {
+  agentId: string;
+  sessionId: string;
+  harnesses: Harness[];
+  onApplied: () => void;
+  onStartAgent: (agentId: string, another?: boolean) => void;
+  onCloseAgent: (agentId: string) => void;
+}) {
   const { running } = useAgentSurface();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const installed = harnesses.filter((item) => item.available);
   return (
     <Stack sx={{ height: "100%", minHeight: 0 }}>
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ p: 0.75, flexShrink: 0, overflowX: "auto", borderBottom: 1, borderColor: "divider" }}>
@@ -339,8 +348,36 @@ function AgentInPanel({ agentId, sessionId, onApplied }: { agentId: string; sess
             color={id === agentId ? "primary" : "default"}
             variant={id === agentId ? "filled" : "outlined"}
             onClick={() => focusAgent(id)}
+            onDelete={() => {
+              // Closing the shown tab moves to a neighbour; only the last one falls back to the cards.
+              if (id === agentId) focusAgent(running.find((other) => other !== id) ?? null);
+              onCloseAgent(id);
+            }}
           />
         ))}
+        {installed.length > 0 && (
+          <>
+            <Tooltip title="New session">
+              <IconButton size="small" aria-label="New agent session" onClick={(event) => setMenuAnchor(event.currentTarget)}>
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+              {installed.map((item) => (
+                <MenuItem
+                  key={item.id}
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    onStartAgent(item.id, running.some((id) => agentBase(id) === item.id));
+                  }}
+                >
+                  <Box sx={{ mr: 1, display: "flex" }}><AgentIcon id={item.id} size={16} /></Box>
+                  {item.name}
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
       </Stack>
       <Box sx={{ flexShrink: 0, maxHeight: "35%", overflow: "auto", px: 1 }}>
         <Proposals sessionId={sessionId} onApplied={onApplied} />
@@ -358,17 +395,18 @@ function AgentInPanel({ agentId, sessionId, onApplied }: { agentId: string; sess
  * — started here in the terminal panel, or set up by hand. Its proposed
  * changes are reviewed here too.
  */
-export function AgentsPanel({ capabilities, sessionId, onApplied, onStartAgent: openAgent }: {
+export function AgentsPanel({ capabilities, sessionId, onApplied, onStartAgent: openAgent, onCloseAgent }: {
   capabilities: AssistantCapabilities;
   sessionId: string;
   onApplied: () => void;
   onStartAgent: (agentId: string, another?: boolean) => string;
+  onCloseAgent: (agentId: string) => void;
 }) {
   const { placement, focused, running } = useAgentSurface();
   // Starting (or showing) an agent also makes it the one this tab shows, when the terminal lives here.
   const onStartAgent = useCallback((agentId: string, another?: boolean) => { focusAgent(openAgent(agentId, another)); }, [openAgent]);
   if (placement === "here" && focused && running.includes(focused)) {
-    return <AgentInPanel agentId={focused} sessionId={sessionId} onApplied={onApplied} />;
+    return <AgentInPanel agentId={focused} sessionId={sessionId} harnesses={capabilities.harnesses ?? []} onApplied={onApplied} onStartAgent={onStartAgent} onCloseAgent={onCloseAgent} />;
   }
   return (
     <Stack spacing={2} sx={{ height: "100%", minHeight: 0, overflow: "auto", p: 1.5 }}>

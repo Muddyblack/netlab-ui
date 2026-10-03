@@ -70,7 +70,7 @@ export default function App() {
             appRuntime={c.appRuntime}
             sessionId={c.sessionId}
             transformRunning={c.transformRunning}
-            activeFileTab={c.activeFileTab}
+            activeFileTab={c.activeFileTab ?? c.activeWebTab}
             portalContainer={c.portalContainer}
             labFiles={c.labFiles}
             handleOpenLab={c.handleOpenLab}
@@ -96,6 +96,7 @@ export default function App() {
           <AppCanvasOverlays
             portalContainer={c.portalContainer}
             activeFileTab={c.activeFileTab}
+            activeWebTab={c.activeWebTab}
             themeMode={c.themeMode}
             handleFileTabChange={c.handleFileTabChange}
             handleCloseLab={c.handleCloseLab}

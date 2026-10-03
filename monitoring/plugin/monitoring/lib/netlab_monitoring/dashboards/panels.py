@@ -20,6 +20,15 @@ MISSING_ISIS = (
 )
 
 
+# Colours match the annotation toggles below (orange, purple, blue, red).
+MARKERS = [
+    ("🟧", "link outage"),
+    ("🟪", "fault test"),
+    ("🟦", "SPF run"),
+    ("🟥", "neighbor change"),
+]
+
+
 class Board:
     def __init__(self, uid: str, title: str, description: str) -> None:
         self.uid, self.title, self.description = uid, title, description
@@ -74,7 +83,24 @@ class Board:
             target.setdefault("datasource", DS)
         self.panels.append(panel)
 
+    def marker_key(self) -> dict:
+        """What the coloured lines and bands on the graphs mean. Grafana lists annotations in no
+        legend, so this is the legend; the toggles at the top decide which of them are drawn."""
+        key = " &nbsp;·&nbsp; ".join(f"{icon} {name}" for icon, name in MARKERS)
+        return {
+            "type": "text",
+            "title": "",
+            "transparent": True,
+            "options": {"mode": "markdown", "content": f"**Markers on the graphs** (switch on above): {key}"},
+            "id": self._id(),
+            "gridPos": {"x": 0, "y": 0, "w": 24, "h": 2},
+        }
+
     def build(self, variables: list[dict], links: list[dict]) -> dict:
+        key = self.marker_key()
+        for panel in self.panels:
+            panel["gridPos"]["y"] += 2
+        self.panels.insert(0, key)
         return {
             "uid": self.uid,
             "title": self.title,
@@ -93,8 +119,8 @@ class Board:
             # A link down/up pair shows as one shaded region (the outage).
             "annotations": {
                 "list": [
-                    events("Link outages", "link", "rgba(255, 152, 48, 0.4)"),
-                    events("Fault tests", "scenario", "rgba(184, 119, 217, 0.4)"),
+                    events("🟧 Link outages", "link", "rgba(255, 152, 48, 0.4)"),
+                    events("🟪 Fault tests", "scenario", "rgba(184, 119, 217, 0.4)"),
                     *device_markers(any(v.get("name") == "node" for v in variables)),
                 ]
             },
@@ -139,8 +165,8 @@ def device_markers(node_filter: bool) -> list[dict]:
         ]
     )
     return [
-        marker("SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}"),
-        marker("Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed"),
+        marker("🟦 SPF runs", "rgba(87, 148, 242, 0.7)", spf, "{{proto}} SPF on {{node}}"),
+        marker("🟥 Neighbor changes", "rgba(242, 73, 92, 0.7)", neighbors, "{{proto}} {{node}} - {{peer_node}} changed"),
     ]
 
 
@@ -241,6 +267,7 @@ def table(
     hide: list[str] | None = None,
     mappings: list | None = None,
     overrides: list | None = None,
+    no_value: str = "",
 ) -> dict:
     hidden = dict.fromkeys(["Time", "__name__", "lab", "job", "instance", *(hide or [])], True)
     for target in targets:
@@ -253,7 +280,11 @@ def table(
         "targets": targets,
         "options": {"showHeader": True, "cellHeight": "sm", "footer": {"show": False}},
         "fieldConfig": {
-            "defaults": {"mappings": mappings or [], "custom": {"align": "auto"}},
+            "defaults": {
+                "mappings": mappings or [],
+                "custom": {"align": "auto"},
+                **({"noValue": no_value} if no_value else {}),
+            },
             "overrides": overrides or [],
         },
         "transformations": [

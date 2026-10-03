@@ -10,6 +10,8 @@ import { GroupsPanel } from "../panels/Groups";
 import { WorkersPanel } from "../panels/Workers";
 import { AgentsPanel } from "../components/agents/AgentsPanel";
 import { pendingProposals, useProposals } from "../components/agents/proposalsStore";
+import { MonitoringPanel } from "../components/dialogs/MonitoringDialog";
+import { useMonitoringEnabled } from "../hooks/useMonitoringEnabled";
 import { LensesPanel } from "../components/lenses/LensesPanel";
 
 type Toast = (message: string, severity?: "info" | "success" | "warning" | "error") => void;
@@ -28,6 +30,7 @@ interface UseCustomPaletteTabsOptions {
   addToast: Toast;
   handleRerunDeployment: (action: string) => void;
   openAgentTerminal: (agentId: string, another?: boolean) => string;
+  closeAgentTerminal: (node: string) => void;
 }
 
 // Leads the tab strip when present — it's the reason you're looking at this
@@ -46,7 +49,9 @@ export function useCustomPaletteTabs({
   addToast,
   handleRerunDeployment,
   openAgentTerminal,
+  closeAgentTerminal,
 }: UseCustomPaletteTabsOptions): CustomPaletteTab[] {
+  const monitoring = useMonitoringEnabled(sessionId);
   const waiting = pendingProposals(useProposals().proposals).length;
   return useMemo<CustomPaletteTab[]>(() => {
     if (!sessionId) return [];
@@ -71,6 +76,9 @@ export function useCustomPaletteTabs({
         { id: "netlab-plugins", label: "Plugins", render: () => <PluginsPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> }
       );
     }
+    if (monitoring && !DEMO_MODE) {
+      tabs.push({ id: "netlab-monitoring", label: "Monitoring", render: () => <MonitoringPanel sessionId={sessionId} /> });
+    }
     if (multiserverEnabled) {
       tabs.push({ id: "netlab-workers", label: "Workers", render: () => <WorkersPanel sessionId={sessionId} onChanged={handlePluginPanelChanged} /> });
     }
@@ -88,10 +96,11 @@ export function useCustomPaletteTabs({
             sessionId={sessionId}
             onApplied={handlePluginPanelChanged}
             onStartAgent={openAgentTerminal}
+            onCloseAgent={closeAgentTerminal}
           />
         )
       });
     }
     return tabs;
-  }, [sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal]);
+  }, [monitoring, sessionId, activeUnitPath, activeTabId, multiserverEnabled, assistantCapabilities, assistantOpen, waiting, handlePluginPanelChanged, refreshCanvas, netlabLenses, validationIssues, addToast, handleRerunDeployment, openAgentTerminal, closeAgentTerminal]);
 }

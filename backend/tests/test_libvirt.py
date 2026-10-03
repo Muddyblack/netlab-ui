@@ -212,3 +212,30 @@ def test_vm_lan_link_impairment_runs_netlab_tc(vm_lab, monkeypatch):
         "/api/lab/link-impairment", json={"sessionId": sid, "node": "r1", "interface": "Ethernet2", "loss": "5"}
     )
     assert res.json()["code"] == 1
+
+
+def test_runtime_collect_hides_netlab_tool_entries(monkeypatch):
+    async def status_for(_path):
+        return {
+            "nodes": {
+                "r1": {"device": "frr", "provider": "clab", "status": "Up 1 minute"},
+                "monitoring": {"device": "(tool)", "provider": "clab", "status": "Not running"},
+            }
+        }
+
+    monkeypatch.setattr(runner, "status_for", status_for)
+    containers = asyncio.run(runtime.collect("lab.yml", Topology(name="lab")))
+    assert [c["nodeName"] for c in containers] == ["r1"]
+
+
+def test_netem_set_ignores_containerlab_readback_error(monkeypatch):
+    async def run_external(_cmd, _args):
+        return runner.CommandResult(1, "", "Could not get all qdiscs: extractXStats(): unsupported kind: netem.")
+
+    async def snapshot(_name, _runtime=""):
+        return [], "qdisc netem 1: root refcnt 13 dev eth2 limit 10000 delay 100ms"
+
+    monkeypatch.setattr(runner, "_run_external", run_external)
+    monkeypatch.setattr(runner, "container_link_snapshot", snapshot)
+    assert asyncio.run(runner.netem_set("c", "eth2", delay="100")).code == 0
+    assert asyncio.run(runner.netem_set("c", "eth2")).code == 1  # clearing, but the qdisc is still there

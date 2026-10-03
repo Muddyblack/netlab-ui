@@ -104,13 +104,13 @@ def test_dashboard_markers_are_toggles(topology):
     files = rendered(topology)
     routing = json.loads(files["grafana/dashboards/netlab-routing.json"])
     markers = {a["name"]: a for a in routing["annotations"]["list"]}
-    assert markers["Link outages"]["enable"] and markers["Fault tests"]["enable"]
+    assert markers["🟧 Link outages"]["enable"] and markers["🟪 Fault tests"]["enable"]
     # device-timestamp markers are opt-in, follow the node filter and sit at the device's time
-    for name in ("SPF runs", "Neighbor changes"):
+    for name in ("🟦 SPF runs", "🟥 Neighbor changes"):
         assert markers[name]["enable"] is False and markers[name]["useValueForTime"]
         assert 'node=~"$node"' in markers[name]["expr"]
     overview = json.loads(files["grafana/dashboards/netlab-overview.json"])
-    spf = next(a for a in overview["annotations"]["list"] if a["name"] == "SPF runs")
+    spf = next(a for a in overview["annotations"]["list"] if a["name"] == "🟦 SPF runs")
     assert "$node" not in spf["expr"]  # the overview has no node variable
     folded = [p for p in overview["panels"] if p["type"] == "row" and p["collapsed"]]
     assert [p["title"] for p in folded] == ["Topology graph"]

@@ -1,3 +1,4 @@
+import contextlib
 import re
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from app.contract.responses import (
     TopologyPattern,
 )
 from app.sessions.store import store as session_store
+from services import monitoring as monitoring_svc
 from services.netlab import docs as netlab_docs
 from services.netlab import generators as generator_svc
 from services.netlab import location
@@ -197,6 +199,10 @@ def list_plugins(session_id: str | None = Query(default=None, alias="sessionId")
     """Plugin catalog. Passing *sessionId* adds the session topology's own
     directory to the search path — that's where netlab looks first, so without
     it the palette can't see a plugin sitting next to the topology file."""
+    # The monitoring plugin ships with netlab-ui, not netlab: put it where netlab looks, so it is listed
+    # and selectable here (and found by `netlab up`) without first switching it on in the Monitoring dialog.
+    with contextlib.suppress(OSError, RuntimeError):
+        monitoring_svc.install_plugin()
     plugins = _merged_plugins(_session_topology_dir(session_id))
     if plugins:
         return plugins

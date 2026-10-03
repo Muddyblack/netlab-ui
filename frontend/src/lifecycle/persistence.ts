@@ -25,6 +25,13 @@ export type PersistedTab =
       /** Kept so an unsaved editor buffer is not lost on a browser reload. */
       content: string;
       originalContent: string;
+    }
+  | {
+      kind: "web";
+      id: string;
+      title: string;
+      subtitle: string;
+      url: string;
     };
 
 export type PersistedTabSession = {
@@ -47,6 +54,10 @@ export function resolveOpenLabTab(topologyRef: LabFileEntry["topologyRef"]) {
 
 export function buildFileTabId(endpointId: string, path: string): string {
   return `file:${endpointId}:${path}`;
+}
+
+export function buildWebTabId(url: string): string {
+  return `web:${url}`;
 }
 
 export function persistLastOpenLabPath(yamlPath: string | null) {
@@ -115,7 +126,8 @@ export function readOpenTabSession(): PersistedTabSession | null {
     if (!Array.isArray(parsed?.tabs)) return null;
     const tabs = (parsed.tabs as unknown[]).filter((tab): tab is PersistedTab => {
       if (!tab || typeof tab !== "object" || typeof (tab as { id?: unknown }).id !== "string") return false;
-      const candidate = tab as { kind?: unknown; topologyRef?: { yamlPath?: unknown }; path?: unknown; endpointId?: unknown };
+      const candidate = tab as { kind?: unknown; topologyRef?: { yamlPath?: unknown }; path?: unknown; endpointId?: unknown; url?: unknown };
+      if (candidate.kind === "web") return typeof candidate.url === "string";
       if (candidate.kind === "topology") return typeof candidate.topologyRef?.yamlPath === "string";
       return candidate.kind === "file" && typeof candidate.path === "string" && typeof candidate.endpointId === "string";
     });

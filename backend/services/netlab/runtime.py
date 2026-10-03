@@ -141,6 +141,13 @@ async def collect(topology_path: str | Path, topo: Topology) -> list[dict[str, A
     nodes_status = lab.get("nodes") if isinstance(lab, dict) else {}
     if not isinstance(nodes_status, dict):
         return []
+    # netlab lists external tools (the monitoring stack) beside the nodes with device "(tool)".
+    # They are not containerlab nodes: showing them offers start/stop actions that cannot work.
+    nodes_status = {
+        name: info
+        for name, info in nodes_status.items()
+        if not (isinstance(info, dict) and info.get("device") == "(tool)" and topo.node(str(name)) is None)
+    }
     preferred_runtime = clab_runtime(topo)
     vm_nodes = await _transformed_vm_nodes(topology_path, nodes_status)
 

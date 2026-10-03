@@ -33,3 +33,23 @@ export function useMonitoringDialogRequest(): MonitoringDialogRequest | null {
     () => request
   );
 }
+
+// Monitoring switched on/off from the dialog or the side panel: tells the
+// right-hand panel (which only shows a Monitoring tab while it is on) to re-check.
+let changes = 0;
+const changeListeners = new Set<() => void>();
+
+export function notifyMonitoringChanged(): void {
+  changes += 1;
+  for (const listener of changeListeners) listener();
+}
+
+export function useMonitoringChanges(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
+    () => changes
+  );
+}

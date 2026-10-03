@@ -8,11 +8,12 @@ import { getApiBase } from "../api/endpoint";
 import {
   resolveOpenLabTab,
   buildFileTabId,
+  buildWebTabId,
   persistLastOpenLabPath,
   persistOpenTabSession,
   type PersistedTabSession
 } from "../lifecycle/persistence";
-import type { OpenLabTab, OpenFileTab, OpenTab, RuntimeSnackbarState } from "../lifecycle/types";
+import type { OpenLabTab, OpenFileTab, OpenWebTab, OpenTab, RuntimeSnackbarState } from "../lifecycle/types";
 import type { AppClabUiHost } from "../host/createHost";
 import type { LabFileEntry } from "../api/client";
 
@@ -152,7 +153,7 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     const tab = openTabs.find((t) => t.id === tabId);
     if (!tab) return;
     setActiveTabId(tabId);
-    if (tab.kind === "file") return;
+    if (tab.kind !== "topology") return;
     if (activeTabId === tabId && sessionId) return;
     await activateLabTab(tab);
   }, [activeTabId, activateLabTab, openTabs, sessionId]);
@@ -173,6 +174,15 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     setActiveTabId(nextActive.id);
     if (nextActive.kind === "topology") await activateLabTab(nextActive, { skipDisposeCurrent: true });
   }, [activeTabId, activateLabTab, clearActiveLabSession, openTabs]);
+
+  const handleOpenWebTab = useCallback((input: { url: string; title: string; subtitle?: string }) => {
+    const tab: OpenWebTab = {
+      kind: "web", id: buildWebTabId(input.url),
+      title: input.title, subtitle: input.subtitle ?? "Web", url: input.url
+    };
+    setOpenTabs((cur) => (cur.some((t) => t.id === tab.id) ? cur : [...cur, tab]));
+    setActiveTabId(tab.id);
+  }, []);
 
   const handleOpenFileTab = useCallback(async (input: { endpointId: string; path: string; title?: string }) => {
     const tabId = buildFileTabId(input.endpointId, input.path);
@@ -353,8 +363,10 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
 
   const activeFileTab = openTabs.find((t): t is OpenFileTab => t.kind === "file" && t.id === activeTabId) ?? null;
 
+  const activeWebTab = openTabs.find((t): t is OpenWebTab => t.kind === "web" && t.id === activeTabId) ?? null;
+
   return {
-    sessionId, openTabs, activeTabId, activeFileTab,
+    sessionId, openTabs, activeTabId, activeFileTab, activeWebTab, handleOpenWebTab,
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
     handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession, restoreComplete

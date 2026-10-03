@@ -57,6 +57,7 @@ import {
   openMonitoringDialog,
   openToolsDialog,
   registerFileOpener,
+  registerWebTabOpener,
   openPanelTab,
   requestCopyLab,
 } from "./appControllerDeps";
@@ -520,7 +521,7 @@ export function useAppController() {
 
   // ── Tab + session management ─────────────────────────────────────────────────
   const {
-    sessionId, openTabs, activeTabId, activeFileTab,
+    sessionId, openTabs, activeTabId, activeFileTab, activeWebTab, handleOpenWebTab,
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
     handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession
@@ -901,6 +902,7 @@ export function useAppController() {
   const ensureLabActiveRef = useRef(ensureLabActive); ensureLabActiveRef.current = ensureLabActive;
   const openMultiExec = useCallback((sid?: string | null) => sessionDock.openTab("multi", "nodes", sid ?? undefined), [sessionDock]);
   const openAgentTerminal = useCallback((agentId: string, another?: boolean) => sessionDock.openAgent(agentId, another), [sessionDock]);
+  const closeAgentTerminal = useCallback((node: string) => sessionDock.closeAgent(node), [sessionDock]);
   const openMultiExecRef = useRef(openMultiExec); openMultiExecRef.current = openMultiExec;
   // Like VS Code's terminal toggle: show or hide the bottom panel; with nothing open in it yet, start a terminal.
   const toggleSessionDock = useCallback(() => {
@@ -932,6 +934,11 @@ export function useAppController() {
   const handleNodeLifecycleRef = useRef(handleNodeLifecycle); handleNodeLifecycleRef.current = handleNodeLifecycle;
   const handleOpenLabRef = useRef(handleOpenLab); handleOpenLabRef.current = handleOpenLab;
   const handleOpenFileTabRef = useRef(handleOpenFileTab); handleOpenFileTabRef.current = handleOpenFileTab;
+  const handleOpenWebTabRef = useRef(handleOpenWebTab); handleOpenWebTabRef.current = handleOpenWebTab;
+  useEffect(() => {
+    registerWebTabOpener((input) => handleOpenWebTabRef.current(input));
+    return () => registerWebTabOpener(null);
+  }, []);
   useEffect(() => {
     registerFileOpener((path) => void handleOpenFileTabRef.current({ endpointId: "local", path }));
     return () => registerFileOpener(null);
@@ -1088,6 +1095,7 @@ export function useAppController() {
     addToast,
     handleRerunDeployment,
     openAgentTerminal,
+    closeAgentTerminal,
   });
 
   // null until the lens bundle loads; then reflects whether the topology
@@ -1122,7 +1130,7 @@ export function useAppController() {
 
   return {
     runtime, appRuntime, host,
-    sessionId, openTabs, activeTabId, activeFileTab,
+    sessionId, openTabs, activeTabId, activeFileTab, activeWebTab,
     handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleFileTabChange, handleFileTabSave, handleFileTabReload,
     handleCreateLab, getOrCreateSession,

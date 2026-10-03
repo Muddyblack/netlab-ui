@@ -91,5 +91,7 @@ export function useSessionDock(sessionId: string | null) {
     return node;
   }, [tabs, openTab]);
 
-  return { tabs, activeKey, open, setOpen, openTab, openTerminal, openAgent, selectTab, closeTab };
+  const closeAgent = useCallback((node: string) => closeTab(sessionTabKey("agent", node)), [closeTab]);
+
+  return { tabs, activeKey, open, setOpen, openTab, openTerminal, openAgent, closeAgent, selectTab, closeTab };
 }

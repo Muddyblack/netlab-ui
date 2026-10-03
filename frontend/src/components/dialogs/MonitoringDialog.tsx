@@ -23,10 +23,11 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
+import { openWebTab } from "../../host/webTabStore";
 import { MonitoringOptions, type MonitoringOptionChange } from "./MonitoringOptions";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import StopIcon from "@mui/icons-material/Stop";
 
@@ -40,6 +41,8 @@ import {
 } from "../../api/client";
 import {
   type FaultTestPrefill,
+  type MonitoringDialogRequest,
+  notifyMonitoringChanged,
   openMonitoringDialog,
   useMonitoringDialogRequest
 } from "../../host/monitoringDialogStore";
@@ -75,6 +78,12 @@ function grafanaUrl(port: number, uid: string, vars: Record<string, string> = {}
   const url = new URL(`http://${window.location.hostname}:${port}/d/${uid}/`);
   for (const [key, value] of Object.entries(vars)) url.searchParams.set(`var-${key}`, value);
   return url.toString();
+}
+
+/** Grafana as a tab of this app; a plain browser tab when the app cannot host one. */
+function showGrafana(url: string, title: string): void {
+  if (openWebTab({ url, title, subtitle: "Grafana" })) openMonitoringDialog(null);
+  else window.open(url, "_blank", "noopener,noreferrer");
 }
 
 function seconds(value: number | null | undefined, digits = 2): string {
@@ -193,10 +202,8 @@ function HealthTab({
             <Button
               size="small"
               variant="outlined"
-              endIcon={<OpenInNewIcon fontSize="small" />}
-              href={grafanaUrl(port, dash.overview)}
-              target="_blank"
-              rel="noopener noreferrer"
+              endIcon={<ShowChartIcon fontSize="small" />}
+              onClick={() => showGrafana(grafanaUrl(port, dash.overview), "Lab overview")}
             >
               Lab
             </Button>
@@ -205,10 +212,8 @@ function HealthTab({
             <Button
               size="small"
               variant="outlined"
-              endIcon={<OpenInNewIcon fontSize="small" />}
-              href={grafanaUrl(port, dash.routing)}
-              target="_blank"
-              rel="noopener noreferrer"
+              endIcon={<ShowChartIcon fontSize="small" />}
+              onClick={() => showGrafana(grafanaUrl(port, dash.routing), "Routing and convergence")}
             >
               Routing
             </Button>
@@ -232,10 +237,8 @@ function HealthTab({
               <Button
                 size="small"
                 variant="outlined"
-                endIcon={<OpenInNewIcon fontSize="small" />}
-                href={grafanaUrl(port, dash.node, { node })}
-                target="_blank"
-                rel="noopener noreferrer"
+                endIcon={<ShowChartIcon fontSize="small" />}
+                onClick={() => showGrafana(grafanaUrl(port, dash.node, { node }), `Node detail: ${node}`)}
               >
                 Node
               </Button>
@@ -867,9 +870,8 @@ function SetupTab({
 
 /** Lab monitoring (the netlab `monitoring` plugin): health against the topology,
  * repeatable fault tests, Grafana dashboards and setup. */
-export function MonitoringDialog() {
-  const request = useMonitoringDialogRequest();
-  const sessionId = request?.sessionId ?? null;
+/** Everything the Monitoring dialog and the Monitoring side-panel tab share. */
+function useMonitoringController(sessionId: string | null, request: MonitoringDialogRequest | null) {
   const [state, setState] = useState<MonitoringState | null>(null);
   const [summary, setSummary] = useState<MonitoringSummary | null>(null);
   const [busy, setBusy] = useState(false);
@@ -911,8 +913,6 @@ export function MonitoringDialog() {
   }, [nodes, node]);
   const showError = useCallback((text: string) => setError(text), []);
 
-  if (!request || !sessionId) return null;
-  const close = () => openMonitoringDialog(null);
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -925,18 +925,32 @@ export function MonitoringDialog() {
     }
   };
   const toggle = (on: boolean) =>
-    run(async () => setState(await api.setMonitoring(sessionId, on, state?.placement)));
+    run(async () => {
+      setState(await api.setMonitoring(sessionId!, on, state?.placement));
+      notifyMonitoringChanged();
+    });
   const place = (placement: "tool" | "node") =>
-    run(async () => setState(await api.setMonitoring(sessionId, true, placement)));
+    run(async () => setState(await api.setMonitoring(sessionId!, true, placement)));
   const options = (change: MonitoringOptionChange) =>
-    run(async () => setState(await api.setMonitoring(sessionId, true, state?.placement, change)));
+    run(async () => setState(await api.setMonitoring(sessionId!, true, state?.placement, change)));
   const act = (action: "up" | "down") =>
     run(async () => {
-      const result = await api.monitoringAction(sessionId, action);
+      const result = await api.monitoringAction(sessionId!, action);
       if (result.code) setError(result.stderr || result.stdout);
       await load();
     });
   const status = state ? stackStatus(state) : null;
+
+  return { state, summary, busy, error, setError, tab, setTab, node, setNode, nodes, showError, toggle, place, options, act, status, request };
+}
+
+export function MonitoringDialog() {
+  const request = useMonitoringDialogRequest();
+  const sessionId = request?.sessionId ?? null;
+  const c = useMonitoringController(sessionId, request);
+  if (!request || !sessionId) return null;
+  const { state, summary, busy, error, setError, tab, setTab, node, setNode, showError, toggle, place, options, act, status } = c;
+  const close = () => openMonitoringDialog(null);
 
   return (
     <Dialog
@@ -1050,5 +1064,62 @@ export function MonitoringDialog() {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+
+/** The same controls as the dialog, docked as a tab of the right-hand panel. */
+export function MonitoringPanel({ sessionId }: { sessionId: string }) {
+  const c = useMonitoringController(sessionId, null);
+  const { state, summary, busy, error, setError, tab, setTab, node, setNode, showError, toggle, place, options, act, status } = c;
+  return (
+    <Box sx={{ p: 1.5, overflow: "auto", height: "100%" }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+        <Typography variant="subtitle1" sx={{ flex: 1 }}>
+          Monitoring
+        </Typography>
+        {status && <Chip size="small" color={status.color} variant={status.color === "default" ? "outlined" : "filled"} label={status.label} />}
+        {busy && <CircularProgress size={14} />}
+        {state && (
+          <Switch
+            size="small"
+            checked={state.enabled}
+            disabled={busy || !state.pluginAvailable}
+            onChange={(_event, on) => void toggle(on)}
+            slotProps={{ input: { "aria-label": "Monitor this lab" } }}
+          />
+        )}
+      </Stack>
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 1, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {error}
+        </Alert>
+      )}
+      {!state && !error && (
+        <Stack alignItems="center" sx={{ py: 3 }}>
+          <CircularProgress size={22} />
+        </Stack>
+      )}
+      {state?.enabled && (
+        <>
+          <Tabs value={tab} onChange={(_event, value: TabId) => setTab(value)} variant="fullWidth" sx={{ minHeight: 36, mb: 1.5, "& .MuiTab-root": { minHeight: 36 } }}>
+            <Tab value="health" label="Health" />
+            <Tab value="faults" label="Fault tests" />
+            <Tab value="setup" label="Setup" />
+          </Tabs>
+          {tab === "health" && <HealthTab state={state} summary={summary} node={node} setNode={setNode} />}
+          {tab === "faults" && <FaultsTab sessionId={sessionId} state={state} prefill={undefined} onError={showError} />}
+          {tab === "setup" && (
+            <SetupTab
+              state={state}
+              busy={busy}
+              onPlace={(value) => void place(value)}
+              onAction={(action) => void act(action)}
+              onOptions={(change) => void options(change)}
+            />
+          )}
+        </>
+      )}
+    </Box>
   );
 }
