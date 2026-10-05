@@ -184,9 +184,9 @@ def test_up_sh_stops_on_a_port_another_program_holds(topology):
     assert up.index("NETLAB_PORT_CHECK") < up.index("docker run")  # before anything is started
 
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp.bind(("0.0.0.0", 0))
+    tcp.bind(("127.0.0.1", 0))
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp.bind(("0.0.0.0", 0))
+    udp.bind(("127.0.0.1", 0))
     try:
         taken, taken_udp = tcp.getsockname()[1], udp.getsockname()[1]
         result = _run(containers.port_check_code([("grafana", taken, "tcp"), ("syslog", taken_udp, "udp")]))
@@ -223,7 +223,7 @@ def test_a_port_that_is_only_closing_does_not_read_as_taken():
     # while a server really listens on it, the check still says so
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    listener.bind(("0.0.0.0", port))
+    listener.bind(("127.0.0.1", port))
     listener.listen()
     try:
         assert _run(check).returncode == 1
