@@ -2,17 +2,13 @@
 
 The dev setup (see [CONTRIBUTING](../CONTRIBUTING.md)) runs the backend and frontend as two separate processes. The root [`Dockerfile`](../Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
 
-Two images come out of it:
+The image is the UI only. netlab, Ansible and containerlab stay on the host (install them with your package manager, pip or Nix) and the container uses that install, so the UI never drifts from the netlab you actually run.
 
-| Image | Target | Contains | Use when |
-| --- | --- | --- | --- |
-| `ghcr.io/muddyblack/netlab-ui:<ver>-full` | `full` | UI + netlab + Ansible + containerlab | the host only has Docker |
-| `ghcr.io/muddyblack/netlab-ui:<ver>` | `ui` (default) | UI only | you already run netlab on the host and want the UI to use *that* install |
-
-## Quick start (everything included)
+## Quick start
 
 ```bash
-docker compose up -d          # uses docker-compose.yml; labs live in ./labs
+NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
+  docker compose up -d        # uses docker-compose.yml; labs live in ./labs
 ```
 
 Open `http://localhost:8000`. The equivalent `docker run`:
@@ -26,8 +22,12 @@ docker run -d --name netlab-ui \
   -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
   -v "$HOME/.netlab:/root/.netlab" \
   -e UVICORN_HOST=127.0.0.1 \
-  ghcr.io/muddyblack/netlab-ui:latest-full
+  -v /opt/netlab-venv:/opt/netlab-venv:ro -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
+  -v /usr/bin/containerlab:/usr/bin/containerlab:ro \
+  ghcr.io/muddyblack/netlab-ui:latest
 ```
+
+Mount your netlab install at its own path (here `/opt/netlab-venv`; on NixOS the store, `HOST_TOOLS_DIR=/nix/store` in the compose file) and point `NETLAB_BIN` at it, or pick it in **Settings → Environment**. containerlab is a static binary; mounting it enables link impairment, orphan cleanup and link reconcile.
 
 Why each flag matters — each one fails late and cryptically when missing:
 
@@ -51,22 +51,11 @@ Why each flag matters — each one fails late and cryptically when missing:
 
 You don't have to remember any of this: the backend inspects its own container and lists anything missing — with the exact flag to add — under **Settings → Environment → Container Setup**, plus a banner at startup when a deployment would fail.
 
-## UI-only image with your host's netlab
-
-Same flags, plus mount your netlab install at its own path and point the UI at it (or pick it in **Settings → Environment**):
-
-```bash
-  -v /opt/netlab-venv:/opt/netlab-venv:ro -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
-  -v /usr/bin/containerlab:/usr/bin/containerlab:ro \
-  ghcr.io/muddyblack/netlab-ui:latest
-```
-
 ## Building locally
 
 ```bash
-docker build -t netlab-ui .                       # UI only
-docker build --target full -t netlab-ui:full .    # with netlab + containerlab
-docker compose build                              # the compose file's image
+docker build -t netlab-ui .     # the UI image
+docker compose build            # the compose file's image
 ```
 
-libvirt-based providers aren't included in either image.
+libvirt-based providers aren't included in the image.

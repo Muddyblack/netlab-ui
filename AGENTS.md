@@ -29,9 +29,8 @@ cd frontend && npm run gen:api      # regenerate src/api/generated.ts (backend m
 ### Container
 
 ```bash
-docker compose up -d                          # full image: UI + netlab + containerlab
-docker build --target full -t netlab-ui:full .
-docker build -t netlab-ui .                   # UI only (uses the host's netlab)
+docker compose up -d                          # the UI image (uses the host's netlab: set NETLAB_BIN)
+docker build -t netlab-ui .                   # build it yourself
 ```
 
 The backend checks its own `docker run` setup (`services/container_env.py`,
