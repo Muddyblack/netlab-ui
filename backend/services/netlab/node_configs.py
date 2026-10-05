@@ -37,8 +37,9 @@ def list_files(lab_dir: Path, node: str) -> list[dict[str, object]]:
         raise ValueError(f"invalid node name: {node}")
     found: list[dict[str, object]] = []
     for directory, group in _SOURCES:
-        base = lab_dir / directory / node
-        if not base.is_dir():
+        root = (lab_dir / directory).resolve()
+        base = (root / node).resolve()
+        if not base.is_relative_to(root) or not base.is_dir():
             continue
         files = sorted((p for p in base.rglob("*") if p.is_file() and not p.is_symlink()), key=_rank)
         for path in files[:_MAX_FILES]:
