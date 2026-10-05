@@ -9,9 +9,9 @@ import fs from "node:fs";
 const START = "<!-- showcase:start -->";
 const END = "<!-- showcase:end -->";
 
-function picture(prefix, files, alt, width) {
-  const light = files.light ?? files.dark;
-  const dark = files.dark ?? files.light;
+function picture(prefix, files, alt, width, file = (name) => name) {
+  const light = file(files.light ?? files.dark);
+  const dark = file(files.dark ?? files.light);
   const size = width ? ` width="${width}"` : "";
   if (light === dark) return `<img src="${prefix}${light}" alt="${alt}"${size} />`;
   return [
@@ -25,9 +25,11 @@ function picture(prefix, files, alt, width) {
 /**
  * `prefix` is the path from the markdown file to docs/showcase/media/.
  * `details: false` leaves out the per-feature sections; thumbnails then link
- * to `linkBase` (the GALLERY.md holding them).
+ * to `linkBase` (the GALLERY.md holding them), or, when `linkImage` is set, to
+ * the full-size image. `file` maps a media file name to the name it has where
+ * the markdown looks for it.
  */
-export function galleryMarkdown(manifest, prefix, { columns = 2, details = true, linkBase = "", excludeFeatureIds = [] } = {}) {
+export function galleryMarkdown(manifest, prefix, { columns = 2, details = true, linkBase = "", linkImage = false, file, excludeFeatureIds = [] } = {}) {
   const features = manifest.features.filter((feature) =>
     !excludeFeatureIds.includes(feature.id) && feature.shots.some((shot) => Object.keys(shot.files).length),
   );
@@ -41,8 +43,8 @@ export function galleryMarkdown(manifest, prefix, { columns = 2, details = true,
       const hero = feature.shots.find((shot) => shot.hero) ?? feature.shots.find((shot) => shot.window) ?? feature.shots[0];
       out.push(
         `<td width="${Math.floor(100 / columns)}%" valign="top">`,
-        `<a href="${linkBase}#showcase-${feature.id}">`,
-        picture(prefix, hero.files, hero.alt),
+        `<a href="${linkImage ? prefix + (file ?? ((name) => name))(hero.files.dark ?? hero.files.light) : `${linkBase}#showcase-${feature.id}`}">`,
+        picture(prefix, hero.files, hero.alt, undefined, file),
         "</a>",
         `<p><b>${feature.title}</b><br />${feature.summary}</p>`,
         "</td>",
@@ -86,9 +88,12 @@ export function writeGallery(manifest, galleryFile, readmeFile) {
   const start = readme.indexOf(START);
   const end = readme.indexOf(END);
   if (start < 0 || end < start) return false;
-  const body = galleryMarkdown(manifest, "docs/showcase/media/", {
+  // docs/showcase/media and GALLERY.md are local outputs (git-ignored), so the README
+  // uses the committed copies in docs/images/ ("canvas/new-link-dark.webp" -> "canvas-new-link.webp").
+  const body = galleryMarkdown(manifest, "docs/images/", {
     details: false,
-    linkBase: "docs/showcase/GALLERY.md",
+    linkImage: true,
+    file: (name) => name.replace(/^([^/]+)\/(.+?)(?:-dark|-light)?\.webp$/, "$1-$2.webp"),
   });
   fs.writeFileSync(readmeFile, `${readme.slice(0, start + START.length)}\n${body}\n${readme.slice(end)}`);
   return true;
