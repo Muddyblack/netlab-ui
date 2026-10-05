@@ -89,7 +89,6 @@ export function writeGallery(manifest, galleryFile, readmeFile) {
   const body = galleryMarkdown(manifest, "docs/showcase/media/", {
     details: false,
     linkBase: "docs/showcase/GALLERY.md",
-    excludeFeatureIds: ["traffic"], // The README hero already shows this screenshot.
   });
   fs.writeFileSync(readmeFile, `${readme.slice(0, start + START.length)}\n${body}\n${readme.slice(end)}`);
   return true;

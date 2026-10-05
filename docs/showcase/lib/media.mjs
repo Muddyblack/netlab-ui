@@ -9,6 +9,18 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
+/**
+ * Pixel size of every rendered video. The pages are laid out at a fixed
+ * 1600×900 CSS viewport; this only decides how many device pixels we capture
+ * and encode (1080 → 1920×1080, 1440 → 2560×1440, 2160 → 3840×2160), so the
+ * layout never changes. Override with SHOWCASE_HEIGHT.
+ */
+export const LAYOUT = { width: 1600, height: 900 };
+const OUTPUT_HEIGHT = Number(process.env.SHOWCASE_HEIGHT) || 1440;
+export const OUTPUT = { width: Math.round(OUTPUT_HEIGHT * 16 / 9), height: OUTPUT_HEIGHT };
+export const PIXEL_RATIO = OUTPUT.width / LAYOUT.width;
+export const CRF = "18";
+
 const has = (bin, args = ["-version"]) => spawnSync(bin, args, { stdio: "ignore" }).status === 0;
 
 function encoders(bin) {
@@ -66,7 +78,7 @@ export function pngToWebp(ffmpeg, png, webp) {
 export const IDLE_SPEED = 4;
 
 /** Calculate the actual encoded timeline, including caption reading time. */
-export function frameTimeline(frames, { maxHold = 1.2, tail = 1.6, idle = [], idleSpeed = IDLE_SPEED, captions = [], contentStart } = {}) {
+export function frameTimeline(frames, { maxHold = 1.2, tail = 1.6, idle = [], idleSpeed = IDLE_SPEED, captions = [], track = [], contentStart } = {}) {
   const intervals = [];
   for (const [start, end] of [...idle].sort((a, b) => a[0] - b[0])) {
     const previous = intervals.at(-1);
@@ -96,8 +108,18 @@ export function frameTimeline(frames, { maxHold = 1.2, tail = 1.6, idle = [], id
     time += duration;
     return { start, duration };
   });
+  // Cursor samples → clip time (~8 Hz), for cropping the 16:9 demo to portrait.
+  const focus = [];
+  let cursor = 0;
+  for (const [ts, x, y] of [...track].sort((a, b) => a[0] - b[0])) {
+    while (cursor + 1 < frames.length && frames[cursor + 1].ts <= ts) cursor += 1;
+    const t = Number(timeline[cursor].start.toFixed(3));
+    if (focus.length && t - focus.at(-1).t < 0.12) focus.pop();
+    focus.push({ t, x: Math.round(x), y: Math.round(y) });
+  }
   return {
     duration: time,
+    focus,
     contentStartSeconds: timeline[frames.findIndex((frame) => frame.ts >= contentStart)]?.start,
     frames: frames.map((frame, index) => ({ ...frame, ...timeline[index] })),
     captions: spans.map(({ indices, start: _start, end: _end, ...caption }) => ({
@@ -110,7 +132,7 @@ export function frameTimeline(frames, { maxHold = 1.2, tail = 1.6, idle = [], id
 }
 
 export function framesToClip(
-  ffmpeg, frames, clip, { width = 1600, height = 900, ...options } = {},
+  ffmpeg, frames, clip, { width = OUTPUT.width, height = OUTPUT.height, ...options } = {},
 ) {
   if (!frames.length) throw new Error("Chrome did not capture any video frames");
   const timing = frameTimeline(frames, options);
@@ -127,7 +149,7 @@ export function framesToClip(
     // The repeated final concat image establishes its timestamp but can
     // inherit the preceding duration. Bound it to our measured timeline.
     "-t", timing.duration.toFixed(6),
-    "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-movflags", "+faststart", clip,
+    "-c:v", "libx264", "-preset", "slow", "-crf", CRF, "-movflags", "+faststart", clip,
   ]);
   fs.rmSync(list);
   return timing;

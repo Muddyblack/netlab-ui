@@ -18,16 +18,21 @@ export default {
       await s.palette("Running configs & changes");
       const dialog = s.page.getByRole("dialog").filter({ hasText: "Running configurations" }).first();
       await s.until(dialog, { timeout: 30_000 });
-      await s.click(dialog.getByRole("button", { name: "Take snapshot" }));
+      // The button is grayed out while the dialog compares: wait until it is usable.
+      const take = dialog.locator("button:not([disabled])", { hasText: "Take snapshot" });
+      await s.until(take, { timeout: 120_000 });
+      await s.beat(800);
+      await s.click(take);
       await s.until(dialog.getByText("unchanged").first(), { timeout: 180_000 });
-      await s.wait(600);
+      await s.until(take, { timeout: 120_000 });
+      await s.beat(1500);
       await s.say("Someone changes l1 by hand…");
       s.netlabCli(...vtysh(CHANGE));
       await s.beat(900);
       await s.click(dialog.getByLabel("Refresh drift"));
       const changed = dialog.getByText(/^\+\d+ −\d+$/).first();
       await s.until(changed, { timeout: 120_000 });
-      await s.click(dialog.getByText("l1", { exact: true }).first());
+      // l1 is selected automatically once it has changed: no click needed.
       await s.say("…and the diff shows exactly what moved");
       await s.wait(2500);
       await s.shot("diff", dialog, { pad: 0, hero: true, alt: "Running-config drift: l1 changed since the snapshot, with its diff" });

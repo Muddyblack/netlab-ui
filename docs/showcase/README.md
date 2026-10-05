@@ -17,8 +17,9 @@ It produces:
 
 ## What belongs in Git
 
-Commit the generation scripts, SVG source artwork, credits, gallery Markdown,
-feature screenshots and animated WebP previews used by the gallery.
+Commit the generation scripts, SVG source artwork and credits. The generated
+`media/` folder and `GALLERY.md` are ignored; the few images the repository
+README shows live in `docs/images/` and are copied there by hand.
 
 Keep these generated outputs local (the showcase `.gitignore` excludes them):
 
@@ -52,7 +53,7 @@ The run is isolated:
 
 ## Keeping recordings current
 
-A full run captures every scene into a temporary directory. Only after every scene succeeds does it replace `media/` and regenerate the gallery. A failure leaves the previous gallery untouched, reports the error, and exits unsuccessfully; it never fills a gap with an old clip. Features that finished before the failure are kept in `.work/resume/`: fix the problem and run `docs/showcase/run.sh --resume` to record only the remaining ones (a run without `--resume` starts clean). The frontend is still rebuilt, so reused features may predate your fix. The complete replacement also removes obsolete screenshots and previews.
+A full run captures every scene into a temporary directory. Only after every scene succeeds does it replace `media/` and regenerate the gallery. A failure leaves the previous gallery untouched, reports the error, and exits unsuccessfully; it never treats a partial scene as complete. The complete replacement also removes obsolete screenshots and previews.
 
 The manifest records a hash of the frontend, backend, dependency files, canvas patches, lab fixtures and recording scripts. This includes uncommitted edits. It also records checksums for every published asset and the final caption timings. The source must remain unchanged throughout the build and recording.
 
@@ -60,9 +61,66 @@ The manifest records a hash of the frontend, backend, dependency files, canvas p
 docs/showcase/run.sh --check
 ```
 
-This verifies that every feature has its screenshots, clip, preview and caption timings, that every asset matches its checksum, and that the source still matches. Older recordings without this metadata fail the check and need a full run. `--only` can reuse other scenes only when this verification passes for the current source; after a UI change, run the full showcase.
+This verifies that every feature has its screenshots, clip, preview and caption timings, that every asset matches its checksum, and that the source still matches. Older published recordings without this metadata fail the check; failed capture directories can be imported as described below. `--only` can reuse other scenes only when this verification passes for the current source; after a UI change, run the full showcase.
+
+## Resuming a failed recording
+
+```bash
+docs/showcase/run.sh --resume
+# Or choose a saved capture and redo a scene (including all later scenes):
+docs/showcase/run.sh --resume docs/showcase/.work/capture-XXXXXX --restart validation
+```
+
+Each full recording saves `progress.json` after a feature's **entire** set of
+stills, video, preview and caption timings succeeds. Resume verifies checksums,
+keeps the completed prefix, and restarts the first unfinished feature from its
+first still. A failed video pass therefore redoes that feature's stills too.
+`--restart` can move the restart earlier, but cannot skip an unfinished or changed
+feature. Original theme/video options are restored automatically; don't add
+`--no-video`, `--themes`, `--only` or `--from` to a resume command.
+
+Resumed output goes into a new capture directory. Old partial files are never
+copied, and the earlier attempt remains available for recovery. A second failure
+updates the latest-capture pointer so the next `--resume` uses the newest verified
+progress. If recording finished but video assembly failed, resume retries assembly.
+Only a complete verified tour replaces the published media and gallery.
+
+The lab is rebuilt from the fixtures and deployed as required. Scenes with state
+dependencies restart from their prerequisite: monitoring restarts at validation
+so the dashboard has the fault-test outage band. Earlier clips otherwise do not
+need to be replayed to recreate a deployed lab.
+
+A fix to the failed scene's own script allows earlier clips to be reused. Editing
+an already completed scene automatically moves the restart back to it. Changes
+to the app, lab fixtures, monitoring plugin, or shared capture helpers require a
+new recording; the runner will explain this before building or capturing.
+
+**Older captures without checkpoints:** supply their directory and an explicit
+`--restart` naming the scene that failed. The importer supports the default dark
+video tour and verifies every preceding scene's expected screenshots, MP4,
+preview and caption timings. It requires `ffprobe`. Such captures did not record
+their original source version, so imported clips retain an explicit
+`sourceVerified: false` provenance record in the new manifest. They are not
+represented as having verified historical source. Failed and later scenes are
+always recorded again. For the existing failed validation run:
+
+```bash
+docs/showcase/run.sh --resume docs/showcase/.work/capture-To8okv --restart validation
+```
 
 ## Options
+
+To check the remaining scenes after a failure without replaying the earlier ones:
+
+```bash
+docs/showcase/run.sh --from validation
+```
+
+`--from` runs that feature and every later feature in order, with stills only.
+It builds the current UI and prepares the required lab, but needs no previous
+successful recording. Diagnostic images stay in `.work/capture-*`; the gallery
+and published media are untouched. After it passes, run without `--from` to
+record the complete video. `--from` cannot be combined with `--only`.
 
 ```bash
 docs/showcase/run.sh --list                 # the features
@@ -133,16 +191,10 @@ Frames come from Chrome's screencast (sharper than Playwright's built-in recorde
 
 After those speed changes, the encoder checks every caption and title card. If one would be too short, it holds its last visible frame long enough to read it. Captions get at least three seconds, with longer text given more time. Every recorded clip writes its final caption timings to `.work/timing-<feature>.json`. The finished MP4's duration is measured automatically for the manifest; the README and gallery links omit it.
 
-Run the timing regression checks (requires ffmpeg):
-
-```bash
-node --test docs/showcase/lib/*.test.mjs
-```
-
 ## Animated intro and background music
 
 [`music/mix.mjs`](music/mix.mjs) replaces the first title card with five seconds of
-the app's animated loading screen and adds **Memories by Sappheiros** at a quiet
+the app's animated loading screen and adds **Memories**, followed by **Moments**, both by Sappheiros, at a quiet
 background level. Music fades in during the intro, repeats with smooth crossfades
 for longer videos, and fades out at the measured end. Run it after `run.sh`; it creates the extra
 `media/netlab-ui-showcase-music.mp4` and records its checksum in the manifest.
@@ -150,8 +202,96 @@ The original silent video stays unchanged. Repeating the mix is safe.
 See [music settings and attribution](music/README.md) for the credit to include when
 sharing the video. Use `node docs/showcase/music/mix.mjs --check` to verify the mix.
 
-## Voice-over (optional, not enabled)
+## YouTube Shorts
 
-[`narration/`](narration/) can speak [`narration/script.txt`](narration/script.txt) with the offline Kokoro model (voice `am_michael`), on the CPU with no internet connection once the model is downloaded. `run.sh` doesn't use it yet; see the top of [`narration/narrate.py`](narration/narrate.py) for the one-time setup.
+Turn existing recorded feature clips into portrait Shorts:
 
-Write it like a spoken walkthrough, with contractions and a mix of short and longer sentences. Each paragraph stays together during synthesis. Its optional first line, such as `[speed=1.14 pause=0.18]`, controls the speaking speed and the added pause after it in seconds; this line isn't spoken. The defaults are speed `1.14` and pause `0.18`. The script moves faster through familiar actions, gives shortcuts and review steps more time, and leaves a longer pause at a topic change. Keep timing choices tied to the meaning of the text.
+```bash
+docs/showcase/shorts.sh --list
+docs/showcase/shorts.sh --feature monitoring
+# Higher resolution portrait output (2K):
+docs/showcase/shorts.sh --feature monitoring --width 1440
+# Check the source recordings and encoding tools first:
+docs/showcase/shorts.sh --feature monitoring --width 1440 --preflight
+docs/showcase/shorts.sh --all
+# Without music (choose a song inside YouTube), or without the voice-over:
+docs/showcase/shorts.sh --feature shell --silent
+docs/showcase/shorts.sh --feature shell --no-voice
+```
+
+Record with `docs/showcase/run.sh` first if the local clips or manifest are missing.
+Shorts export does not build the app or deploy labs. It verifies the selected
+clip and timing checksums, and uses the recorded title and summary. Existing
+recordings can be exported after source changes; their original source hash is
+retained in each Short's JSON metadata.
+
+Outputs are ignored local artifacts in `media/shorts/<feature>/`: `<feature>.mp4`,
+`<feature>.youtube.txt` (title on the first line, description and credits below),
+and `<feature>.json` (source checksums, caption timings, music excerpts).
+`--output <directory>` chooses another destination. Upload the MP4 manually and
+paste the upload text; the script does not publish to YouTube.
+
+The default format is 1080×1920; `--width 1440` exports 1440×2560 and
+`--width 2160` exports 2160×3840. All presets use 30 fps, H.264/yuv420p,
+limited color range, square pixels, CRF 18 with the slow preset (matching the
+showcase quality settings), MP3 audio (VS Code's preview can't play AAC;
+YouTube accepts both) and fast-start MP4. Captions scale with
+the output resolution. Every encoded file is probed before publication to
+verify its dimensions, codec, pixel format, frame rate, color range and duration.
+A higher output resolution cannot recover details missing from the source clip;
+the script warns when the source width is smaller than the export width.
+`--preflight` verifies recordings and encoding tools without rendering or
+downloading music. `--list` and `--help` need no media tools.
+Layout: a heading (feature name as an orange kicker, the title, an accent bar),
+the video, the caption in a card like the app's, and a footer with the logo.
+The heading, footer and background are HTML drawn once by headless Chrome
+([`lib/short-frame.mjs`](lib/short-frame.mjs)); the captions are timed subtitles.
+
+The video is a 900×780 CSS px window of the recording, stretched about 1.3×
+taller to fill the video box: slightly distorted, but much more of the app
+stays in view than with an undistorted, narrower window. It follows the cursor and the points a scene
+marks with `s.focus(target)` (no mouse move, so no hover effects), easing over
+and starting just before the cursor arrives. Its height stops above the
+recording's own caption, which the Short shows below the video instead.
+A feature's `framing` (one entry per caption, like `narration`) can mark a
+scene `"wide"`: a 1280px window squeezed into the same box (about 1.85×
+taller, but a whole Grafana tab fits), held still on everything right of the
+lab sidebar. The width switches where that caption starts.
+Recordings made before the cursor track existed are letterboxed instead
+(re-record them with `run.sh --only <feature>`). The original title card is
+skipped.
+
+The voice-over is an offline [Kokoro](https://github.com/thewh1teagle/kokoro-onnx)
+voice ([`narration/speak.py`](narration/speak.py)): a 50/50 blend of
+`am_michael` and `am_fenrir` by default; `SHOWCASE_VOICE` takes another voice
+or blend, e.g. `am_michael:0.6,am_fenrir:0.4`. It speaks the feature's
+`narration`, one paragraph per caption, written to be heard (see
+[`features/monitoring.mjs`](features/monitoring.mjs)); a feature without one
+gets its captions read. "…" in a paragraph is a real pause (0.35 s, for
+listing things), and a paragraph can be `{ text, speed }` to slow it down
+(default 1.12). A paragraph starts just after its caption appears and
+must end before the next one: speak.py speeds up a long one slightly (at most
+1.2×) and `shorts.sh` names any that still don't fit, to shorten. About 2.6
+words a second is a good guide. The voice gets a light EQ and compression, and
+the music ducks under it. The first run sets up a venv in `.cache/` and
+downloads the model (~120 MB) to `narration/voices/`; on NixOS it takes
+espeak-ng, libstdc++ and zlib from nixpkgs.
+
+The music is one of the two tracks (random), from a random point, so every Short
+gets a different excerpt. It sits well under the voice: it fades in, stays low
+(and ducks) while the voice speaks, swells once the voice has finished, then
+fades out. The upload text credits only the track used. The voice speaks at
+1.12× (`SHOWCASE_VOICE_SPEED`); at 1.0 Kokoro drags stressed vowels. Features longer than 59
+seconds split into numbered parts at caption boundaries, preserving action pace
+and caption reading time. Very short features keep their natural length.
+
+Each part crossfades two randomly selected excerpts from the showcase's verified
+Sappheiros tracks, normalized to −24 LUFS with opening and closing fades.
+Rerunning changes the excerpts and replaces the corresponding exports.
+Include both generated music credits when uploading; Creative Commons licensing
+does not guarantee that YouTube will never issue a Content ID claim.
+`--silent` lets you choose music in YouTube's own library instead.
+Requires ffprobe and ffmpeg with libx264, libmp3lame and libass, plus Noto Sans (or a
+fontconfig substitute) for captions. `FFMPEG` and `FFPROBE` override binaries.
+YouTube accepts square or vertical videos up to three minutes as Shorts:
+[YouTube's format guidance](https://support.google.com/youtube/answer/15424877).

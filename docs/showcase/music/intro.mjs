@@ -7,7 +7,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { joinClips, pngToWebp } from "../lib/media.mjs";
+import { CRF, joinClips, LAYOUT, PIXEL_RATIO, pngToWebp } from "../lib/media.mjs";
 import { fileHash } from "../lib/recordings.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -49,7 +49,8 @@ function browserExecutable() {
   return undefined;
 }
 
-export async function renderBookends(ffmpeg, directory, { width = 1600, height = 900 } = {}) {
+/** `pixelRatio` sets the output size (LAYOUT × ratio); it must match the feature clips it is joined to. */
+export async function renderBookends(ffmpeg, directory, { width = LAYOUT.width, height = LAYOUT.height, pixelRatio = PIXEL_RATIO } = {}) {
   const { createServer } = await import(pathToFileURL(frontendRequire.resolve("vite")).href);
   const { chromium } = await import("playwright-core");
   const frames = path.join(directory, "intro-frames");
@@ -82,7 +83,7 @@ export async function renderBookends(ffmpeg, directory, { width = 1600, height =
   try {
     await server.listen();
     browser = await chromium.launch({ executablePath: browserExecutable() });
-    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1, colorScheme: "dark" });
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: pixelRatio, colorScheme: "dark" });
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/__showcase_intro.html`);
@@ -138,7 +139,7 @@ export async function renderBookends(ffmpeg, directory, { width = 1600, height =
     }
     const outroClip = path.join(directory, "outro.mp4");
     ffmpegRun(ffmpeg, ["-framerate", String(OUTRO.fps), "-i", path.join(outroFrames, "%04d.png"),
-      "-vf", "fade=t=in:d=0.3:color=0x1e1e1e,format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-crf", "20",
+      "-vf", "fade=t=in:d=0.3:color=0x1e1e1e,format=yuv420p", "-c:v", "libx264", "-preset", "slow", "-crf", CRF,
       "-video_track_timescale", "15360", "-movflags", "+faststart", outroClip]);
     const outroPoster = path.join(directory, "thanks-dark.webp");
     pngToWebp(ffmpeg, path.join(outroFrames, "0150.png"), outroPoster);
@@ -153,7 +154,7 @@ export async function renderBookends(ffmpeg, directory, { width = 1600, height =
   ffmpegRun(ffmpeg, [
     "-framerate", String(INTRO.fps), "-i", path.join(frames, "%04d.png"),
     "-vf", `fade=t=out:st=${INTRO.seconds - INTRO.fade}:d=${INTRO.fade}:color=0x1e1e1e,format=yuv420p`,
-    "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-video_track_timescale", "15360", "-movflags", "+faststart", clip,
+    "-c:v", "libx264", "-preset", "slow", "-crf", CRF, "-video_track_timescale", "15360", "-movflags", "+faststart", clip,
   ]);
   const poster = path.join(directory, "loading-dark.webp");
   pngToWebp(ffmpeg, path.join(frames, "0132.png"), poster);
@@ -169,7 +170,7 @@ export function replaceOpeningTitle(ffmpeg, clips, trimStart, intro, output, out
     ffmpegRun(ffmpeg, [
       "-ss", String(trimStart), "-i", clips[0], "-map", "0:v:0", "-an",
       "-vf", `fade=t=in:d=${INTRO.fade}:color=0x1e1e1e,format=yuv420p`,
-      "-c:v", "libx264", "-preset", "slow", "-crf", "20", "-video_track_timescale", "15360", "-movflags", "+faststart", first,
+      "-c:v", "libx264", "-preset", "slow", "-crf", CRF, "-video_track_timescale", "15360", "-movflags", "+faststart", first,
     ]);
     joinClips(ffmpeg, [intro, first, ...clips.slice(1), ...(outro ? [outro] : [])], output);
   } finally {

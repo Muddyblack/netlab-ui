@@ -1,11 +1,25 @@
 # Showcase lab for docs/showcase: a small leaf/spine fabric.
-# OSPF underlay, iBGP with the spines as route reflectors.
+# OSPF underlay, iBGP with the spines as route reflectors, the monitoring
+# plugin, netlab validate tests and one fault test (Monitoring, Validation).
 name: fabric
 provider: clab
 addressing.mgmt.start: 150
 
 defaults.device: frr
 module: [ospf, bgp]
+plugin: [monitoring]
+# Keep the showcase stack separate from other labs' default monitoring ports.
+monitoring.ports:
+  grafana: 23000
+  tsdb: 28428
+  vmalert: 28880
+  alertmanager: 29093
+  loki: 23100
+  loki_grpc: 29096
+  syslog: 21514
+  collector: 29480
+  gnmic: 29804
+  snmp: 29116
 bgp.as: 65000
 
 groups:
@@ -24,3 +38,38 @@ links:
 - s2-l1
 - s2-l2
 - s2-l3
+
+validate:
+  ospf_s1:
+    description: Every leaf has an OSPF adjacency with s1
+    wait: 40
+    wait_msg: Waiting for OSPF to converge
+    nodes: [ l1, l2, l3 ]
+    plugin: ospf_neighbor(nodes.s1.ospf.router_id)
+  ospf_s2:
+    description: Every leaf has an OSPF adjacency with s2
+    wait: 40
+    nodes: [ l1, l2, l3 ]
+    plugin: ospf_neighbor(nodes.s2.ospf.router_id)
+  ibgp_rr:
+    description: Every leaf has an iBGP session with the route reflector s1
+    wait: 40
+    wait_msg: Waiting for BGP to establish
+    nodes: [ l1, l2, l3 ]
+    plugin: bgp_neighbor(node.bgp.neighbors,'s1')
+  ping_l1_l3:
+    description: l1 reaches l3 across the fabric
+    wait: 20
+    nodes: [ l1 ]
+    plugin: ping('l3')
+
+monitoring.faults:
+  uplink_loss:
+    description: Lose the s1-l2 uplink; the fabric must keep working over s2
+    links: [ s1-l2 ]
+    cycles: 1
+    down: 10
+    up: 25
+    during: [ ping_l1_l3 ]
+    validate: [ ospf_s1, ibgp_rr ]
+    expect.recovery: 20

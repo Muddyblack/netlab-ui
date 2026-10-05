@@ -6,12 +6,13 @@ export default {
   state: "deployed",
   async run(s) {
     await s.openLab("fabric");
-    await s.say("Double-click a node to edit it");
+    await s.say("Open a node's editor from its context menu");
     await s.click(s.byTestId("navbar-lock"));
-    await s.dblclick(s.node("l1"));
-    await s.wait(800);
+    await s.rightClick(s.node("l1"));
+    await s.click(s.menuItem("Edit Node"));
+    await s.until(s.page.getByRole("tab", { name: "Configuration", exact: true }));
     await s.say("Preview the exact configuration netlab generates");
-    await s.click(s.page.getByRole("tab", { name: /configuration/i }).first());
+    await s.click(s.page.getByRole("tab", { name: "Configuration", exact: true }));
     await s.until(s.page.getByText("Exact files produced by netlab create", { exact: false }), { timeout: 60_000 });
     await s.until(s.page.getByRole("combobox", { name: "Generated file" }), { timeout: 60_000 });
     await s.wait(600);
