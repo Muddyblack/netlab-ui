@@ -72,6 +72,7 @@ def format_nodeset(names: list[str]) -> str:
 _HOSTLIST = re.compile(r"^(?P<prefix>[^\[\]]*)\[(?P<spec>\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)\](?P<suffix>[^\[\]]*)$")
 _RANGE = re.compile(r"^(?P<prefix>.*?)(?P<lo>\d+)\s*-\s*(?P=prefix)?(?P<hi>\d+)$")
 _WILDCARDS = re.compile(r"[*?#]")
+_MAX_EXPRESSION = 200  # node names are short; a longer pattern is a typo or an attempt to stall the matcher
 _REGEX_SYNTAX = re.compile(r"[\\()|^$+{}\[\]]")
 
 
@@ -102,6 +103,8 @@ def select(expression: str, names: list[str]) -> list[str] | None:
     text = expression.strip()
     if not text:
         return None
+    if len(text) > _MAX_EXPRESSION:
+        raise ValueError(f"selector is longer than {_MAX_EXPRESSION} characters")
     if hostlist := _HOSTLIST.match(text):
         bounds = [(part.split("-")[0], part.split("-")[-1]) for part in hostlist.group("spec").split(",")]
         return _numbered(names, hostlist.group("prefix"), hostlist.group("suffix"), bounds)

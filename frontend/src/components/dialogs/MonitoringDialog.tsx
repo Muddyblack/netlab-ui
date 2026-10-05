@@ -302,16 +302,16 @@ function HealthTab({ state, summary, updatedAt }: {
   );
 }
 
+const VERDICT_TONES: Record<string, string> = {
+  passed: "success.main",
+  done: "success.main",
+  failed: "error.main",
+  running: "primary.main",
+};
+
 /** The run's outcome, coloured explicitly (the app theme flattens Chip colours). */
 function VerdictChip({ value, title }: { value: string; title?: string }) {
-  const tone =
-    value === "passed" || value === "done"
-      ? "success.main"
-      : value === "failed"
-        ? "error.main"
-        : value === "running"
-          ? "primary.main"
-          : "warning.main";
+  const tone = VERDICT_TONES[value] ?? "warning.main";
   return (
     <Chip
       size="small"
@@ -334,7 +334,9 @@ function checksText(checks: ValidationCheck[]): { text: string; failed: boolean;
   const failed = checks.filter((check) => check.passed === false);
   const detail = checks
     .map((check) => {
-      const status = check.passed === false ? "FAIL" : check.passed ? "pass" : "—";
+      let status = "—";
+      if (check.passed === false) status = "FAIL";
+      else if (check.passed) status = "pass";
       const time =
         check.passed && check.seconds !== null && check.seconds !== undefined
           ? ` in ${check.seconds} s`
@@ -418,11 +420,7 @@ function ScenarioResults({ run }: { run: ScenarioRun }) {
               color: cycle.recoverySeconds === null && cycle.upAt ? "warning.main" : undefined
             }}
           >
-            {cycle.upAt
-              ? cycle.recoverySeconds === null
-                ? "not recovered"
-                : recovery(cycle.recoverySeconds)
-              : "—"}
+            {recoveryLabel(cycle.upAt, cycle.recoverySeconds)}
           </Typography>
           {validated ? (
             <ValidateCell during={cycle.during ?? []} after={cycle.after ?? []} cell={cell} />
@@ -432,17 +430,23 @@ function ScenarioResults({ run }: { run: ScenarioRun }) {
               noWrap
               title={cycle.affected.join("\n")}
             >
-              {cycle.recoveryExact
-                ? "device timestamps (1 s)"
-                : cycle.upAt
-                  ? "sampled (0.5 s)"
-                  : ""}
+              {precisionLabel(cycle.recoveryExact, cycle.upAt)}
             </Typography>
           )}
         </Box>
       ))}
     </Box>
   );
+}
+
+function recoveryLabel(upAt: unknown, recoverySeconds: number | null | undefined): string {
+  if (!upAt) return "—";
+  return recoverySeconds === null ? "not recovered" : recovery(recoverySeconds);
+}
+
+function precisionLabel(exact: unknown, upAt: unknown): string {
+  if (exact) return "device timestamps (1 s)";
+  return upAt ? "sampled (0.5 s)" : "";
 }
 
 function FaultsTab({
@@ -557,7 +561,7 @@ function FaultsTab({
       {defined.faults.length > 0 && (
         <Box>
           <Typography variant="overline" color="text.secondary">
-            This lab's fault tests
+            This lab&apos;s fault tests
           </Typography>
           <Stack spacing={0.75}>
             {defined.faults.map((fault) => {
@@ -708,7 +712,7 @@ function FaultsTab({
           }
           label={
             <Typography variant="body2" color="text.secondary">
-              Run the lab's netlab validate tests after each recovery (
+              Run the lab&apos;s netlab validate tests after each recovery (
               {defined.validationTests.length})
             </Typography>
           }
@@ -1053,7 +1057,7 @@ export function MonitoringDialog() {
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Switch it on and netlab starts a small collector, a metrics store and Grafana with the
-              lab. You then see the lab's health against what the topology defines, run repeatable
+              lab. You then see the lab&apos;s health against what the topology defines, run repeatable
               link-failure tests and measure convergence.
             </Typography>
           </Stack>

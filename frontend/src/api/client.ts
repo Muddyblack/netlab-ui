@@ -672,7 +672,7 @@ export const api = {
         } catch {
           return; // ignore malformed frames
         }
-        for (const handler of [...eventHandlers]) handler(event);
+        for (const handler of Array.from(eventHandlers)) handler(event);
       };
     }
     return () => {

@@ -9,6 +9,7 @@ in the editor tabs.
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -37,9 +38,11 @@ def list_files(lab_dir: Path, node: str) -> list[dict[str, object]]:
         raise ValueError(f"invalid node name: {node}")
     found: list[dict[str, object]] = []
     for directory, group in _SOURCES:
-        base = lab_dir / directory / node
-        if not base.is_dir():
+        root = os.path.realpath(lab_dir / directory)
+        resolved = os.path.realpath(os.path.join(root, node))
+        if not resolved.startswith(root + os.sep) or not os.path.isdir(resolved):
             continue
+        base = Path(resolved)
         files = sorted((p for p in base.rglob("*") if p.is_file() and not p.is_symlink()), key=_rank)
         for path in files[:_MAX_FILES]:
             found.append({
