@@ -69,6 +69,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       docker: ${{ steps.filter.outputs.docker }}
+      monitoring: ${{ steps.filter.outputs.monitoring }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -87,6 +88,7 @@ jobs:
               echo "backend=true"
               echo "frontend=true"
               echo "docker=true"
+              echo "monitoring=true"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -101,6 +103,12 @@ jobs:
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if match '^(monitoring/|\.github/workflows/ci\.yml)'; then
+            echo "monitoring=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "monitoring=false" >> "$GITHUB_OUTPUT"
           fi
 
           if match '^(frontend/|\.github/workflows/ci\.yml)'; then
@@ -135,6 +143,32 @@ jobs:
 
       - name: Install dependencies
         run: pip install -e ".[dev,netlab]"
+
+      - name: Lint (ruff check)
+        run: ruff check
+
+      - name: Format check (ruff format)
+        run: ruff format --check
+
+      - name: Tests
+        run: pytest
+
+  monitoring:
+    needs: changes
+    if: needs.changes.outputs.monitoring == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitoring
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install ruff pytest pyyaml jinja2
 
       - name: Lint (ruff check)
         run: ruff check

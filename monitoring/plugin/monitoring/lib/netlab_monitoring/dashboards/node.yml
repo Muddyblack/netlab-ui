@@ -1,0 +1,193 @@
+# Node detail: resources, interfaces and protocol state of one node.
+#
+# A built-in dashboard in the same format as the dashboards users write (see spec.py): rows of
+# panels with plain queries. `@NAME@` is a macro from `macros`. Queries use netlab_* metrics and
+# netlab labels only, so one board serves FRR, gNMI, SNMP and host-only nodes alike.
+---
+uid: netlab-node
+title: netlab / Node detail
+description: Resources, interfaces and protocol state of one node
+node_variable: single
+rows:
+
+  - title: $node
+    panels:
+      - type: stat
+        title: Up
+        expr: netlab_node_up{lab="$lab",node="$node"}
+        thresholds:
+          - color: red
+            value: null
+          - color: green
+            value: 1
+        color_mode: background
+        width: 4
+        height: 4
+      - type: stat
+        title: CPU
+        expr: rate(netlab_node_cpu_seconds_total{lab="$lab",node="$node"}[$__rate_interval]) * 100
+        unit: percent
+        width: 4
+        height: 4
+      - type: stat
+        title: Memory
+        expr: netlab_node_memory_bytes{lab="$lab",node="$node"}
+        unit: bytes
+        width: 4
+        height: 4
+      - type: stat
+        title: Interfaces up
+        expr: sum(netlab_if_oper_up{lab="$lab",node="$node",link!="mgmt"})
+        width: 4
+        height: 4
+      - type: stat
+        title: BGP sessions up
+        expr: sum(netlab_bgp_session_up{lab="$lab",node="$node"})
+        width: 4
+        height: 4
+      - type: stat
+        title: IGP adjacencies up
+        expr: (sum(netlab_ospf_neighbor_up{lab="$lab",node="$node"}) or vector(0)) + (sum(netlab_isis_adjacency_up{lab="$lab",node="$node"}) or vector(0))
+        width: 4
+        height: 4
+      - type: timeseries
+        title: CPU
+        expr: rate(netlab_node_cpu_seconds_total{lab="$lab",node="$node"}[$__rate_interval]) * 100
+        legend: CPU
+        unit: percent
+        width: 12
+        height: 7
+      - type: timeseries
+        title: Memory
+        expr: netlab_node_memory_bytes{lab="$lab",node="$node"}
+        legend: memory
+        unit: bytes
+        width: 12
+        height: 7
+
+  - title: Interfaces
+    panels:
+      - type: timeseries
+        title: Receive
+        expr: rate(netlab_if_rx_bytes_total{lab="$lab",node="$node",link!="mgmt"}[$__rate_interval]) * 8
+        legend: '{{ifname}} ({{link}})'
+        unit: bps
+        width: 12
+        height: 8
+      - type: timeseries
+        title: Transmit
+        expr: rate(netlab_if_tx_bytes_total{lab="$lab",node="$node",link!="mgmt"}[$__rate_interval]) * 8
+        legend: '{{ifname}} ({{link}})'
+        unit: bps
+        width: 12
+        height: 8
+      - type: table
+        title: Interfaces
+        queries:
+          - netlab_if_oper_up{lab="$lab",node="$node"}
+          - netlab_if_carrier_changes_total{lab="$lab",node="$node"}
+          - rate(netlab_if_rx_bytes_total{lab="$lab",node="$node"}[$__rate_interval]) * 8
+          - rate(netlab_if_tx_bytes_total{lab="$lab",node="$node"}[$__rate_interval]) * 8
+        rename:
+          ifname: Interface
+          link: Link
+          peer_node: Peer
+          peer_ifname: Peer interface
+          'Value #A': State
+          'Value #B': Link changes
+          'Value #C': Rx
+          'Value #D': Tx
+        hide:
+          - node
+        overrides:
+          - field: State
+            colors: up_down
+          - matcher:
+              id: byRegexp
+              options: Rx|Tx
+            properties:
+              - id: unit
+                value: bps
+        width: 24
+        height: 8
+
+  - title: Protocols
+    panels:
+      - type: table
+        title: BGP
+        queries:
+          - netlab_bgp_session_state{lab="$lab",node="$node"}
+        rename:
+          peer: Peer
+          peer_node: Peer node
+          peer_as: AS
+          vrf: VRF
+          type: Type
+          Value: State
+        hide:
+          - node
+        overrides:
+          - field: State
+            colors: bgp_state
+        width: 12
+        height: 7
+      - type: table
+        title: OSPF / IS-IS
+        queries:
+          - label_replace(netlab_ospf_neighbor_up{lab="$lab",node="$node"}, "protocol", "OSPF", "", "") or label_replace(netlab_isis_adjacency_up{lab="$lab",node="$node"}, "protocol", "IS-IS", "", "")
+        rename:
+          protocol: Protocol
+          peer_node: Peer
+          ifname: Interface
+          Value: State
+        hide:
+          - node
+          - peer_id
+          - peer_ifname
+          - area
+          - level
+        overrides:
+          - field: State
+            colors: up_down
+        width: 12
+        height: 7
+      - type: timeseries
+        title: BGP prefixes received per peer
+        expr: sum without (afi, safi) (netlab_bgp_prefixes_received{lab="$lab",node="$node"})
+        legend: '{{peer_node}} {{peer}}'
+        width: 12
+        height: 7
+      - type: timeseries
+        title: BGP UPDATEs per peer
+        description: Spikes = prefix churn (route injection, flaps, policy changes)
+        queries:
+          - expr: rate(netlab_bgp_updates_received_total{lab="$lab",node="$node"}[$__rate_interval])
+            legend: in {{peer_node}} {{peer}}
+          - expr: rate(netlab_bgp_updates_sent_total{lab="$lab",node="$node"}[$__rate_interval])
+            legend: out {{peer_node}} {{peer}}
+        width: 12
+        height: 7
+      - type: timeseries
+        title: OSPF LSAs by type
+        description: Router LSAs = routers in the area, network LSAs = multi-access segments, summary = inter-area
+        expr: sum by (type) (netlab_ospf_lsas_by_type{lab="$lab",node="$node"})
+        legend: '{{type}}'
+        stack: true
+        width: 12
+        height: 7
+      - type: timeseries
+        title: OSPF retransmissions and neighbor changes
+        description: Per neighbor, last 5 minutes. Retransmissions = LSAs not acknowledged in time (loss, CPU, MTU)
+        queries:
+          - expr: increase(netlab_ospf_neighbor_retransmissions_total{lab="$lab",node="$node"}[5m])
+            legend: retransmissions {{peer_node}}
+          - expr: increase(netlab_ospf_neighbor_changes_total{lab="$lab",node="$node"}[5m])
+            legend: state changes {{peer_node}}
+        width: 12
+        height: 7
+      - type: timeseries
+        title: Routes
+        expr: netlab_routes{lab="$lab",node="$node",table="rib"}
+        legend: '{{afi}} {{protocol}}'
+        width: 24
+        height: 7
