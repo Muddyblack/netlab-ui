@@ -1,6 +1,6 @@
 """Optional MCP server that lets the user's own AI agent work with netlab-ui.
 
-netlab-ui has no chat of its own: people point Claude Code, Codex, Gemini CLI,
+netlab-ui has no chat of its own: people point Claude Code, Codex, Copilot,
 Cursor, … at this server. Everything AI-related lives under this package plus
 ``app/assistant/`` — the rest of the backend never imports from here except for
 the guarded block in ``app.main``. Deleting both directories (and that block) removes the feature

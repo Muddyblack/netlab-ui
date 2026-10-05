@@ -192,7 +192,7 @@ export function PluginCard({
   const isCustom = isCustomPlugin(plugin);
   // Builtins are self-evident; a custom plugin's provenance is the thing the
   // user actually needs (which file on disk is netlab going to load?).
-  const originLabel = isCustom ? ORIGIN_LABELS[plugin.origin ?? ""] ?? plugin.origin : null;
+  const originLabel = isCustom || plugin.origin === "netlab-ui" ? ORIGIN_LABELS[plugin.origin ?? ""] ?? plugin.origin : null;
   const hooks = plugin.hooks ?? [];
   const requires = plugin.requires ?? [];
   const executeAfter = plugin.execute_after ?? [];

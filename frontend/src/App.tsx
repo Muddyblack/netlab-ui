@@ -7,6 +7,7 @@ import "@fontsource/roboto/700.css";
 import "@containerlab/clab-ui/styles/global.css";
 import "highlight.js/styles/github-dark.css";
 
+import type { OpenWebTab } from "./lifecycle/types";
 import { StartupGate } from "./components/StartupGate";
 import { AppToolbarActions } from "./app/AppToolbarActions";
 import { AppCanvasArea } from "./components/app/AppCanvasArea";
@@ -29,9 +30,14 @@ export default function App() {
         c.setSettingsTab("general");
         c.setSettingsOpen(true);
       }}
-      assistantAvailable={Boolean(c.assistantCapabilities && c.sessionId)}
+      onQuickOpen={() => c.setQuickOpen(true)}
       assistantOpen={c.assistantOpen}
-      onToggleAssistant={() => c.setAssistantOpen((open) => !open)}
+      assistantStatus={c.assistantStatus}
+      hasLab={Boolean(c.sessionId)}
+      onToggleAssistant={() => {
+        if (c.assistantStatus === "connecting") c.retryAssistant(); // do not wait for the next scheduled try
+        c.setAssistantOpen((open) => !open);
+      }}
     />
   );
 
@@ -70,10 +76,11 @@ export default function App() {
             appRuntime={c.appRuntime}
             sessionId={c.sessionId}
             transformRunning={c.transformRunning}
-            activeFileTab={c.activeFileTab}
+            activeFileTab={c.activeFileTab ?? c.activeWebTab}
             portalContainer={c.portalContainer}
             labFiles={c.labFiles}
             handleOpenLab={c.handleOpenLab}
+            onCreateWithAi={c.assistantStatus === "ready" ? c.openNewLabWithAi : undefined}
             navbarPortalContainer={c.navbarPortalContainer}
             toolbarActions={toolbarActions}
           />
@@ -96,6 +103,8 @@ export default function App() {
           <AppCanvasOverlays
             portalContainer={c.portalContainer}
             activeFileTab={c.activeFileTab}
+            activeWebTab={c.activeWebTab}
+            webTabs={c.openTabs.filter((t): t is OpenWebTab => t.kind === "web")}
             themeMode={c.themeMode}
             handleFileTabChange={c.handleFileTabChange}
             handleCloseLab={c.handleCloseLab}

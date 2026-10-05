@@ -14,6 +14,11 @@ import { getApiBase } from "./endpoint";
 
 type Schemas = components["schemas"];
 
+/** A backend push event (`{type: "files" | "workspaces" | "proposals" | "ui" …}`). */
+export type BackendEvent = { type?: string; sessionId?: string; [key: string]: unknown };
+let eventSource: EventSource | null = null;
+const eventHandlers = new Set<(event: BackendEvent) => void>();
+
 export type HealthStatus = Schemas["HealthStatus"];
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
@@ -34,11 +39,26 @@ export type GeneratorPreview = Schemas["GeneratorPreview"];
 export type TopologyPattern = Schemas["TopologyPattern"];
 export type VersionResult = Schemas["VersionResult"];
 export type ExecTargets = Schemas["ExecTargets"];
+export type ExecResolved = Schemas["ExecResolved"];
 export type LabSearchHit = Schemas["LabSearchHit"];
 export type ConfigSnapshot = Schemas["ConfigSnapshot"];
+export type NodeConfigFiles = Schemas["NodeConfigFiles"];
 export type LabTools = Schemas["LabTools"];
 export type LabTool = Schemas["LabTool"];
 export type ToolActionResult = Schemas["ToolActionResult"];
+export type MonitoringState = Schemas["MonitoringState"];
+export type MonitoringSummary = Schemas["MonitoringSummary"];
+export type MonitoringActionResult = Schemas["MonitoringActionResult"];
+export type MonitoringScope = Schemas["MonitoringScope"];
+export type MonitoringScopeNode = Schemas["ScopeNode"];
+/** Which nodes monitoring covers: selector lines for `monitoring.nodes` and `monitoring.light`, and the random seed. */
+export type MonitoringSelection = { nodes: string[]; light: string[]; seed: number };
+export type PromSample = Schemas["PromSample"];
+export type ScenarioRun = Schemas["ScenarioRun"];
+export type ScenarioRequest = Schemas["ScenarioRequest"];
+export type FaultTests = Schemas["FaultTests"];
+export type FaultTestDefinition = Schemas["FaultTest"];
+export type ValidationCheck = Schemas["ValidationCheck"];
 export type SetupCatalog = Schemas["SetupCatalog"];
 export type BoxRecipe = Schemas["BoxRecipe"];
 export type CustomConfigs = Schemas["CustomConfigs"];
@@ -385,6 +405,9 @@ export const api = {
   copyLab: (topologyPath: string, name: string, targetWorkspace: string) =>
     http<Schemas["CopyLabResult"]>("/api/lab/copy", { method: "POST", body: JSON.stringify({ topologyPath, name, targetWorkspace }) }, 1, 60000),
 
+  deleteLab: (topologyPath: string, dryRun = false) =>
+    http<{ deleted: string; kind: "folder" | "file" }>("/api/lab/delete", { method: "POST", body: JSON.stringify({ topologyPath, dryRun }) }, 1, 60000),
+
   getLease: (sessionId: string) =>
     http<{ expiresAt?: string | null }>(`/api/lab/lease?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1),
 
@@ -393,6 +416,9 @@ export const api = {
 
   listConfigSnapshots: (sessionId: string) =>
     http<{ snapshots: ConfigSnapshot[] }>(`/api/lab/configs/snapshots?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  listNodeConfigs: (sessionId: string, node: string) =>
+    http<NodeConfigFiles>(`/api/lab/node-configs?sessionId=${encodeURIComponent(sessionId)}&node=${encodeURIComponent(node)}`, { cache: "no-store" }),
 
   getSetupCatalog: () => http<SetupCatalog>("/api/environment/setup", { cache: "no-store" }, 1, 30000),
 
@@ -425,6 +451,53 @@ export const api = {
   labToolAction: (sessionId: string, tool: string, action: "up" | "down") =>
     http<ToolActionResult>("/api/lab/tools/action", { method: "POST", body: JSON.stringify({ sessionId, tool, action }) }, 1, 330000),
 
+  getMonitoring: (sessionId: string) =>
+    http<MonitoringState>(`/api/lab/monitoring?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  /** Turn monitoring on/off and set where it runs; `options` sets the opt-in parts (logs, alert targets;
+   * an omitted one stays as it is, an empty address removes a target). */
+  setMonitoring: (
+    sessionId: string,
+    enabled: boolean,
+    placement?: "tool" | "node",
+    options: { logs?: boolean; webhook?: string; slack?: string } = {}
+  ) =>
+    http<MonitoringState>("/api/lab/monitoring", { method: "PUT", body: JSON.stringify({ sessionId, enabled, placement, ...options }) }, 1, 30000),
+
+  getMonitoringScope: (sessionId: string) =>
+    http<MonitoringScope>(`/api/lab/monitoring/scope?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 60000),
+
+  /** What a selection would match; nothing is saved. */
+  previewMonitoringScope: (sessionId: string, selection: MonitoringSelection) =>
+    http<MonitoringScope>("/api/lab/monitoring/scope/preview", { method: "POST", body: JSON.stringify({ sessionId, ...selection }) }, 1, 60000),
+
+  /** Save a selection into the topology; with `apply`, also make a running stack use it (restarts the monitoring containers). */
+  setMonitoringScope: (sessionId: string, selection: MonitoringSelection, apply: boolean) =>
+    http<MonitoringScope>("/api/lab/monitoring/scope", { method: "PUT", body: JSON.stringify({ sessionId, ...selection, apply }) }, 1, 400000),
+
+  getMonitoringSummary: (sessionId: string) =>
+    http<MonitoringSummary>(`/api/lab/monitoring/summary?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  queryMonitoring: (sessionId: string, query: string) =>
+    http<PromSample[]>(`/api/lab/monitoring/query?sessionId=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(query)}`, { cache: "no-store" }, 1, 30000),
+
+  /** Fields with a server default may be left out (a named test needs only `name`). */
+  startScenario: (request: Partial<ScenarioRequest> & { sessionId: string }) =>
+    http<ScenarioRun>("/api/lab/monitoring/scenarios", { method: "POST", body: JSON.stringify(request) }, 1, 30000),
+
+  /** Fault tests the topology defines (monitoring.faults) and its netlab validation tests. */
+  listFaultTests: (sessionId: string) =>
+    http<FaultTests>(`/api/lab/monitoring/faults?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
+
+  listScenarios: (sessionId: string) =>
+    http<ScenarioRun[]>(`/api/lab/monitoring/scenarios?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 30000),
+
+  cancelScenario: (scenarioId: string) =>
+    http<{ ok: boolean }>(`/api/lab/monitoring/scenarios/${encodeURIComponent(scenarioId)}/cancel`, { method: "POST" }, 1, 30000),
+
+  monitoringAction: (sessionId: string, action: "up" | "down") =>
+    http<MonitoringActionResult>("/api/lab/monitoring/action", { method: "POST", body: JSON.stringify({ sessionId, action }) }, 1, 330000),
+
   takeConfigSnapshot: (sessionId: string, reason = "manual snapshot") =>
     http<ConfigSnapshot>("/api/lab/configs/snapshots", { method: "POST", body: JSON.stringify({ sessionId, reason }) }, 1, 120000),
 
@@ -441,6 +514,10 @@ export const api = {
 
   getExecTargets: (sessionId: string) =>
     http<ExecTargets>(`/api/lab/exec/targets?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }, 1, 15000),
+
+  /** What a "Run on" selection (names, groups, patterns like r1-r3 or leaf*) resolves to. */
+  resolveExecTargets: (sessionId: string, nodes: string[]) =>
+    http<ExecResolved>("/api/lab/exec/resolve", { method: "POST", body: JSON.stringify({ sessionId, nodes }) }, 1, 15000),
 
   getExecScripts: (sessionId: string) =>
     http<{ scripts: ExecScript[] }>(`/api/lab/exec/scripts?sessionId=${encodeURIComponent(sessionId)}`, { cache: "no-store" }),
@@ -582,16 +659,29 @@ export const api = {
    * should keep a slow polling fallback — the stream is best-effort (the
    * watcher is disabled when watchfiles isn't installed on the backend).
    */
-  subscribeEvents(onEvent: (event: { type?: string; sessionId?: string }) => void): () => void {
-    const es = new EventSource(`${getApiBase()}/api/lab/events/stream`);
-    es.onmessage = (e) => {
-      try {
-        onEvent(JSON.parse(e.data));
-      } catch {
-        /* ignore malformed frames */
+  subscribeEvents(onEvent: (event: BackendEvent) => void): () => void {
+    // One shared stream for every subscriber: browsers allow only ~6 open
+    // HTTP/1.1 connections per host, and each EventSource holds one forever.
+    eventHandlers.add(onEvent);
+    if (!eventSource) {
+      eventSource = new EventSource(`${getApiBase()}/api/lab/events/stream`);
+      eventSource.onmessage = (e) => {
+        let event: BackendEvent;
+        try {
+          event = JSON.parse(e.data);
+        } catch {
+          return; // ignore malformed frames
+        }
+        for (const handler of Array.from(eventHandlers)) handler(event);
+      };
+    }
+    return () => {
+      eventHandlers.delete(onEvent);
+      if (!eventHandlers.size && eventSource) {
+        eventSource.close();
+        eventSource = null;
       }
     };
-    return () => es.close();
   },
 
   labInitial: (sessionId: string) =>
@@ -739,8 +829,12 @@ export const api = {
       { cache: "no-store" }
     ),
 
-  applyAssistantProposal: (proposalId: string) =>
-    http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/apply`, { method: "POST" }, 1, 20000),
+  /** `positions` is where the canvas drew the nodes the proposal adds, so they land there. */
+  applyAssistantProposal: (proposalId: string, positions?: Record<string, { x: number; y: number }>) =>
+    http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/apply`, {
+      method: "POST",
+      body: JSON.stringify({ positions: positions ?? {} }),
+    }, 1, 20000),
 
   rejectAssistantProposal: (proposalId: string) =>
     http<AssistantProposalResult>(`/api/assistant/proposals/${proposalId}/reject`, { method: "POST" }),
@@ -750,5 +844,11 @@ export const api = {
     http<{ ok: boolean }>("/api/assistant/selection", {
       method: "POST",
       body: JSON.stringify({ sessionId, nodes }),
+    }),
+  /** What this window can open for the lab, so an attached agent can show the user around. */
+  setAssistantUiActions: (sessionId: string, actions: { id: string; label: string; detail: string }[]) =>
+    http<{ ok: boolean }>("/api/assistant/ui-actions", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, actions }),
     }),
 };

@@ -8,11 +8,12 @@ import { getApiBase } from "../api/endpoint";
 import {
   resolveOpenLabTab,
   buildFileTabId,
+  buildWebTabId,
   persistLastOpenLabPath,
   persistOpenTabSession,
   type PersistedTabSession
 } from "../lifecycle/persistence";
-import type { OpenLabTab, OpenFileTab, OpenTab, RuntimeSnackbarState } from "../lifecycle/types";
+import type { OpenLabTab, OpenFileTab, OpenWebTab, OpenTab, RuntimeSnackbarState } from "../lifecycle/types";
 import type { AppClabUiHost } from "../host/createHost";
 import type { LabFileEntry } from "../api/client";
 
@@ -152,10 +153,12 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     const tab = openTabs.find((t) => t.id === tabId);
     if (!tab) return;
     setActiveTabId(tabId);
-    if (tab.kind === "file") return;
-    if (activeTabId === tabId && sessionId) return;
+    if (tab.kind !== "topology") return;
+    // The session survives visits to file/web tabs; coming back to the lab it
+    // belongs to must not dispose and rebuild it (that reloads the canvas).
+    if (sessionId && activePathRef.current === tab.topologyRef.yamlPath) return;
     await activateLabTab(tab);
-  }, [activeTabId, activateLabTab, openTabs, sessionId]);
+  }, [activateLabTab, openTabs, sessionId]);
 
   const handleCloseLab = useCallback(async (tabId?: string) => {
     const targetId = tabId ?? activeTabId;
@@ -173,6 +176,15 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     setActiveTabId(nextActive.id);
     if (nextActive.kind === "topology") await activateLabTab(nextActive, { skipDisposeCurrent: true });
   }, [activeTabId, activateLabTab, clearActiveLabSession, openTabs]);
+
+  const handleOpenWebTab = useCallback((input: { url: string; title: string; subtitle?: string }) => {
+    const tab: OpenWebTab = {
+      kind: "web", id: buildWebTabId(input.url),
+      title: input.title, subtitle: input.subtitle ?? "Web", url: input.url
+    };
+    setOpenTabs((cur) => (cur.some((t) => t.id === tab.id) ? cur : [...cur, tab]));
+    setActiveTabId(tab.id);
+  }, []);
 
   const handleOpenFileTab = useCallback(async (input: { endpointId: string; path: string; title?: string }) => {
     const tabId = buildFileTabId(input.endpointId, input.path);
@@ -330,9 +342,27 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
     setRestoreComplete(true);
   }, [activateLabTab, restoreComplete]);
 
+  // Saved a moment after the last change (typing in an editor changes the tabs on
+  // every keystroke), and flushed when the page is hidden or closed.
+  const pendingSession = useRef<PersistedTabSession | null>(null);
+  const warnedUnsaved = useRef(false);
+  const flushSession = useCallback(() => {
+    const session = pendingSession.current;
+    if (!session) return;
+    pendingSession.current = null;
+    void persistOpenTabSession(session).then((result) => {
+      if (result === "failed" && !warnedUnsaved.current) {
+        warnedUnsaved.current = true;
+        addToast("Browser storage is full or blocked: unsaved edits in open files may not survive a reload. Save your files.", "warning");
+      } else if (result !== "failed") {
+        warnedUnsaved.current = false;
+      }
+    });
+  }, [addToast]);
+
   useEffect(() => {
     if (!restoreComplete) return;
-    persistOpenTabSession({
+    pendingSession.current = {
       activeTabId,
       tabs: openTabs.map((tab) =>
         tab.kind === "file"
@@ -348,13 +378,27 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
             }
           : tab
       )
-    });
-  }, [activeTabId, openTabs, restoreComplete]);
+    };
+    const timer = window.setTimeout(flushSession, 400);
+    return () => window.clearTimeout(timer);
+  }, [activeTabId, openTabs, restoreComplete, flushSession]);
+
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flushSession(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushSession);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushSession);
+    };
+  }, [flushSession]);
 
   const activeFileTab = openTabs.find((t): t is OpenFileTab => t.kind === "file" && t.id === activeTabId) ?? null;
 
+  const activeWebTab = openTabs.find((t): t is OpenWebTab => t.kind === "web" && t.id === activeTabId) ?? null;
+
   return {
-    sessionId, openTabs, activeTabId, activeFileTab,
+    sessionId, openTabs, activeTabId, activeFileTab, activeWebTab, handleOpenWebTab,
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
     handleCreateLab, getOrCreateSession, topologyPathForSession, restoreTabSession, restoreComplete

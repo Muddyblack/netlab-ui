@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { createPortal } from "react-dom";
-import { DEMO_MODE, type OpenFileTab, type RuntimeSnackbarState } from "../../lifecycle/types";
+import { DEMO_MODE, type OpenFileTab, type OpenWebTab, type RuntimeSnackbarState } from "../../lifecycle/types";
 import type { TopologyRef } from "../../hooks/useTabManager";
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
 import type { SessionTab, useSessionDock } from "../../hooks/useSessionDock";
@@ -17,11 +17,14 @@ import { CanvasLabOverlays } from "./CanvasLabOverlays";
 const FileEditorTabPanel = lazy(() =>
   import("../FileEditorTabPanel").then((m) => ({ default: m.FileEditorTabPanel }))
 );
+const WebTabPanel = lazy(() => import("../WebTabPanel").then((m) => ({ default: m.WebTabPanel })));
 const SessionDock = lazy(() => import("../../terminal/SessionDock").then((m) => ({ default: m.SessionDock })));
 
 interface AppCanvasOverlaysProps {
   portalContainer: Element | null;
   activeFileTab: OpenFileTab | null;
+  activeWebTab: OpenWebTab | null;
+  webTabs: OpenWebTab[];
   themeMode: AppThemeMode;
   handleFileTabChange: (tabId: string, content: string) => void;
   handleCloseLab: (id: string) => Promise<void>;
@@ -44,6 +47,8 @@ interface AppCanvasOverlaysProps {
 export function AppCanvasOverlays({
   portalContainer,
   activeFileTab,
+  activeWebTab,
+  webTabs,
   themeMode,
   handleFileTabChange,
   handleCloseLab,
@@ -72,8 +77,19 @@ export function AppCanvasOverlays({
         portalContainer
       )}
 
-      {portalContainer && sessionId && !activeFileTab && !DEMO_MODE && createPortal(
-        <>
+      {/* Web tabs stay mounted while hidden so Grafana keeps its state. */}
+      {portalContainer && webTabs.length > 0 && createPortal(
+        <Suspense fallback={null}>
+          {webTabs.map((tab) => (
+            <WebTabPanel key={tab.id} tab={tab} active={tab.id === activeWebTab?.id} />
+          ))}
+        </Suspense>,
+        portalContainer
+      )}
+
+      {/* Lab overlays (agents, lenses, units) stay mounted but hidden on file/web tabs. */}
+      {portalContainer && sessionId && !DEMO_MODE && createPortal(
+        <div style={{ display: activeFileTab || activeWebTab ? "none" : "contents" }}>
           <CanvasValidationSummary issues={validationIssues} onClose={() => setValidationIssues([])} />
           <CanvasDeploymentProgress progress={deploymentProgress} />
           <UnitsDock
@@ -95,7 +111,7 @@ export function AppCanvasOverlays({
               )
             }
           />
-          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} />
+          <CanvasLabOverlays container={portalContainer as HTMLElement} sessionId={sessionId} onToast={addToast} onRefresh={refreshCanvas} />
           <NetlabLenses
             sessionId={sessionId}
             container={portalContainer as HTMLElement}
@@ -103,7 +119,7 @@ export function AppCanvasOverlays({
             themeMode={themeMode}
             onToast={addToast}
           />
-        </>,
+        </div>,
         portalContainer
       )}
 
@@ -122,6 +138,7 @@ export function AppCanvasOverlays({
             onToggleOpen={() => sessionDock.setOpen((value) => !value)}
             onOpenShell={openShell}
             onOpenMulti={() => sessionDock.openTab("multi", "nodes")}
+            onNewTerminal={sessionDock.openTerminal}
             onPopOut={handleSessionPopOut}
           />
         </Suspense>,

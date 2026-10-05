@@ -131,6 +131,11 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 - **netlab's Ansible playbooks find the lab through `$PWD`**, not the process cwd (`lookup('env','PWD')` in collect-configs, initial-config: node_files). `runner._child_env(cwd)` sets `PWD`. Any new way of spawning netlab must do the same, or configs land in the backend's own directory.
 - **Things netlab only knows from the deployed snapshot run in netlab's own Python** (`services/netlab/_tools_bridge.py`, the catalog script in `services/netlab/setup.py`, run with `location.target_python()`), never imported into the backend. `netlab test` exits 0 even when the test failed, and waits for RETURN before cleaning up: `setup.stream` answers the prompt, checks the output for failure, and tears the test lab down in a shielded task.
 
+- **Lab monitoring is a netlab plugin in `monitoring/plugin/monitoring`, not netlab or backend code.** It must keep working from the plain netlab CLI (`plugin: [ monitoring ]`); the backend only links it into `~/.netlab`, edits `plugin:` and reads `<lab>/monitoring/stack.json` + `plan.json`. The collector (`collector/nlmon`) is stdlib-only Python run on the stock `python:alpine` image — don't add dependencies. Metrics use netlab names (`node`, `ifname`, `link`, `peer_node`) and `netlab_*` metric names only; a new vendor is a profile in `defaults.yml` (plus a gNMI/SNMP mapping), never a vendor branch in code. Test with `python -m pytest monitoring/tests` (netlab's Python).
+- **`<lab>/monitoring/data` is written continuously while a lab is monitored.** The workspace watcher (`services/events.py::_workspace_filter`) skips it; keep it that way or the UI drowns in `files` events.
+- **Calls to lab-host services (metrics store, Grafana) bypass HTTP proxies** (`services/monitoring._DIRECT`): urllib doesn't understand CIDR `NO_PROXY` entries, and lab addresses are never behind a proxy.
+- **Edgeshark is installed with netlab's own `edgeshark` tool** through `_tools_bridge.py host up edgeshark --bind <UI address>`; the bridge only scopes netlab's unaddressed `--publish` ports to the UI's bind address. Don't reintroduce a separately downloaded compose file.
+
 ## Key rules
 
 ### clab-ui stays generic

@@ -102,7 +102,8 @@ export function EnvWarningBanner({ health }: { health: HealthStatus | null }) {
   if (dismissed || hidden || !health) return null;
   const missing: string[] = [];
   if (!health.netlab) missing.push("netlab");
-  if (health.containerlab === false) missing.push("containerlab");
+  // A libvirt-only host can still deploy VM labs, so only warn when neither provider exists.
+  if (health.containerlab === false && !health.libvirt) missing.push("containerlab");
   if (missing.length === 0) return null;
 
   const primaryInstallUrl = missing.includes("netlab")
@@ -127,7 +128,13 @@ export function EnvWarningBanner({ health }: { health: HealthStatus | null }) {
           <Alert
             severity="warning"
             variant="filled"
-            sx={{ boxShadow: 4, alignItems: "center" }}
+            sx={{
+              boxShadow: 4,
+              alignItems: "center",
+              // The clab-ui dark palette pairs its amber with dark contrast text, which is unreadable here.
+              color: "text.primary",
+              "& .MuiAlert-icon": { color: "text.primary" }
+            }}
             action={
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
                 <DocumentationActionButtons

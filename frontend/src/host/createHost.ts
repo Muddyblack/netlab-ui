@@ -8,6 +8,7 @@ import { postLinkCommand } from "../api/linkCommands";
 import { requestCapture } from "./captureStore";
 import { parseIconListResponse, parseIconNamesResponse, parseTemplatesFile, selectFile, selectIconFile, type CustomIconListItem } from "./iconHelpers";
 import { createImagesHost } from "./imagesHost";
+import { openNodeConfigsDialog } from "./nodeConfigsStore";
 import { runningLabMatches } from "./runningMatch";
 import type { RunningLabsStatus } from "../hooks/useAppData";
 
@@ -30,6 +31,8 @@ export interface AppClabUiHost extends ClabUiHost {
   onLifecycleFinished?: (result: LifecycleCompletion) => void;
   setLifecycleCancel?(cancel: (() => void) | null): void;
   setRuntimeContainers(containers: HostRuntimeContainer[]): void;
+  /** Open the capture chooser for a node interface (an AI agent can ask for it). */
+  openCapture(nodeName: string, interfaceName: string): void;
   emitTopoViewerEvent(event: ClabUiTopoViewerEvent): void;
 }
 
@@ -462,6 +465,10 @@ export function createApiClabUiHost(options?: {
       }
     },
 
+    openNodeConfigs(nodeName: string) {
+      if (currentSessionId) openNodeConfigsDialog({ sessionId: currentSessionId, node: nodeName });
+    },
+
     captureInterface(nodeName: string, interfaceName: string) {
       openCapture(nodeName, interfaceName);
     },
@@ -640,6 +647,7 @@ export function createApiClabUiHost(options?: {
     ...baseHost,
     topoViewer: topoViewerHost,
     sessionId: null,
+    openCapture,
     setRuntimeContainers(containers: HostRuntimeContainer[]) {
       runtimeContainers = containers;
     },

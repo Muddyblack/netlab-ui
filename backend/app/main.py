@@ -29,7 +29,8 @@ from app.lenses.router import router as lenses_router
 from app.plugins.router import router as plugins_router
 from app.schema.router import router as schema_router
 from app.shell.ws import router as shell_router
-from services import assistant, events, lab_limits
+from app.user_state import router as user_state_router
+from services import assistant, events, lab_limits, monitoring
 from services.netlab import runner
 
 logger = logging.getLogger(__name__)
@@ -91,6 +92,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Warm the tool-version cache so the first /api/health (the startup
     # splash) doesn't wait on `containerlab version`.
     warmup = asyncio.create_task(asyncio.to_thread(_warm_tool_versions))
+    # The monitoring plugin link in ~/.netlab may point at another environment's path.
+    with contextlib.suppress(OSError, RuntimeError):
+        monitoring.repair_plugin_link()
     # Shut down labs whose lease ran out (only when NETLAB_UI_LAB_HOURS is set).
     reaper = asyncio.create_task(lab_limits.reap_forever())
     try:
@@ -155,6 +159,7 @@ app.include_router(plugins_router)
 app.include_router(schema_router)
 app.include_router(docs_router)
 app.include_router(environment_router)
+app.include_router(user_state_router)
 
 if _assistant_router is not None and _assistant_mcp is not None:
     app.include_router(_assistant_router)

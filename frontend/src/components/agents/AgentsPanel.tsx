@@ -1,15 +1,30 @@
-import { useCallback, useEffect, useState } from "react";
-import { Box, Button, IconButton, Link, MenuItem, Select, Stack, Tooltip, Typography } from "@mui/material";
+import { useCallback, useState } from "react";
+import {
+  Accordion, AccordionDetails, AccordionSummary, Box, ButtonBase, Chip, Divider, FormControlLabel, IconButton, Link, Menu, MenuItem, Select, Stack, Switch,
+  ToggleButton, ToggleButtonGroup, Tooltip, Typography
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import SmartToyOutlinedIcon from "@mui/icons-material/SmartToyOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
-import { api, type AssistantCapabilities, type AssistantProposal } from "../../api/client";
+import { type AssistantCapabilities } from "../../api/client";
+import { AgentIcon } from "./AgentIcon";
+import { NetlabMascot, type MascotState } from "./NetlabMascot";
+import { agentBase, agentName } from "./agentNames";
+import { TerminalSlot, focusAgent, setAgentPlacement, useAgentSurface } from "./AgentSurface";
+import { persistAgentConnect, persistAgentSkipPermissions, readAgentConnect, readAgentSkipPermissions, type AgentPlacement } from "./preferences";
+import { terminalShortcutLabel, useTerminalShortcut } from "../../app/terminalShortcut";
+import { ProposalBar } from "./ProposalBar";
 import { ProposalCard } from "./ProposalCard";
+import { pendingProposals, refreshProposals, useProposals } from "./proposalsStore";
 
 type McpInfo = NonNullable<AssistantCapabilities["mcp"]>;
+type Harness = NonNullable<AssistantCapabilities["harnesses"]>[number];
 
-/** How each agent is pointed at netlab-ui's MCP server, in its own config format. */
-function clientSnippets({ url, authHeader }: McpInfo): Array<{ id: string; label: string; where: string; text: string }> {
+/** Ways to point a tool at netlab-ui's MCP server by hand. Agents netlab-ui starts itself are wired up
+ * by the backend (services/assistant/harness.py); the ones it can't wire add their own recipe from there. */
+function clientSnippets({ url, authHeader }: McpInfo, harnesses: Harness[]): Array<{ id: string; label: string; where: string; text: string }> {
   const headers = { Authorization: authHeader };
   const json = (value: unknown) => JSON.stringify(value, null, 2);
   return [
@@ -26,12 +41,6 @@ function clientSnippets({ url, authHeader }: McpInfo): Array<{ id: string; label
       text: `codex mcp add netlab --url ${url} --bearer-token-env-var NETLAB_MCP_TOKEN\nexport NETLAB_MCP_TOKEN=${authHeader.replace(/^Bearer /, "")}`,
     },
     {
-      id: "gemini",
-      label: "Gemini CLI",
-      where: "~/.gemini/settings.json",
-      text: json({ mcpServers: { netlab: { httpUrl: url, headers } } }),
-    },
-    {
       id: "cursor",
       label: "Cursor",
       where: "~/.cursor/mcp.json",
@@ -43,6 +52,9 @@ function clientSnippets({ url, authHeader }: McpInfo): Array<{ id: string; label
       where: ".vscode/mcp.json",
       text: json({ servers: { netlab: { type: "http", url, headers } } }),
     },
+    ...harnesses
+      .filter((item) => item.connect)
+      .map((item) => ({ id: item.id, label: item.name, where: item.connect!.where, text: item.connect!.text })),
   ];
 }
 
@@ -75,13 +87,206 @@ function CopyBlock({ text, label }: { text: string; label: string }) {
   );
 }
 
-/** One button per agent CLI installed on the backend host; a muted line otherwise. */
+/** What starting this agent does about the lab connection, in a word or two (it has to fit under the name). */
+function connectNote(item: Harness, connect: boolean): string {
+  if (!connect) return "plain terminal";
+  if (item.mcp === "register") return "adds config";
+  if (item.mcp === "manual") return "connect by hand";
+  return "connected";
+}
+
+/** Sort key within the installed agents: connected first, then the ones that need setup. */
+function connectRank(item: Harness): number {
+  if (item.mcp === "register") return 1;
+  if (item.mcp === "manual") return 2;
+  return 0;
+}
+
+const cardSx = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-start",
+  gap: 1,
+  width: "100%",
+  minWidth: 0,
+  height: 52,
+  p: 1,
+  border: 1,
+  borderColor: "divider",
+  borderRadius: 1.5,
+  textAlign: "left",
+  bgcolor: "background.paper",
+  "&:hover": { borderColor: "primary.main", bgcolor: "action.hover" },
+} as const;
+
+/** The agent's logo on a fixed dark tile, so light and dark logos read the same in either theme. */
+function Logo({ id }: { id: string }) {
+  return (
+    <Box sx={{ display: "grid", placeItems: "center", width: 32, height: 32, flex: "none", borderRadius: 1, bgcolor: "#1c1f24" }}>
+      <AgentIcon id={id} size={20} />
+    </Box>
+  );
+}
+
+/** Where the agents are looked for, when that is not simply "this machine". */
+function RunsOn({ capabilities }: { capabilities: AssistantCapabilities }) {
+  if (capabilities.agentsRunOn === "host") {
+    return <Typography variant="caption" color="text.secondary">Agents are started on your host machine, as your user, with your own logins.</Typography>;
+  }
+  if (capabilities.agentsRunOn === "container") {
+    return (
+      <Typography variant="caption" color="warning.main">
+        netlab-ui runs in a container and can only see agents installed inside it.
+        {capabilities.agentsNote ? ` To use the ones on your host: ${capabilities.agentsNote}.` : ""}
+      </Typography>
+    );
+  }
+  return null;
+}
+
+function AgentCard({ item, connect, running, onStart, onHover }: {
+  item: Harness;
+  connect: boolean;
+  /** How many instances of this agent are running in the lab. */
+  running: number;
+  onStart: (agentId: string, another?: boolean) => void;
+  /** Hovered or keyboard-focused (the mascot below explains it); null when left. */
+  onHover: (item: Harness | null) => void;
+}) {
+  let note = "not installed";
+  if (item.available) {
+    if (running > 1) note = `${running} running`;
+    else note = running ? "running · click to show" : connectNote(item, connect);
+  }
+  const body = (
+    <>
+      <Logo id={item.id} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600, lineHeight: 1.25 }}>{item.name}</Typography>
+        <Typography variant="caption" color={running ? "success.main" : "text.secondary"} noWrap sx={{ display: "block", lineHeight: 1.2 }}>
+          {note}
+        </Typography>
+      </Box>
+      {running > 0 && <Box aria-label="running" sx={{ ml: "auto", mr: 3.5, width: 8, height: 8, flex: "none", borderRadius: "50%", bgcolor: "success.main" }} />}
+    </>
+  );
+  const hover = { onMouseEnter: () => onHover(item), onMouseLeave: () => onHover(null), onFocus: () => onHover(item), onBlur: () => onHover(null) };
+  if (!item.available) {
+    return (
+      <Box {...hover}>
+        <ButtonBase
+          component="a"
+          href={item.homepage}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`${item.name} is not installed. Open its page`}
+          sx={{ ...cardSx, opacity: 0.55, "&:hover, &:focus-visible": { opacity: 1, borderColor: "error.main", bgcolor: "action.hover" } }}
+        >
+          {body}
+        </ButtonBase>
+      </Box>
+    );
+  }
+  return (
+    <Box sx={{ position: "relative" }} {...hover}>
+      <ButtonBase onClick={() => onStart(item.id)} aria-label={running ? `Show ${item.name}` : `Start ${item.name}`} sx={cardSx}>
+        {body}
+      </ButtonBase>
+      {running > 0 && (
+        <Tooltip title={`Start another ${item.name}`}>
+          <IconButton
+            size="small"
+            aria-label={`Start another ${item.name}`}
+            onClick={() => onStart(item.id, true)}
+            sx={{ position: "absolute", top: "50%", right: 4, transform: "translateY(-50%)", width: 24, height: 24 }}
+          >
+            <AddIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
+  );
+}
+
+/** The mascot's line under the cards: explains the card being hovered (why one can't be started, what to do
+ * instead) and otherwise sums up what is available. Fixed height, so the panel doesn't jump as it changes. */
+function AgentHint({ harnesses, hovered, connect, runningTotal, runningHovered, capabilities }: {
+  harnesses: Harness[];
+  hovered: Harness | null;
+  connect: boolean;
+  runningTotal: number;
+  runningHovered: number;
+  capabilities: AssistantCapabilities;
+}) {
+  const installed = harnesses.filter((item) => item.available);
+  let mood: MascotState = "idle";
+  let title = "Pick an agent";
+  let text = "Installed ones start right here, already connected to this lab.";
+  if (hovered && !hovered.available) {
+    const others = installed.slice(0, 2).map((item) => item.name);
+    mood = "alarm";
+    title = `${hovered.name} isn't installed here`;
+    text = capabilities.agentsRunOn === "container"
+      ? "netlab-ui runs in a container and only sees agents installed inside it."
+      : "Click to open its page and install it.";
+    text += others.length
+      ? ` Or start ${others.join(" or ")} now.`
+      : " Or connect an agent you already run by hand, below.";
+  } else if (hovered) {
+    mood = "giggle";
+    title = hovered.name;
+    if (runningHovered > 0) text = "Already running. Click to show it, or + for another session.";
+    else if (!connect) text = "Starts as a plain terminal in the lab's folder (the MCP switch is off).";
+    else if (hovered.mcp === "register") text = "Starts connected; a small MCP config is added for it first.";
+    else if (hovered.mcp === "manual") text = "Can't be wired up automatically. Start it, then connect it by hand below.";
+    else text = "Starts already connected to this lab: it can read it, run show commands and propose changes.";
+  } else if (installed.length === 0) {
+    mood = "sleeping";
+    title = "No agents found";
+    text = "Install one from the list, or connect one you run yourself, below.";
+  } else if (runningTotal > 0) {
+    mood = "hustle";
+    title = `${runningTotal} agent${runningTotal > 1 ? "s" : ""} running`;
+    text = "Click a running one to show it.";
+  }
+  const angry = mood === "alarm";
+  return (
+    <Stack
+      direction="row"
+      spacing={1.25}
+      alignItems="center"
+      role="status"
+      aria-live="polite"
+      sx={{
+        minHeight: 68,
+        px: 1.25,
+        py: 0.75,
+        border: 1,
+        borderRadius: 1.5,
+        borderColor: angry ? "error.main" : "divider",
+        bgcolor: angry ? (theme) => `${theme.palette.error.main}1a` : "action.hover",
+        transition: "border-color 120ms ease, background-color 120ms ease",
+      }}
+    >
+      <NetlabMascot size={44} state={mood} showCaption={false} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" color={angry ? "error.main" : "text.primary"} sx={{ fontWeight: 600, lineHeight: 1.3 }}>{title}</Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.35 }}>{text}</Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+/** One card per agent CLI: installed ones start in the terminal panel below, the rest link to their page. */
 function StartAgent({ capabilities, onStartAgent }: {
   capabilities: AssistantCapabilities;
-  onStartAgent: (agentId: string) => void;
+  onStartAgent: (agentId: string, another?: boolean) => void;
 }) {
-  const harnesses = capabilities.harnesses ?? [];
-  const installed = harnesses.filter((item) => item.available);
+  const [connect, setConnect] = useState(readAgentConnect);
+  const [skipPermissions, setSkipPermissions] = useState(readAgentSkipPermissions);
+  const { placement, running } = useAgentSurface();
+  const [hovered, setHovered] = useState<Harness | null>(null);
+  const terminalShortcut = useTerminalShortcut();
   if (!capabilities.harnessesAllowed) {
     return (
       <Typography variant="body2" color="text.secondary">
@@ -89,47 +294,94 @@ function StartAgent({ capabilities, onStartAgent }: {
       </Typography>
     );
   }
-  if (installed.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        No agent CLI on this host. Install{" "}
-        {harnesses.map((item, index) => (
-          <span key={item.id}>
-            {index > 0 && (index === harnesses.length - 1 ? " or " : ", ")}
-            <Link href={item.homepage} target="_blank" rel="noreferrer">{item.name}</Link>
-          </span>
-        ))}
-        , or connect a tool below.
-      </Typography>
-    );
-  }
+  const harnesses = capabilities.harnesses ?? [];
+  // Installed first; the backend's order within each group.
+  const ordered = [...harnesses].sort((a, b) =>
+    Number(b.available) - Number(a.available) || connectRank(a) - connectRank(b) || a.name.localeCompare(b.name));
   return (
-    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
-      {installed.map((item) => (
-        <Button key={item.id} variant="contained" size="small" startIcon={<SmartToyOutlinedIcon />} onClick={() => onStartAgent(item.id)}>
-          {item.name}
-        </Button>
-      ))}
+    <Stack spacing={1.25}>
+      <Tooltip
+        placement="top-start"
+        title="On: the agent starts already connected to this lab, so it can read it, run show commands and propose changes. Off: it starts as a plain terminal in the lab's folder."
+      >
+        <FormControlLabel
+          sx={{ ml: 0, mr: 0, alignSelf: "flex-start" }}
+          control={
+            <Switch
+              size="small"
+              checked={connect}
+              onChange={(event) => { setConnect(event.target.checked); persistAgentConnect(event.target.checked); }}
+            />
+          }
+          label={<Typography variant="body2">Connect the agent to this lab (MCP)</Typography>}
+        />
+      </Tooltip>
+      <Tooltip
+        placement="top-start"
+        title="Starts agents with their own skip-permissions flag (for example claude --dangerously-skip-permissions), so they edit files and run commands without asking. Off by default. Applies to agents started from now on; agents without a known flag start normally."
+      >
+        <FormControlLabel
+          sx={{ ml: 0, mr: 0, alignSelf: "flex-start" }}
+          control={
+            <Switch
+              size="small"
+              color="warning"
+              checked={skipPermissions}
+              onChange={(event) => { setSkipPermissions(event.target.checked); persistAgentSkipPermissions(event.target.checked); }}
+            />
+          }
+          label={<Typography variant="body2">Start without permission prompts</Typography>}
+        />
+      </Tooltip>
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Typography variant="body2">Show the terminal</Typography>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={placement}
+          onChange={(_event, value: AgentPlacement | null) => { if (value) setAgentPlacement(value); }}
+        >
+          <ToggleButton value="below" sx={{ textTransform: "none", py: 0.25 }}>Below</ToggleButton>
+          <ToggleButton value="here" sx={{ textTransform: "none", py: 0.25 }}>In this panel</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+      <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", alignItems: "stretch" }}>
+        {ordered.map((item) => (
+          <AgentCard key={item.id} item={item} connect={connect} running={running.filter((node) => agentBase(node) === item.id).length} onStart={onStartAgent} onHover={setHovered} />
+        ))}
+      </Box>
+      <AgentHint
+        harnesses={harnesses}
+        hovered={hovered}
+        connect={connect}
+        runningTotal={running.length}
+        runningHovered={hovered ? running.filter((node) => agentBase(node) === hovered.id).length : 0}
+        capabilities={capabilities}
+      />
+      <Typography variant="caption" color="text.secondary">
+        {placement === "here"
+          ? "Opens in this panel, so keep this tab selected while you talk to the agent. It keeps running when you switch tabs."
+          : `Opens in the terminal panel below. ${terminalShortcutLabel(terminalShortcut)} shows or hides it (change it in Settings).`}
+      </Typography>
+      <RunsOn capabilities={capabilities} />
     </Stack>
   );
 }
 
-/** Pending proposals from the agent; nothing at all when there are none. */
-function Proposals({ sessionId, onApplied }: { sessionId: string; onApplied: () => void }) {
-  const [proposals, setProposals] = useState<AssistantProposal[]>([]);
-  const load = useCallback(() => {
-    void api.listAssistantProposals(sessionId).then((result) => setProposals(result.proposals ?? []), () => undefined);
-  }, [sessionId]);
-
-  useEffect(() => {
-    load();
-    return api.subscribeEvents((event) => {
-      if (event.type === "proposals" && (!event.sessionId || event.sessionId === sessionId)) load();
-    });
-  }, [load, sessionId]);
-
-  const pending = proposals.filter((proposal) => proposal.status === "pending");
+/** Pending proposals from the agent; nothing at all when there are none. `compact` is one line each, for
+ * above a terminal: the change itself is drawn on the canvas. */
+function Proposals({ sessionId, onApplied, compact }: { sessionId: string; onApplied: () => void; compact?: boolean }) {
+  const { proposals } = useProposals();
+  const load = useCallback(() => { void refreshProposals(sessionId); }, [sessionId]);
+  const pending = pendingProposals(proposals);
   if (pending.length === 0) return null;
+  if (compact) {
+    return (
+      <Stack spacing={0.5} sx={{ py: 0.5 }}>
+        {pending.map((proposal) => <ProposalBar key={proposal.id} proposal={proposal} onApplied={onApplied} />)}
+      </Stack>
+    );
+  }
   return (
     <Box>
       <SectionLabel>Review · {pending.length}</SectionLabel>
@@ -142,53 +394,156 @@ function Proposals({ sessionId, onApplied }: { sessionId: string; onApplied: () 
   );
 }
 
-/** Setup for any MCP tool. */
-function ConnectTool({ mcp }: { mcp: McpInfo }) {
+/** Setup for any MCP tool, for agents run outside netlab-ui (an IDE, another terminal). */
+function ConnectTool({ mcp, harnesses }: { mcp: McpInfo; harnesses: Harness[] }) {
   const [client, setClient] = useState("claude");
-  const snippets = clientSnippets(mcp);
+  const snippets = clientSnippets(mcp, harnesses);
   const snippet = snippets.find((item) => item.id === client) ?? snippets[0];
   return (
-    <Stack spacing={1}>
-      <Typography variant="subtitle2" color="text.secondary">Connect another tool</Typography>
-      <Stack direction="row" spacing={1} alignItems="center">
-        <Select size="small" value={snippet.id} onChange={(event) => setClient(event.target.value)} sx={{ minWidth: 150, fontSize: "0.85rem" }}>
-          {snippets.map((item) => <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>)}
-        </Select>
-        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: snippet.where.includes("/") ? "monospace" : undefined }}>
-          {snippet.where}
-        </Typography>
+    <Accordion disableGutters elevation={0} square sx={{ border: 1, borderColor: "divider", borderRadius: 1, "&:before": { display: "none" } }}>
+      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 40, "& .MuiAccordionSummary-content": { my: 0.75 } }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>Connect a tool by hand</Typography>
+      </AccordionSummary>
+      <AccordionDetails>
+        <Stack spacing={1}>
+          <Typography variant="caption" color="text.secondary">
+            For an agent you run yourself, in another terminal or your editor.
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Select size="small" value={snippet.id} onChange={(event) => setClient(event.target.value)} sx={{ minWidth: 150, fontSize: "0.85rem" }}>
+              {snippets.map((item) => <MenuItem key={item.id} value={item.id}>{item.label}</MenuItem>)}
+            </Select>
+            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: snippet.where.includes("/") ? "monospace" : undefined }}>
+              {snippet.where}
+            </Typography>
+          </Stack>
+          <CopyBlock text={snippet.text} label={`${snippet.label} setup`} />
+          <Typography variant="caption" color="text.secondary">
+            {mcp.tools?.length ?? 0} tools · the token changes on restart unless <code>NETLAB_APP_ASSISTANT_TOKEN</code> is set
+          </Typography>
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+/** An agent's terminal inside the tab (placement "here"): a strip to switch between running agents or go
+ * back to the cards, any pending proposals, then the terminal filling the rest. */
+function AgentInPanel({ agentId, sessionId, harnesses, onApplied, onStartAgent, onCloseAgent }: {
+  agentId: string;
+  sessionId: string;
+  harnesses: Harness[];
+  onApplied: () => void;
+  onStartAgent: (agentId: string, another?: boolean) => void;
+  onCloseAgent: (agentId: string) => void;
+}) {
+  const { running, placement } = useAgentSurface();
+  const [connect, setConnect] = useState(readAgentConnect);
+  const [skipPermissions, setSkipPermissions] = useState(readAgentSkipPermissions);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const installed = harnesses.filter((item) => item.available);
+  return (
+    <Stack sx={{ height: "100%", minHeight: 0 }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ p: 0.75, flexShrink: 0, overflowX: "auto", borderBottom: 1, borderColor: "divider" }}>
+        <Tooltip title="All agents">
+          <IconButton size="small" aria-label="Back to all agents" onClick={() => focusAgent(null)}>
+            <ArrowBackIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        {running.map((id) => (
+          <Chip
+            key={id}
+            size="small"
+            clickable
+            icon={<AgentIcon id={agentBase(id)} size={14} />}
+            label={agentName(id)}
+            color={id === agentId ? "primary" : "default"}
+            variant={id === agentId ? "filled" : "outlined"}
+            onClick={() => focusAgent(id)}
+            onDelete={() => {
+              // Closing the shown tab moves to a neighbour; only the last one falls back to the cards.
+              if (id === agentId) focusAgent(running.find((other) => other !== id) ?? null);
+              onCloseAgent(id);
+            }}
+          />
+        ))}
+        {installed.length > 0 && (
+          <>
+            <Tooltip title="New session">
+              <IconButton size="small" aria-label="New agent session" onClick={(event) => setMenuAnchor(event.currentTarget)}>
+                <AddIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+              {installed.map((item) => (
+                <MenuItem
+                  key={item.id}
+                  onClick={() => {
+                    setMenuAnchor(null);
+                    onStartAgent(item.id, running.some((id) => agentBase(id) === item.id));
+                  }}
+                >
+                  <Box sx={{ mr: 1, display: "flex" }}><AgentIcon id={item.id} size={16} /></Box>
+                  {item.name}
+                </MenuItem>
+              ))}
+              <Divider />
+              <MenuItem onClick={() => { setConnect(!connect); persistAgentConnect(!connect); }}>
+                <Switch size="small" checked={connect} sx={{ mr: 1 }} />
+                <Typography variant="body2">Connect to this lab (MCP)</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { setSkipPermissions(!skipPermissions); persistAgentSkipPermissions(!skipPermissions); }}>
+                <Switch size="small" color="warning" checked={skipPermissions} sx={{ mr: 1 }} />
+                <Typography variant="body2">Start without permission prompts</Typography>
+              </MenuItem>
+              <MenuItem onClick={() => { setMenuAnchor(null); setAgentPlacement(placement === "here" ? "below" : "here"); }}>
+                <Switch size="small" checked={placement === "here"} sx={{ mr: 1 }} />
+                <Typography variant="body2">Show the terminal in this panel</Typography>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
       </Stack>
-      <CopyBlock text={snippet.text} label={`${snippet.label} setup`} />
-      <Typography variant="caption" color="text.secondary">
-        {mcp.tools?.length ?? 0} tools · the token changes on restart unless <code>NETLAB_APP_ASSISTANT_TOKEN</code> is set
-      </Typography>
+      <Box sx={{ flexShrink: 0, maxHeight: "35%", overflow: "auto", px: 1 }}>
+        <Proposals sessionId={sessionId} onApplied={onApplied} compact />
+      </Box>
+      <Box sx={{ flex: 1, minHeight: 0 }}>
+        <TerminalSlot holderKey={`${sessionId}:agent:${agentId}`} />
+      </Box>
     </Stack>
   );
 }
 
 /**
  * netlab-ui has no chat of its own: people use the agent they already have
- * (Claude Code, Codex, Gemini CLI, Cursor, …), connected to this lab over MCP
- * — started here in a terminal tab, or set up by hand. Its proposed changes
- * are reviewed here too.
+ * (Claude Code, Codex, Copilot, Cursor, …), connected to this lab over MCP
+ * — started here in the terminal panel, or set up by hand. Its proposed
+ * changes are reviewed here too.
  */
-export function AgentsPanel({ capabilities, sessionId, onApplied, onStartAgent }: {
+export function AgentsPanel({ capabilities, sessionId, onApplied, onStartAgent: openAgent, onCloseAgent }: {
   capabilities: AssistantCapabilities;
   sessionId: string;
   onApplied: () => void;
-  onStartAgent: (agentId: string) => void;
+  onStartAgent: (agentId: string, another?: boolean) => string;
+  onCloseAgent: (agentId: string) => void;
 }) {
+  const { placement, focused, running } = useAgentSurface();
+  // Starting (or showing) an agent also makes it the one this tab shows, when the terminal lives here.
+  const onStartAgent = useCallback((agentId: string, another?: boolean) => { focusAgent(openAgent(agentId, another)); }, [openAgent]);
+  if (placement === "here" && focused && running.includes(focused)) {
+    return <AgentInPanel agentId={focused} sessionId={sessionId} harnesses={capabilities.harnesses ?? []} onApplied={onApplied} onStartAgent={onStartAgent} onCloseAgent={onCloseAgent} />;
+  }
   return (
-    <Stack spacing={2.5} sx={{ height: "100%", minHeight: 0, overflow: "auto", p: 1.5 }}>
+    <Stack spacing={2} sx={{ height: "100%", minHeight: 0, overflow: "auto", p: 1.5 }}>
       <Box>
         <Typography variant="body2" sx={{ mb: 1.25 }}>
           Your own AI agent, connected to this lab. It reads the lab, runs show commands and proposes changes for you to
-          review.
+          review. <Link href="https://modelcontextprotocol.io" target="_blank" rel="noreferrer">What is MCP?</Link>
         </Typography>
         <StartAgent capabilities={capabilities} onStartAgent={onStartAgent} />
       </Box>
       <Proposals sessionId={sessionId} onApplied={onApplied} />
-      {capabilities.mcp && <ConnectTool mcp={capabilities.mcp} />}
+      {capabilities.mcp && <ConnectTool mcp={capabilities.mcp} harnesses={capabilities.harnesses ?? []} />}
     </Stack>
   );
 }

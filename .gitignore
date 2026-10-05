@@ -45,3 +45,8 @@ Vagrantfile
 # labs/ holds user-specific lab data; only the sample lab is tracked
 labs/*
 !labs/sample.yml
+
+.ruff_cache/
+
+# pasted into agent terminals (netlab-ui saves them in the lab folder)
+.pasted-images/

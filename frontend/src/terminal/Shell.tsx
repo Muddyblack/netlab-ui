@@ -1,3 +1,4 @@
+import { readNumber, writeStored } from "../utils/storage";
 import { useEffect, useId, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
@@ -17,7 +18,7 @@ const clampFontSize = (value: number) =>
   Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));
 
 function loadFontSize(): number {
-  const raw = Number(localStorage.getItem(FONT_SIZE_KEY));
+  const raw = readNumber(FONT_SIZE_KEY, 0);
   return Number.isFinite(raw) && raw > 0 ? clampFontSize(raw) : DEFAULT_FONT_SIZE;
 }
 
@@ -131,7 +132,7 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
 
   // Apply font changes live without tearing down the connection.
   useEffect(() => {
-    localStorage.setItem(FONT_SIZE_KEY, String(fontSize));
+    writeStored(FONT_SIZE_KEY, String(fontSize));
     const term = termRef.current;
     const ws = wsRef.current;
     if (!term) return;

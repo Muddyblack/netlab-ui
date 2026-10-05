@@ -32,7 +32,16 @@ export interface OpenFileTab {
   diskContent?: string;
 }
 
-export type OpenTab = OpenLabTab | OpenFileTab;
+/** An external web page (e.g. Grafana) shown in the canvas area like any other tab. */
+export interface OpenWebTab {
+  kind: "web";
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+}
+
+export type OpenTab = OpenLabTab | OpenFileTab | OpenWebTab;
 
 export type WorkspaceEntry = { path: string; exists: boolean; labCount?: number; shared?: boolean };
 

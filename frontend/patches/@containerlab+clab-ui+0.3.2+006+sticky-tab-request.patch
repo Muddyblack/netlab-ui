@@ -1,0 +1,20 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index e234a9c..acc84b2 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -14928,9 +14928,15 @@ var PaletteSection = ({
+   // this ran first, so that race could land on the fallback's tab
+   // (netlab-assistant, since our patch above makes it visibleTabs[0])
+   // instead of the requested "yaml" tab.
++  // Each request is applied once: re-running it on every later `visibleTabs`
++  // change (a host tab's label or list updating) would yank the user back to
++  // the requested tab long after they moved on.
++  const appliedTabRequestRef = useRef(void 0);
+   useEffect19(() => {
++    if (requestedTab === appliedTabRequestRef.current) return;
+     const requestedTabId = requestedTab?.tabId;
+     if (requestedTabId !== void 0 && requestedTabId.length > 0 && visibleTabs.some((t) => t.id === requestedTabId)) {
++      appliedTabRequestRef.current = requestedTab;
+       setUserTab(requestedTabId);
+     }
+   }, [requestedTab, visibleTabs]);

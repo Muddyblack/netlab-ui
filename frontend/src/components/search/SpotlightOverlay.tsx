@@ -28,7 +28,11 @@ export function SpotlightOverlay({ container, sessionId }: { container: HTMLElem
   const litEdges = useMemo(() => {
     if (!spotlight) return new Set<string>();
     const nodes = new Set(spotlight.nodes);
-    return new Set(edges.filter((edge) => nodes.has(edge.source) && nodes.has(edge.target)).map((edge) => edge.id));
+    const pairs = spotlight.links?.map(([a, b]) => [a, b] as const);
+    const wanted = (edge: { source: string; target: string }) => pairs
+      ? pairs.some(([a, b]) => (edge.source === a && edge.target === b) || (edge.source === b && edge.target === a))
+      : nodes.has(edge.source) && nodes.has(edge.target);
+    return new Set(edges.filter(wanted).map((edge) => edge.id));
   }, [edges, spotlight]);
 
   useEffect(() => {

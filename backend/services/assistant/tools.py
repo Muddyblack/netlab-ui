@@ -18,11 +18,11 @@ Everything is read-only except ``write_workspace_file`` and the two
 from __future__ import annotations
 
 import asyncio
-import difflib
 import json
 from pathlib import Path
 from typing import Any, Literal
 
+from services import nodeset
 from services.assistant import exec_tool, proposals
 from services.assistant.config import MAX_FILE_BYTES, MAX_OUTPUT_BYTES
 from services.netlab import runner
@@ -244,16 +244,6 @@ async def get_lab_status(lab: str | None = None, detail: Detail = "concise") -> 
     return result
 
 
-async def validate_topology(lab: str | None = None) -> dict[str, Any]:
-    """Run `netlab validate`: the lab's own tests, against the running lab."""
-    session = _session(lab)
-    result = await runner.validate(session.topology_path)
-    output = result.stdout + result.stderr
-    if "No validation tests defined" in output:
-        return {"passed": None, "note": "this lab defines no validation tests (no `validate:` section)"}
-    return {"passed": result.code == 0, "output": _untrusted(_cap(output))}
-
-
 async def list_workspace_files(lab: str | None = None) -> dict[str, Any]:
     """Files next to the topology: configs, templates, docs, other labs."""
     session = _session(lab)
@@ -317,6 +307,27 @@ async def run_fcli_report(report: str, lab: str | None = None) -> str:
     return _untrusted(_cap(result.stdout))
 
 
+def _expand_nodes(requested: list[str], running: dict[str, Any]) -> list[str]:
+    """Names stay as they are; patterns (r1-r3, r[1-3,5], leaf*, h#, a regex) expand over the running nodes."""
+    known = sorted(running)
+    result: list[str] = []
+    for item in requested:
+        if item in running:
+            result.append(item)
+            continue
+        try:
+            matched = nodeset.select(item, known)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        if matched is None:
+            result.append(item)  # an unknown name: reported with the list of running nodes below
+        elif not matched:
+            raise ToolError(f"{item!r} matches none of the running nodes: {', '.join(known)}")
+        else:
+            result.extend(matched)
+    return list(dict.fromkeys(result))
+
+
 async def run_show_command(command: str, nodes: list[str] | None = None, lab: str | None = None) -> str:
     """Run a read-only command (show …, ping, traceroute, ip …) on running nodes,
     all of them in parallel. ``nodes`` defaults to every running node; nodes that
@@ -331,7 +342,7 @@ async def run_show_command(command: str, nodes: list[str] | None = None, lab: st
         raise ToolError(
             f"lab {_lab_name(session)!r} is not deployed — deploy it first (the user does that in netlab-ui)"
         )
-    targets = list(nodes) if nodes else sorted(running)
+    targets = _expand_nodes(nodes, running) if nodes else sorted(running)
     unknown = [n for n in targets if n not in running]
     if unknown:
         raise ToolError(f"not running in this lab: {', '.join(unknown)}; running nodes: {', '.join(sorted(running))}")
@@ -363,36 +374,6 @@ async def run_show_command(command: str, nodes: list[str] | None = None, lab: st
         grouped.setdefault(body, []).append(node)
     blocks = [f"── {', '.join(group)} ──\n{body or '(no output)'}" for body, group in grouped.items()]
     return _untrusted(_cap(f"$ {command}\n" + "\n".join(blocks)))
-
-
-async def get_config_changes(node: str | None = None, lab: str | None = None) -> dict[str, Any]:
-    """What changed on the running devices since the last config snapshot (taken
-    after every deploy). Without ``node``: which nodes changed and by how much;
-    with ``node``: that node's unified diff."""
-    from services.netlab import config_snapshots
-
-    session = _session(lab)
-    snapshots = config_snapshots.list_snapshots(session.topology_path)
-    if not snapshots:
-        return {"note": "no config snapshot yet — one is taken after each deploy, or the user takes one in netlab-ui"}
-    latest = snapshots[0]
-    base = {"since": latest.get("reason") or latest.get("id"), "snapshot": latest.get("id")}
-    if not node:
-        rows = await config_snapshots.drift(session.topology_path, str(latest["id"]))
-        changed = {r["node"]: f"+{r['added']} -{r['removed']}" for r in rows if r.get("status") == "changed"}
-        other = {r["node"]: r["status"] for r in rows if r.get("status") not in ("changed", "same")}
-        return {
-            **base,
-            "changed": changed,
-            "unchanged": sorted(r["node"] for r in rows if r.get("status") == "same"),
-            **({"other": other} if other else {}),
-        }
-    old = config_snapshots.read_snapshot(session.topology_path, str(latest["id"]), node)
-    live = (await config_snapshots.fetch_running(session.topology_path, [node])).get(node)
-    if old is None or live is None:
-        raise ToolError(f"no config for {node!r} in the snapshot or on the running node")
-    diff = "".join(difflib.unified_diff(old.splitlines(True), live.splitlines(True), "snapshot", "running", n=2))
-    return {**base, "node": node, "diff": _untrusted(_cap(diff)) if diff else "(unchanged)"}
 
 
 # ----------------------------------------------------------------- reference

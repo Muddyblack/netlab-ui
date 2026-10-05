@@ -37,7 +37,7 @@ flowchart TD
     subgraph Host ["Host Environment / Runtimes"]
         NetlabCLI["netlab CLI"]
         Providers["containerlab / libvirt / Docker"]
-        AgentCLI["Your AI agent<br>(Claude Code, Codex, Gemini CLI, …)"]
+        AgentCLI["Your AI agent<br>(Claude Code, Codex, Copilot, Kiro, …)"]
     end
 
     subgraph Storage ["Workspace Storage"]

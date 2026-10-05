@@ -158,25 +158,6 @@ def test_propose_fault_injection_describes_the_impairment(session):
     assert "50ms delay" in proposal.summary and "5% loss" in proposal.summary
 
 
-def test_validate_topology_wraps_output_as_untrusted(session, monkeypatch):
-    async def fake_validate(path):
-        return runner.CommandResult(1, "FAIL: bgp session down", "")
-
-    monkeypatch.setattr(runner, "validate", fake_validate)
-    result = asyncio.run(tools.validate_topology())
-    assert result["passed"] is False
-    assert result["output"].startswith("UNTRUSTED")
-    assert "bgp session down" in result["output"]
-
-
-def test_validate_topology_explains_a_lab_without_tests(session, monkeypatch):
-    async def fake_validate(path):
-        return runner.CommandResult(1, "", "Fatal error in netlab: No validation tests defined for the current lab")
-
-    monkeypatch.setattr(runner, "validate", fake_validate)
-    assert asyncio.run(tools.validate_topology())["passed"] is None
-
-
 def test_lab_status_handles_a_lab_that_is_not_running(session, monkeypatch):
     async def fake_status_for(path, max_age=4.0):
         raise runner.NetlabError(["netlab", "status"], 1, "no lab")
@@ -213,6 +194,18 @@ def test_run_show_command_defaults_to_every_node_and_merges_identical_answers(se
     assert output.startswith("UNTRUSTED")
     assert "── r1, r2 ──\nsame" in output
     assert "── r3 ──\ndifferent" in output
+
+
+def test_run_show_command_takes_patterns_over_the_running_nodes(session, monkeypatch):
+    _running(monkeypatch, ("r1", "r2", "r3", "h1"))
+    _spawn_answering(monkeypatch, {"r1": "a\n", "r2": "b\n", "r3": "c\n", "h1": "d\n"})
+    output = asyncio.run(tools.run_show_command("show version", ["r1-r2", "r[3]", "r1"]))
+    assert "── r1 ──\na" in output and "── r2 ──\nb" in output and "── r3 ──\nc" in output
+    assert "h1" not in output  # a pattern only reaches what it matches, and duplicates run once
+    with pytest.raises(tools.ToolError, match="matches none of the running nodes"):
+        asyncio.run(tools.run_show_command("show version", ["leaf*"]))
+    with pytest.raises(tools.ToolError, match="not a valid pattern"):
+        asyncio.run(tools.run_show_command("show version", ["r(1"]))
 
 
 def test_run_show_command_names_the_running_nodes_on_a_typo(session, monkeypatch):

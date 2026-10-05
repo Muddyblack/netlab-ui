@@ -131,6 +131,14 @@ async def _spawn(
         # terminal uvicorn was launched in and blocks forever with the UI
         # showing an eternally in-progress command. Detached, such prompts
         # fail immediately with a visible error instead.
+        #
+        # NETLAB_APP_KEEP_SESSION=1 (the docs showcase sets it) keeps the
+        # session and only gives the child its own process group: sudo ties
+        # its cached login to the session, so a `sudo -v` done in the terminal
+        # that started the backend still covers netlab's `sudo containerlab`.
+        # The run script keeps that login fresh, so nothing prompts.
+        keep_session = os.environ.get("NETLAB_APP_KEEP_SESSION") == "1"
+        detach: dict[str, Any] = {"preexec_fn": os.setpgrp} if keep_session else {"start_new_session": True}
         return await asyncio.create_subprocess_exec(
             netlab_bin,
             *args,
@@ -139,7 +147,7 @@ async def _spawn(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE if pipe_stdin else asyncio.subprocess.DEVNULL,
-            start_new_session=True,
+            **detach,
         )
     except FileNotFoundError as exc:
         if cwd is not None and not Path(cwd).is_dir():
@@ -507,6 +515,18 @@ async def status() -> Any:
     return result
 
 
+def _without_tools(detail: Any) -> Any:
+    """Drop the external tools netlab lists beside the nodes (device ``(tool)``).
+
+    netlab guesses one ``<lab>_<tool>`` container per tool, which a plugin
+    stack such as monitoring never has: as nodes they show as stopped and
+    offer start/stop actions that cannot work."""
+    if isinstance(detail, dict) and isinstance(detail.get("nodes"), dict):
+        nodes = {n: i for n, i in detail["nodes"].items() if not (isinstance(i, dict) and i.get("device") == "(tool)")}
+        return {**detail, "nodes": nodes}
+    return detail
+
+
 async def _full_status() -> Any:
     status_result = await _run(["status", "--format", "json", "--all"])
     if status_result.code != 0:
@@ -531,7 +551,7 @@ async def _full_status() -> Any:
                     ["status", "--format", "json"],
                     cwd=Path(str(summary["dir"])),
                 )
-                detail = json.loads(detail_out)
+                detail = _without_tools(json.loads(detail_out))
                 return key, {**summary, **detail} if isinstance(detail, dict) else summary
             except (NetlabError, NetlabNotInstalled, OSError, json.JSONDecodeError):
                 return key, summary
@@ -745,7 +765,7 @@ async def status_for(topology_path: str | Path, max_age: float = 4.0) -> Any:
         if cached and time.monotonic() - cached[0] < max_age:
             return cached[1]
         out = await _run_checked(["status", "--format", "json"], cwd=Path(topology_path).parent)
-        result = json.loads(out)
+        result = _without_tools(json.loads(out))
         _lab_status_cache[key] = (time.monotonic(), result)
         return result
 
@@ -796,7 +816,17 @@ async def netem_set(
         args += ["--rate", rate.strip()]
     if corruption.strip():
         args += ["--corruption", corruption.strip()]
-    return await _run_external("containerlab", args)
+    result = await _run_external("containerlab", args)
+    if result.code and "unsupported kind: netem" in f"{result.stdout}{result.stderr}":
+        # containerlab 0.79 applies the qdisc, then fails reading it back
+        # ("extractXStats(): unsupported kind: netem"). Trust the kernel, not its exit code.
+        _ifaces, qdiscs = await container_link_snapshot(container_name)
+        applied = any(
+            line.startswith("qdisc netem") and f" dev {interface} " in f"{line} " for line in qdiscs.splitlines()
+        )
+        if applied == any((delay.strip(), jitter.strip(), loss.strip(), rate.strip(), corruption.strip())):
+            return CommandResult(0, result.stdout, "")
+    return result
 
 
 def container_runtime_binary(preferred: str = "") -> str | None:

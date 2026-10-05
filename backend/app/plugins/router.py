@@ -1,3 +1,4 @@
+import contextlib
 import re
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from app.contract.responses import (
     TopologyPattern,
 )
 from app.sessions.store import store as session_store
+from services import monitoring as monitoring_svc
 from services.netlab import docs as netlab_docs
 from services.netlab import generators as generator_svc
 from services.netlab import location
@@ -28,6 +30,7 @@ from services.netlab import plugins as plugin_svc
 router = APIRouter(prefix="/api/plugins", tags=["plugins"])
 
 NETLAB_PLUGIN_DOCS_BASE = "https://netlab.tools/plugins"
+ORIGIN_NETLAB_UI = "netlab-ui"
 
 
 def _plugin_docs_url(plugin_id: str) -> str:
@@ -147,10 +150,13 @@ def _load_installed_plugins(topology_dir: Path | None = None) -> dict[str, dict]
     plugins have no upstream docs, so an adjacent ``README.md`` is used instead
     and shipped straight away."""
     plugins: dict[str, dict] = {}
+    # A plugin netlab-ui ships (symlinked into ~/.netlab) is neither the user's own nor netlab's.
+    ui_plugin = monitoring_svc.PLUGIN if monitoring_svc.plugin_state()["managed"] else None
     for found in plugin_svc.discover(paths=_plugin_search_path(topology_dir)):
         if not _is_user_facing_plugin(found.id):
             continue
         is_builtin = found.origin == plugin_svc.ORIGIN_BUILTIN
+        origin = ORIGIN_NETLAB_UI if found.id == ui_plugin and not is_builtin else found.origin
         plugins[found.id] = {
             "id": found.id,
             "title": found.id,
@@ -158,7 +164,7 @@ def _load_installed_plugins(topology_dir: Path | None = None) -> dict[str, dict]
             "markdown": "" if is_builtin else (found.meta.readme or ""),
             "docs_url": _plugin_docs_url(found.id) if is_builtin else None,
             "source": str(found.source),
-            "origin": found.origin,
+            "origin": origin,
             "description": found.meta.description,
             "requires": found.meta.requires,
             "execute_after": found.meta.execute_after,
@@ -197,6 +203,10 @@ def list_plugins(session_id: str | None = Query(default=None, alias="sessionId")
     """Plugin catalog. Passing *sessionId* adds the session topology's own
     directory to the search path — that's where netlab looks first, so without
     it the palette can't see a plugin sitting next to the topology file."""
+    # The monitoring plugin ships with netlab-ui, not netlab: put it where netlab looks, so it is listed
+    # and selectable here (and found by `netlab up`) without first switching it on in the Monitoring dialog.
+    with contextlib.suppress(OSError, RuntimeError):
+        monitoring_svc.install_plugin()
     plugins = _merged_plugins(_session_topology_dir(session_id))
     if plugins:
         return plugins

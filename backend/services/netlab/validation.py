@@ -80,6 +80,15 @@ def current(path: str | Path) -> list[ValidationIssue]:
     return cached[1]
 
 
+def clear(path: str | Path) -> None:
+    """Forget the stored diagnostics of a lab.
+
+    They describe one run of the lab (or one failed transform). Once the lab is torn
+    down or deployed again they no longer say anything about it, and left in place they
+    keep a node red on the canvas for as long as the YAML itself is unchanged."""
+    _cache.pop(str(path), None)
+
+
 def store_failure(path: str | Path, message: str) -> list[ValidationIssue]:
     """Persist an unclassified transform failure so preflight can never fail silently."""
     clean = _ANSI_RE.sub("", message).strip() or "netlab topology validation failed"

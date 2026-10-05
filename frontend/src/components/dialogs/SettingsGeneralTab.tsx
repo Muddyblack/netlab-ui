@@ -1,10 +1,83 @@
-import type { ReactNode } from "react";
-import { Alert, Box, Card, CardActionArea, Chip, Divider, Stack, Switch, Typography } from "@mui/material";
+import { useEffect, useState, type ReactNode } from "react";
+import { Alert, Box, Button, Card, CardActionArea, Chip, Divider, Stack, Switch, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 import type { AppThemeMode } from "../../theme";
+import { isReservedShortcutKey, quickOpenShortcut, terminalShortcut, terminalShortcutLabel, type ShortcutStore } from "../../app/terminalShortcut";
+import { setWebPageTarget, useWebPageTarget, type WebPageTarget } from "../../host/webTabStore";
+
+/** Where Grafana dashboards open: a tab next to the lab tabs, or a new browser tab. */
+function WebPageTargetSetting() {
+  const target = useWebPageTarget();
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={650} gutterBottom>
+        Open Dashboards In
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+        Where the Grafana dashboards from Monitoring open. A netlab tab keeps them next to the lab; a browser tab gives
+        them the whole window.
+      </Typography>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={target}
+        onChange={(_event, value: WebPageTarget | null) => value && setWebPageTarget(value)}
+      >
+        <ToggleButton value="app">netlab tab</ToggleButton>
+        <ToggleButton value="browser">New browser tab</ToggleButton>
+      </ToggleButtonGroup>
+    </Box>
+  );
+}
+
+/** Pick the key for one app shortcut: press it while this is listening. */
+function ShortcutSetting({ title, description, store }: { title: string; description: string; store: ShortcutStore }) {
+  const shortcut = store.use();
+  const [listening, setListening] = useState(false);
+  useEffect(() => {
+    if (!listening) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") return setListening(false);
+      if (isReservedShortcutKey(event)) return undefined;
+      store.set(store.fromEvent(event));
+      return setListening(false);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [listening, store]);
+  const isDefault = shortcut === store.defaultShortcut;
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={650} gutterBottom>
+        {title}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
+        {description}
+      </Typography>
+      <Card variant="outlined" sx={{ p: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+          <Box>
+            <Typography variant="subtitle2" fontWeight={600}>
+              {listening ? "Press the key to use (Esc cancels)…" : terminalShortcutLabel(shortcut)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {isDefault ? "Default" : `Default is ${terminalShortcutLabel(store.defaultShortcut)}`}
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <Button size="small" variant="outlined" onClick={() => setListening((value) => !value)}>{listening ? "Cancel" : "Change"}</Button>
+            <Button size="small" disabled={isDefault} onClick={() => store.set(store.defaultShortcut)}>Reset</Button>
+          </Stack>
+        </Stack>
+      </Card>
+    </Box>
+  );
+}
 
 function describeNotificationText(notificationsEnabled: boolean, notificationPermission: NotificationPermission | "unavailable"): string {
   if (notificationPermission === "denied") return "Notifications blocked by browser settings";
@@ -94,6 +167,26 @@ export function SettingsGeneralTab({
           />
         </Stack>
       </Box>
+
+      <Divider />
+
+      <ShortcutSetting
+        title="Terminal Shortcut"
+        description="The key that shows or hides the terminal panel, together with Ctrl (Cmd on a Mac). With Shift it opens another terminal. The default is the backtick, which some keyboard layouts (German, for one) don't have as a plain key: pick any other key there."
+        store={terminalShortcut}
+      />
+
+      <Divider />
+
+      <ShortcutSetting
+        title="Quick Open Shortcut"
+        description="The key that opens quick open (labs, files, nodes and commands), together with Ctrl (Cmd on a Mac). The default is P; where the browser keeps Ctrl+P for printing, pick another key, such as Ö. The search button in the toolbar opens it too."
+        store={quickOpenShortcut}
+      />
+
+      <Divider />
+
+      <WebPageTargetSetting />
 
       <Divider />
 

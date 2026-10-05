@@ -74,23 +74,7 @@ def _scan_workspace(workspace_path: Path, running_status: dict) -> list[dict]:
             lab_name = path.stem
 
         abs_path = str(path.resolve())
-        # A lab file counts as deployed while a netlab instance record exists
-        # for it — matched by lab name or by directory, since `netlab status
-        # --all` summaries only carry `dir`. Container state is deliberately
-        # not required: a crashed deploy must still read as deployed so the
-        # UI offers destroy/cleanup instead of a second deploy.
-        is_running = False
-        if running_status:
-            for k, lab_info in running_status.items():
-                lab_dir = str(lab_info.get("dir") or "")
-                if (
-                    k == lab_name
-                    or lab_info.get("name") == lab_name
-                    or k == path.stem
-                    or (lab_dir != "" and abs_path.startswith(f"{lab_dir}/"))
-                ):
-                    is_running = True
-                    break
+        is_running = common.is_lab_running(abs_path, lab_name, path.stem, running_status)
         entries.append(
             {
                 "endpointId": "local",
@@ -263,7 +247,8 @@ runtime_files_router = APIRouter(prefix="/api/runtime/file-explorer", tags=["run
 
 @runtime_files_router.get("/file", response_model=FileDocument)
 async def read_workspace_file(path: str):
-    target = common.resolve_workspace_path(path)
+    # Reading is also allowed for the folder of a lab netlab is running (Running Labs), wherever it lives.
+    target, _ = await common.resolve_openable_path(path)
     if not target.is_file():
         raise HTTPException(404, f"not a file: {target}")
     try:

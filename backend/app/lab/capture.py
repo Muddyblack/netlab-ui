@@ -2,9 +2,10 @@
 
 Mirrors the containerlab VS Code extension's capture stack:
 
-* **Edgeshark** (https://github.com/siemens/edgeshark) is deployed on the
-  docker host from its published compose file. Its ``packetflix`` service
-  (container ``edgeshark-edgeshark-1``, port 5001) streams packets out of any
+* **Edgeshark** (https://github.com/siemens/edgeshark) is started on the
+  docker host by netlab's own ``edgeshark`` tool definition (the same one
+  ``tools: [ edgeshark ]`` uses). Its ``packetflix`` container (``edgeshark``,
+  port 5001, network ``ghost-in-da-edge``) streams packets out of any
   container's network namespace.
 * **Wireshark VNC** runs ``ghcr.io/srl-labs/wireshark-vnc-docker`` attached to
   the edgeshark network with a ``PACKETFLIX_LINK`` pointing at the packetflix
@@ -22,19 +23,21 @@ import re
 import secrets
 import shutil
 import urllib.parse
-import urllib.request
 
 from fastapi import APIRouter, HTTPException
-from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
+
+from services.netlab import tools
 
 router = APIRouter()
 
-EDGESHARK_COMPOSE_URL = os.environ.get(
-    "NETLAB_APP_EDGESHARK_COMPOSE_URL",
-    "https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.yaml",
-)
-EDGESHARK_PROJECT = "edgeshark"
+# netlab's edgeshark tool (netsim/tools/edgeshark.yml): packetflix + gostwire.
+EDGESHARK_TOOL = "edgeshark"
+PACKETFLIX_CONTAINER = "edgeshark"
+EDGESHARK_CONTAINERS = (PACKETFLIX_CONTAINER, "gostwire")
+# Earlier releases ran Edgeshark's own compose file (project "edgeshark");
+# those containers hold port 5001, so an install removes them first.
+LEGACY_CONTAINERS = ("edgeshark-edgeshark-1", "edgeshark-gostwire-1")
 PACKETFLIX_PORT = 5001
 WIRESHARK_VNC_IMAGE = os.environ.get("NETLAB_APP_WIRESHARK_VNC_IMAGE", "ghcr.io/srl-labs/wireshark-vnc-docker:latest")
 WIRESHARK_VNC_HTTP_PORT = 5800
@@ -90,48 +93,35 @@ async def _docker(args: list[str], *, input_text: str | None = None, timeout: fl
     return proc.returncode or 0, stdout.decode(), stderr.decode()
 
 
-async def _edgeshark_containers() -> dict[str, str]:
-    """``{container name: state}`` for the edgeshark compose project's containers."""
-    code, out, _err = await _docker(
-        ["ps", "-a", "--filter", f"name={EDGESHARK_PROJECT}-", "--format", "{{.Names}}\t{{.State}}"]
-    )
+async def _edgeshark_containers(names: tuple[str, ...] = EDGESHARK_CONTAINERS) -> dict[str, str]:
+    """``{container name: state}`` of Edgeshark's containers that exist."""
+    code, out, _err = await _docker(["ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
     if code != 0:
         return {}
     entries: dict[str, str] = {}
     for line in out.splitlines():
         name, _sep, state = line.partition("\t")
-        if name:
+        if name in names:
             entries[name] = state.strip().lower()
     return entries
 
 
-def _fetch_compose_yaml() -> str:
-    try:
-        with urllib.request.urlopen(EDGESHARK_COMPOSE_URL, timeout=30) as res:
-            text = res.read().decode()
-    except OSError as err:
-        raise HTTPException(status_code=502, detail=f"Failed to download the edgeshark compose file: {err}") from err
-    return _publish_on_capture_bind(text)
+async def _remove_legacy_install() -> None:
+    legacy = await _edgeshark_containers(LEGACY_CONTAINERS)
+    if legacy:
+        await _docker(["rm", "-f", *legacy])
+        await _docker(["network", "rm", "edgeshark_default"])
 
 
-def _publish_on_capture_bind(compose_yaml: str) -> str:
-    """Edgeshark's own compose file publishes packetflix (port 5001) on every
-    interface. It is unauthenticated and can read every container's network
-    namespace, so publish it where the UI itself listens. The Wireshark
-    container reaches it over the docker network and does not need the port."""
-    return compose_yaml.replace(
-        f'"{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"', f'"{CAPTURE_BIND}:{PACKETFLIX_PORT}:{PACKETFLIX_PORT}"'
-    )
-
-
-async def _compose(action: list[str], timeout: float) -> CaptureOpResult:
-    yaml_text = await run_in_threadpool(_fetch_compose_yaml)
-    code, out, err = await _docker(
-        ["compose", "-p", EDGESHARK_PROJECT, "-f", "-", *action], input_text=yaml_text, timeout=timeout
-    )
-    if code != 0:
-        raise HTTPException(status_code=502, detail=(err or out).strip() or f"docker compose exited with {code}")
-    return CaptureOpResult(ok=True, message=(err or out).strip())
+async def _netlab_tool(action: str) -> CaptureOpResult:
+    # packetflix is unauthenticated and can read every container's network
+    # namespace: netlab's definition publishes it on every interface, so publish
+    # it where the UI itself listens instead. The Wireshark container reaches it
+    # over the docker network and does not need the published port.
+    result = await tools.host_tool(EDGESHARK_TOOL, action, bind=CAPTURE_BIND if action == "up" else None)
+    if result.code:
+        raise HTTPException(status_code=502, detail=result.stderr.strip() or f"netlab edgeshark {action} failed")
+    return CaptureOpResult(ok=True, message=result.stdout.strip())
 
 
 @router.get("/capture/edgeshark", response_model=EdgesharkStatus)
@@ -145,8 +135,8 @@ _UP_TIMEOUT = 20.0
 
 
 async def _wait_until_running() -> None:
-    """`compose up -d` succeeds even when a container then crashes; wait for
-    the project to actually be up and say why if it is not."""
+    """`docker run -d` succeeds even when a container then crashes; wait for
+    Edgeshark to actually be up and say why if it is not."""
     deadline = asyncio.get_running_loop().time() + _UP_TIMEOUT
     containers: dict[str, str] = {}
     while asyncio.get_running_loop().time() < deadline:
@@ -183,7 +173,8 @@ async def edgeshark_install():
     """Everything browser capture needs: Edgeshark's two containers (running,
     not just created) and the Wireshark image. First run pulls images, so this
     allows minutes."""
-    result = await _compose(["up", "-d"], timeout=570.0)
+    await _remove_legacy_install()
+    result = await _netlab_tool("up")
     await _wait_until_running()
     await _pull_wireshark_image()
     return CaptureOpResult(ok=True, message=result.message or "Edgeshark and the Wireshark image are ready")
@@ -191,33 +182,26 @@ async def edgeshark_install():
 
 @router.post("/capture/edgeshark/uninstall", response_model=CaptureOpResult)
 async def edgeshark_uninstall():
-    return await _compose(["down"], timeout=120.0)
+    await _remove_legacy_install()
+    return await _netlab_tool("down")
 
 
 async def _packetflix_endpoint() -> tuple[str, str]:
     """(container name, docker network) of the running packetflix service."""
-    running = [name for name, state in (await _edgeshark_containers()).items() if state == "running"]
-    if not running:
+    containers = await _edgeshark_containers()
+    if containers.get(PACKETFLIX_CONTAINER) != "running":
         raise HTTPException(
             status_code=409,
             detail="Edgeshark is not running on the docker host — install it from the capture "
             "dialog's 'Install Edgeshark' button first.",
         )
-    # The compose project has two services; packetflix is the one the VNC
-    # container must talk to (service "edgeshark" → edgeshark-edgeshark-1).
-    code, out, _err = await _docker(
-        ["ps", "--filter", f"name={EDGESHARK_PROJECT}-", "--format", "{{.Names}}\t{{.Image}}"]
-    )
-    packetflix = next(
-        (line.split("\t")[0] for line in out.splitlines() if code == 0 and "packetflix" in line.lower()), running[0]
-    )
     code, out, err = await _docker(
-        ["inspect", "-f", "{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}", packetflix]
+        ["inspect", "-f", "{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}", PACKETFLIX_CONTAINER]
     )
     networks = [line for line in out.splitlines() if line.strip()]
     if code != 0 or not networks:
         raise HTTPException(status_code=502, detail=f"Could not determine the edgeshark docker network: {err.strip()}")
-    return packetflix, networks[0]
+    return PACKETFLIX_CONTAINER, networks[0]
 
 
 def _packetflix_link(packetflix_host: str, container: str, interface: str) -> str:

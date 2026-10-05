@@ -1,10 +1,10 @@
-import { useState } from "react";
 import { Alert, Box, Button, Chip, Stack, Typography } from "@mui/material";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 
-import { HttpError, api, type AssistantProposal } from "../../api/client";
+import { type AssistantProposal } from "../../api/client";
 import { ProposalDiffView } from "../ProposalDiffView";
+import { useResolveProposal } from "./useResolveProposal";
 
 /** Fit the diff box to the change: ~19 px a line, 90–320 px. */
 const diffHeight = (diff: string) => Math.min(320, Math.max(90, diff.split("\n").length * 19 + 16));
@@ -25,35 +25,7 @@ export function ProposalCard({
   onResolved: (status: AssistantProposal["status"]) => void;
   onApplied: () => void;
 }) {
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const resolve = async (action: "apply" | "reject") => {
-    setWorking(true);
-    setError(null);
-    try {
-      if (action === "apply") {
-        const result = await api.applyAssistantProposal(proposal.id);
-        if (!result.ok) throw new Error(result.error ?? "could not apply the change");
-        onResolved("applied");
-        onApplied();
-      } else {
-        await api.rejectAssistantProposal(proposal.id);
-        onResolved("rejected");
-      }
-    } catch (err) {
-      // 409 means the backend refused a diff computed against an older
-      // revision — the topology moved on since the user was shown this.
-      if (err instanceof HttpError && err.status === 409) {
-        onResolved("stale");
-        setError("The topology changed since this was proposed — ask for an updated version.");
-      } else {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    } finally {
-      setWorking(false);
-    }
-  };
+  const { working, error, resolve } = useResolveProposal(proposal, onApplied, onResolved);
 
   const pending = proposal.status === "pending";
 

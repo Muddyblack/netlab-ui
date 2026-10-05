@@ -1,0 +1,62 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index acc84b2..38ac079 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -7920,6 +7920,7 @@ import { useMemo as useMemo9 } from "react";
+ import React12 from "react";
+ import AddIcon from "@mui/icons-material/Add";
+ import ArticleIcon from "@mui/icons-material/Article";
++import DescriptionIcon from "@mui/icons-material/Description";
+ import CategoryIcon from "@mui/icons-material/Category";
+ import CircleOutlinedIcon from "@mui/icons-material/CircleOutlined";
+ import CloseIcon from "@mui/icons-material/Close";
+@@ -8268,6 +8269,20 @@ function buildNodeContextMenu(ctx) {
+   if (showRuntimeActions && !isNetworkNode) {
+     items.push(...buildNodeRuntimeItems(ctx));
+   }
++  if (ctx.onNodeConfigs && !isNetworkNode) {
++    if (items.length > 0) {
++      items.push({ id: "divider-node-configs", label: "", divider: true });
++    }
++    items.push({
++      id: "configs-node",
++      label: "Config Files",
++      icon: React12.createElement(DescriptionIcon, { fontSize: "small" }),
++      onClick: () => {
++        ctx.onNodeConfigs(targetId);
++        closeContextMenu();
++      }
++    });
++  }
+   if (isEditMode) {
+     if (items.length > 0) {
+       items.push({ id: "divider-runtime-edit", label: "", divider: true });
+@@ -8735,6 +8750,7 @@ function buildNodeItems(params) {
+     isDeployed: params.deploymentState === "deployed",
+     isLocked: params.isLocked,
+     onNodeAction: params.onNodeAction,
++    onNodeConfigs: params.onNodeConfigs,
+     closeContextMenu: params.handlers.closeContextMenu,
+     editNode: params.editNode,
+     editNetwork: params.editNetwork,
+@@ -8841,6 +8857,7 @@ function useContextMenuItems(params) {
+       ...params,
+       onInterfaceCapture: (nodeName, interfaceName) => topoViewer.captureInterface(nodeName, interfaceName),
+       onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
++      onNodeConfigs: typeof topoViewer.openNodeConfigs === "function" ? (nodeName) => topoViewer.openNodeConfigs(nodeName) : void 0,
+       onLinkAction: typeof topoViewer.runLinkAction === "function" ? (action, endpoints) => topoViewer.runLinkAction(action, endpoints) : void 0,
+       type,
+       targetId,
+diff --git a/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts b/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
+index 6d57434..6856c86 100644
+--- a/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
++++ b/node_modules/@containerlab/clab-ui/dist/host/contracts.d.ts
+@@ -115,6 +115,8 @@ export interface ClabUiTopoViewerHost {
+     cancelLifecycle(): void;
+     toggleSplitView(): void;
+     runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
++    /** Optional: show the node's generated configuration files (adds the node context-menu item). */
++    openNodeConfigs?(nodeName: string): void;
+     /** Optional: take a deployed link down or bring it back up (adds the link context-menu item). */
+     runLinkAction?(action: "down" | "up", endpoints: {
+         sourceNode?: string;

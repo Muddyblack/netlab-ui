@@ -18,6 +18,7 @@ interface AppCanvasAreaProps {
   portalContainer: Element | null;
   labFiles: LabFileEntry[];
   handleOpenLab: (topoRef: TopologyRef, opts?: { fitView?: boolean }) => Promise<void>;
+  onCreateWithAi?: () => void;
   navbarPortalContainer: HTMLElement | null;
   toolbarActions: ReactNode;
 }
@@ -31,6 +32,7 @@ export function AppCanvasArea({
   portalContainer,
   labFiles,
   handleOpenLab,
+  onCreateWithAi,
   navbarPortalContainer,
   toolbarActions
 }: AppCanvasAreaProps) {
@@ -51,6 +53,7 @@ export function AppCanvasArea({
         <AttractorEmptyState
           labs={labFiles}
           onOpenLab={(topologyRef) => void handleOpenLab(topologyRef)}
+          onCreateWithAi={onCreateWithAi}
         />,
         portalContainer
       )}

@@ -14,9 +14,14 @@ export type PluginPipelineInfo = components["schemas"]["PluginPipeline"];
 
 export type PluginDocsView = "markdown" | "web";
 
-/** Builtins ship with netlab; everything else is the user's own plugin. */
+/** Plugins netlab-ui ships itself (not in netlab yet), e.g. monitoring. */
+export function isNetlabUiPlugin(plugin: PluginInfo): boolean {
+  return plugin.origin === "netlab-ui";
+}
+
+/** Builtins ship with netlab and netlab-ui's own are listed apart; everything else is the user's own plugin. */
 export function isCustomPlugin(plugin: PluginInfo): boolean {
-  return !!plugin.origin && plugin.origin !== "builtin";
+  return !!plugin.origin && plugin.origin !== "builtin" && !isNetlabUiPlugin(plugin);
 }
 
 export const ORIGIN_LABELS: Record<string, string> = {
@@ -24,4 +29,5 @@ export const ORIGIN_LABELS: Record<string, string> = {
   user: "~/.netlab",
   system: "/etc/netlab",
   builtin: "netlab",
+  "netlab-ui": "netlab-ui",
 };

@@ -522,3 +522,26 @@ def test_running_lab_uses_management_address_from_netlab_status():
     assert snapshot._mgmt_from_status(status, "lab") == {"r1": "192.168.5.101"}
     registry = {"1": {"name": "ml-1", "nodes": {"h1": {"mgmt": "192.168.1.101"}}}}
     assert snapshot._mgmt_from_status(registry, "ml-1") == {"h1": "192.168.1.101"}
+
+
+def test_a_failed_preview_is_retried_after_a_while_not_only_when_the_yaml_changes(monkeypatch):
+    """A transform can fail for an unchanged file (a plugin that was briefly broken): it must not stick."""
+    entry = snapshot._CachedProjection("hash", [], [], "failed-preview")
+    assert entry.is_fresh("hash", locked=False)  # right after the failure: no retry storm
+    assert not entry.is_fresh("other", locked=False)
+    later = entry.stored_at + snapshot.FAILED_RETRY_SECONDS + 1
+    monkeypatch.setattr(snapshot.time, "monotonic", lambda: later)
+    assert not entry.is_fresh("hash", locked=False)
+    # a real projection of the same YAML does not expire
+    assert snapshot._CachedProjection("hash", [], [], "clab", stored_at=entry.stored_at).is_fresh("hash", locked=False)
+
+
+def test_stored_diagnostics_can_be_cleared(tmp_path):
+    """Diagnostics describe one run of the lab: once it is down they must not keep a node red."""
+    topology = tmp_path / "lab.yml"
+    topology.write_text("name: lab\n")
+    validation.store(topology, "[FAIL] ospf on r1", ["r1", "r2"], [("r1", "r2")])
+    assert [i.entity_id for i in validation.current(topology)] == ["r1"]
+    validation.clear(topology)
+    assert validation.current(topology) == []
+    validation.clear(topology)  # nothing stored: not an error
