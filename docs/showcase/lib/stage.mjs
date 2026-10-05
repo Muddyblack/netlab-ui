@@ -116,6 +116,8 @@ export class Stage {
     this.idle = [];
     /** Fully visible caption/title spans, checked again by the video encoder. */
     this.captions = [];
+    /** [wall-clock seconds, x, y] cursor samples, used to frame portrait crops. */
+    this.track = [];
   }
 
   // ---- pacing -------------------------------------------------------------
@@ -198,6 +200,17 @@ export class Stage {
     return typeof target === "string" ? this.page.getByText(target, { exact: true }).first() : target;
   }
 
+  /**
+   * Mark what the viewer should look at without moving the mouse (which would
+   * set off hover effects, e.g. Grafana's crosshair). Portrait Shorts crop the
+   * 16:9 recording around these points and the cursor.
+   */
+  async focus(target) {
+    if (!this.recording) return;
+    const box = await this.locate(target).boundingBox().catch(() => null);
+    if (box) this.track.push([Date.now() / 1000, box.x + box.width / 2, box.y + box.height / 2]);
+  }
+
   /** Glide the cursor to the target, like a person would. */
   async moveTo(target, { position } = {}) {
     const locator = this.locate(target);
@@ -207,11 +220,37 @@ export class Stage {
     if (!box) throw new Error(`no box for ${target}`);
     const x = box.x + (position?.x ?? box.width / 2);
     const y = box.y + (position?.y ?? box.height / 2);
-    const distance = Math.hypot(x - this.mouse.x, y - this.mouse.y);
-    await this.page.mouse.move(x, y, { steps: this.recording ? Math.max(8, Math.round(distance / 22)) : 1 });
-    this.mouse = { x, y };
+    await this.glide(x, y);
     await this.beat(160);
     return locator;
+  }
+
+  /**
+   * Move the mouse to (x, y). Recording glides on the wall clock: the position
+   * follows elapsed time, so a slow or busy browser drops frames of the glide
+   * instead of stretching it, and it always lands in the same ~half second.
+   * (`mouse.move({ steps })` fires its events as fast as the browser answers,
+   * so its speed and smoothness depended on how loaded the machine was.)
+   */
+  async glide(x, y) {
+    const from = { ...this.mouse };
+    const distance = Math.hypot(x - from.x, y - from.y);
+    if (this.recording && distance > 1) {
+      const duration = Math.min(800, Math.max(300, 220 + distance * 0.55));
+      const start = performance.now();
+      for (let t = 0; t < 1;) {
+        t = Math.min(1, (performance.now() - start) / duration);
+        const eased = t * t * (3 - 2 * t);
+        const px = from.x + (x - from.x) * eased, py = from.y + (y - from.y) * eased;
+        await this.page.mouse.move(px, py);
+        this.track.push([Date.now() / 1000, px, py]);
+        if (t < 1) await new Promise((resolve) => setTimeout(resolve, 6));
+      }
+    } else {
+      await this.page.mouse.move(x, y);
+    }
+    if (this.recording) this.track.push([Date.now() / 1000, x, y]);
+    this.mouse = { x, y };
   }
 
   async click(target, options = {}) {
@@ -296,7 +335,16 @@ export class Stage {
 
   /** Ctrl+P, type, then Enter once the palette lists a match. */
   async palette(query, { pick = true } = {}) {
+    const input = this.page.getByPlaceholder(/^Open labs, units, nodes, actions/);
     await this.press("Control+p");
+    // If the shortcut did not open it, typing would trigger app shortcuts instead.
+    await input.waitFor({ timeout: 2500 }).catch(async () => {
+      await this.press("Control+p");
+      await input.waitFor({ timeout: 5000 });
+    });
+    // Park the cursor on the search box. Left over the result list, the hovered
+    // row becomes the active one and Enter runs it instead of the first match.
+    await this.moveTo(input);
     await this.type(query);
     // Results show the query's last word ("module:bgp" lists "bgp").
     const word = query.split(/[^A-Za-z0-9.]+/).filter(Boolean).at(-1) ?? query;
@@ -337,9 +385,7 @@ export class Stage {
       const m = path.getScreenCTM();
       return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f };
     }, t);
-    const distance = Math.hypot(point.x - this.mouse.x, point.y - this.mouse.y);
-    await this.page.mouse.move(point.x, point.y, { steps: this.recording ? Math.max(8, Math.round(distance / 22)) : 1 });
-    this.mouse = point;
+    await this.glide(point.x, point.y);
     await this.beat(160);
     await this.page.mouse.down({ button: "right" });
     await this.page.mouse.up({ button: "right" });

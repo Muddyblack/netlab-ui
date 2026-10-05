@@ -1,6 +1,9 @@
 .work/
 .cache/
-# Local video outputs and verification metadata; publish together outside Git.
+# Everything generated stays local; only the scripts are committed.
+# README images are copied by hand into ../images/.
+media/
+GALLERY.md
 media/**/*.mp4
 media/manifest.json
 media/*/timing.json
@@ -9,3 +12,6 @@ media/outro/
 node_modules/
 package-lock.json
 narration/voices
+media/youtube-description.txt
+music/youtube-description.txt
+media/shorts/

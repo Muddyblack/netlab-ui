@@ -15,6 +15,8 @@ export default {
     await s.shot("addressing", dialog, { pad: 0, alt: "Addressing report as a table linked to the canvas" });
     await s.say("OSPF, BGP, wiring — download as Markdown, HTML or text");
     await s.click(dialog.getByRole("combobox"));
+    // Type to filter: the list narrows to the match instead of scrolling.
+    await s.type("OSPF");
     await s.click(s.page.getByRole("option", { name: /OSPF Areas/ }).first());
     await s.wait(3500);
     await s.shot("ospf", dialog, { pad: 0, alt: "OSPF areas report rendered from netlab's HTML" });

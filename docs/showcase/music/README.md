@@ -1,23 +1,25 @@
 # Showcase intro, outro and music
 
-Music: **[Memories by Sappheiros](https://soundcloud.com/sappheirosmusic/sappheiros-memories)**.
-Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), as linked from
+The soundtrack plays **[Memories by Sappheiros](https://soundcloud.com/sappheirosmusic/sappheiros-memories)**
+first, then **[Moments by Sappheiros](https://soundcloud.com/sappheirosmusic/moments)**.
+Memories is [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), as linked from
 [the artist's Bandcamp release](https://sappheiros.bandcamp.com/track/memories).
-The showcase uses an excerpt with reduced volume, repeats and fades.
+Moments is credited under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/),
+with mixing and mastering by Sacred Music.
 
-The existing local MP3 came from the MediaFire link on the artist's SoundCloud page.
-It lives at `../.cache/music/sappheiros-memories.mp3` and is checked against its
-SHA-256 checksum. The mixer reuses it. Only when that cached file is missing does it
-download from the artist's original link and verify the checksum. Set `SHOWCASE_MUSIC`
-to use the same file from another local folder; an explicit missing path stops the mix.
-The music is credited in the MP4 metadata and the media manifest. Keep the credit
-below in the description when sharing the video:
+The local Memories MP3 came from the artist's MediaFire link and is verified
+against its pinned SHA-256 checksum. The mixer downloads it only if missing.
+Moments downloads automatically from the direct Chosic MP3 link when missing,
+and is cached at `../.cache/music/sappheiros-moments.mp3`. Its SHA-256 checksum
+is pinned to the verified Chosic copy, just like Memories. Both downloads are
+verified before entering the cache; changed or incomplete files are rejected. Set `SHOWCASE_MUSIC` (Memories) and `SHOWCASE_MOMENTS` (Moments)
+to use files in another folder. An explicit missing path stops the mix.
+Both input checksums and excerpt timings are recorded in the manifest.
 
-> Music: “Memories” by Sappheiros — https://soundcloud.com/sappheirosmusic/sappheiros-memories
->
-> CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
->
-> Edited, looped, faded and reduced in volume for this video.
+The YouTube title and description live in [`youtube-description.txt`](youtube-description.txt)
+(title on the first line). It is a local, **gitignored** file, edited by hand and
+pasted into YouTube; the mixer does not touch it. It must keep both music
+credits and their license links.
 
 ## Render or adjust the mix
 
@@ -56,10 +58,16 @@ two-second fade-in and a six-second fade-out.
 The end is measured from the current video, so longer and shorter edits work without
 changing timestamps. Fades shrink to fit very short videos.
 
-The excerpt uses 0:14–5:00 of the song, excluding its long intro and ending fade.
-It starts at 0:22, plays through the body, then crossfades the last eight seconds
-into the first eight. That cycle repeats seamlessly for as long as the video needs.
-The final fade applies once, at the end of the video.
+Memories uses 0:14–5:00; playback begins at 0:22. At video time **4:30.5**,
+its tail crossfades for eight seconds into Moments starting at **0:24**.
+Moments excludes its last twelve seconds, then crossfades back into Memories
+if the video runs long enough. Each song is normalized separately to the same
+loudness target. Equal-power fades keep transitions from dipping in volume.
+The final fade applies once, at the measured end of the video.
+
+This is an excerpt-and-crossfade edit, without tempo changes or beat matching.
+Very short videos can finish before the second song enters. Track excerpts live
+in `TRACKS`; adjust the first song's end to bring the transition forward.
 
 Music settings live in `MIX` in [`mix.mjs`](mix.mjs); intro timing is in `INTRO` in
 [`intro.mjs`](intro.mjs). After changing them, rerun the mix;
@@ -69,12 +77,6 @@ intro asset checksums, and music details are saved in the `music` entry of
 `media/manifest.json`. The original
 recording checksums stay unchanged. Use the music command's `--check` to validate
 the extra edition as well as the recording.
-
-Run the audio regression checks with:
-
-```bash
-node --test docs/showcase/music/*.test.mjs
-```
 
 ## Thank-you outro
 

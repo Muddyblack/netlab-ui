@@ -5,7 +5,7 @@
 export default {
   id: "ai-agents",
   title: "Bring your own AI agent",
-  summary: "Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.",
+  summary: "Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.",
   lab: "fabric",
   state: "deployed",
   async run(s) {
@@ -31,7 +31,15 @@ export default {
     await s.until(apply, { timeout: 15_000 });
     await s.wait(1200);
     await s.say("You review the diff, then apply it");
-    await s.shot("proposal", undefined, { hero: true, alt: "An agent's proposed topology change, shown as a diff to apply or reject" });
+    await s.shot("proposal", undefined, { hero: true, alt: "An agent's proposed topology change drawn on the canvas, with Apply and Reject in the panel" });
+    await s.say("The canvas shows the change as ghosts; the diff has the exact YAML");
+    const showDiff = s.page.getByLabel("Show the YAML diff").first();
+    if (await showDiff.count()) {
+      await s.click(showDiff, { after: 1200 });
+      await s.wait(1500);
+      await s.shot("diff", s.page.getByRole("dialog").first(), { pad: 0, alt: "The YAML diff behind an agent's proposal" });
+      await s.press("Escape");
+    }
     await s.click(apply, { after: 900 });
     await s.until(s.node("s3"), { timeout: 20_000 });
     await s.say("Applied like any canvas edit: Ctrl+Z undoes it");
@@ -44,5 +52,15 @@ export default {
     if (result.snapshot?.nodes.some((node) => node.id === "s3")) throw new Error("Undo did not remove the proposed spine");
     await s.until(s.node("s3"), { state: "hidden", timeout: 20_000 });
     await s.wait(1000);
+
+    // Anything that touches the running lab waits for the user too: here the
+    // fault test written in the topology. It is rejected, so nothing runs.
+    await s.say("Breaking links is your call: the agent can only ask");
+    await s.mcp("propose_fault_test", { name: "uplink_loss", rationale: "Check the fabric survives losing the s1–l2 uplink", lab: "fabric" });
+    await s.until(apply, { timeout: 15_000 });
+    await s.wait(1200);
+    await s.shot("fault-test", undefined, { alt: "An agent asking to run a fault test, waiting for the user's approval" });
+    await s.click(s.page.getByRole("button", { name: /^reject$/i }).first(), { after: 900 });
+    await s.wait(800);
   },
 };

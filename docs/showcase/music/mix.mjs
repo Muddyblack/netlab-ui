@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { LAYOUT } from "../lib/media.mjs";
 import { fileHash, previewStart, sourceHash, verifyManifest } from "../lib/recordings.mjs";
 import featureOrder from "../features/index.mjs";
 import { INTRO, introRendererHash, renderBookends, replaceOpeningTitle } from "./intro.mjs";
@@ -21,8 +22,24 @@ export const TRACK = {
   sourceFileUrl: "https://www.mediafire.com/file/lacqy30vew21vx9/Sappheiros+-+Memories.mp3/file",
   sha256: "5d88218decffaec012fd16c157685c3a9de0102ecd1a5db3b175721fa799a75e",
 };
+export const TRACKS = [
+  { ...TRACK, file: "sappheiros-memories.mp3", sourceStart: 14, sourceEnd: 300 },
+  {
+    title: "Moments", artist: "Sappheiros", file: "sappheiros-moments.mp3",
+    url: "https://soundcloud.com/sappheirosmusic/moments",
+    license: "https://creativecommons.org/licenses/by/3.0/",
+    licenseSource: "https://soundcloud.com/sappheirosmusic/moments",
+    sourceFileUrl: "https://www.chosic.com/wp-content/uploads/2022/10/Sappheiros-Moments%28chosic.com%29.mp3",
+    sha256: "fbc6a72f91b757f33ce1e9a56006fe233c4eaf92acc2d6848980ae643f2ad221",
+    mixingCredit: "Mixed and mastered by Sacred Music",
+    sourceStart: 24, endPadding: 12,
+  },
+];
 export const MIX = { sourceStart: 14, sourceEnd: 300, crossfade: 8, fadeIn: 2, fadeOut: 6, lufs: -24, start: 0.5 };
-const CREDIT = `Music: ${TRACK.title} by ${TRACK.artist}. ${TRACK.url} | CC BY 4.0: ${TRACK.license} | Edited, looped, faded and reduced in volume for this video.`;
+const CREDIT = TRACKS.map((track) =>
+  `${track.title} by ${track.artist}. ${track.url} | ${track.license}`
+  + (track.mixingCredit ? ` | ${track.mixingCredit}` : "")
+).join("; ") + " | Edited, crossfaded, looped and reduced in volume for this video.";
 
 function run(ffmpeg, args) {
   execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", ...args], { stdio: ["ignore", "pipe", "pipe"] });
@@ -34,27 +51,80 @@ export function probe(file) {
   ], { encoding: "utf8" }));
 }
 
-/** Make one repeatable cycle: middle, then tail crossfaded into the head.
- * Its final sample leads directly into the middle again. Memory and filter
- * size stay bounded regardless of how many hours the finished tour lasts. */
-export function prepareLoop(ffmpeg, source, output, settings = MIX) {
-  const { sourceStart, sourceEnd, crossfade, lufs } = settings;
-  const length = sourceEnd - sourceStart;
-  const sourceDuration = Number(probe(source).format.duration);
-  if (![sourceStart, sourceEnd, crossfade, lufs, sourceDuration].every(Number.isFinite)
-      || sourceStart < 0 || crossfade <= 0 || length <= 2 * crossfade || sourceEnd > sourceDuration) {
-    throw new Error("Music excerpt must fit the track and leave room for its crossfade");
+/** Render a circular playlist: each body, then its tail crossfaded into
+ * the next track's head. The last seam joins the first body on repeat. */
+export function preparePlaylist(ffmpeg, sources, output, settings = MIX) {
+  const { crossfade, lufs } = settings;
+  if (!sources.length || !Number.isFinite(crossfade) || crossfade <= 0 || !Number.isFinite(lufs)) {
+    throw new Error("Playlist needs tracks and a positive crossfade");
   }
-  const filter = [
-    `[0:a]atrim=start=${sourceStart}:end=${sourceEnd},asetpts=PTS-STARTPTS,`
-      + `loudnorm=I=${lufs}:LRA=7:TP=-6,aresample=48000,asplit=3[body][tail][head]`,
-    `[body]atrim=start=${crossfade}:end=${length - crossfade},asetpts=PTS-STARTPTS[middle]`,
-    `[tail]atrim=start=${length - crossfade},asetpts=PTS-STARTPTS[end]`,
-    `[head]atrim=end=${crossfade},asetpts=PTS-STARTPTS[beginning]`,
-    `[end][beginning]acrossfade=d=${crossfade}:c1=tri:c2=tri[seam]`,
-    "[middle][seam]concat=n=2:v=0:a=1[music]",
-  ].join(";");
-  run(ffmpeg, ["-i", source, "-filter_complex", filter, "-map", "[music]", "-c:a", "pcm_f32le", output]);
+  const filter = [];
+  const segments = [];
+  let offset = 0;
+  const tracks = sources.map(({ file, sourceStart, sourceEnd, endPadding = 0 }, i) => {
+    const sourceDuration = Number(probe(file).format.duration);
+    const end = sourceEnd ?? sourceDuration - endPadding;
+    const length = end - sourceStart;
+    if (![sourceStart, end, sourceDuration].every(Number.isFinite)
+        || sourceStart < 0 || length <= 2 * crossfade || end > sourceDuration) {
+      throw new Error("Music excerpt must fit the track and leave room for its crossfade");
+    }
+    filter.push(
+      `[${i}:a]atrim=start=${sourceStart}:end=${end},asetpts=PTS-STARTPTS,`
+        + `loudnorm=I=${lufs}:LRA=7:TP=-6,aresample=48000,`
+        + `aformat=sample_fmts=flt:channel_layouts=stereo,asplit=3[b${i}][t${i}][h${i}]`,
+      `[b${i}]atrim=start=${crossfade}:end=${length - crossfade},asetpts=PTS-STARTPTS[body${i}]`,
+      `[t${i}]atrim=start=${length - crossfade},asetpts=PTS-STARTPTS[tail${i}]`,
+      `[h${i}]atrim=end=${crossfade},asetpts=PTS-STARTPTS[head${i}]`,
+    );
+    const entry = { sourceStart, sourceEnd: end, bodyStartSeconds: offset,
+      transitionStartSeconds: offset + length - 2 * crossfade };
+    offset += length - crossfade;
+    return entry;
+  });
+  sources.forEach((_, i) => {
+    filter.push(`[tail${i}][head${(i + 1) % sources.length}]`
+      + `acrossfade=d=${crossfade}:c1=qsin:c2=qsin[seam${i}]`);
+    segments.push(`[body${i}][seam${i}]`);
+  });
+  filter.push(`${segments.join("")}concat=n=${sources.length * 2}:v=0:a=1[music]`);
+  run(ffmpeg, [...sources.flatMap(({ file }) => ["-i", file]),
+    "-filter_complex", filter.join(";"), "-map", "[music]", "-c:a", "pcm_f32le", output]);
+  return { tracks, cycleSeconds: offset };
+}
+
+export function prepareLoop(ffmpeg, source, output, settings = MIX) {
+  return preparePlaylist(ffmpeg, [{ file: source, sourceStart: settings.sourceStart,
+    sourceEnd: settings.sourceEnd }], output, settings);
+}
+
+export async function getMoments(cache, localFile) {
+  const track = TRACKS[1];
+  const file = path.resolve(localFile ?? path.join(cache, track.file));
+  if (fs.existsSync(file)) {
+    if (fileHash(file) !== track.sha256) throw new Error(`Local Moments file differs from the verified Chosic copy: ${file}`);
+    return file;
+  }
+  if (localFile) throw new Error(`SHOWCASE_MOMENTS file missing: ${file}`);
+  console.log("· Downloading Moments from Chosic");
+  const response = await fetch(track.sourceFileUrl, {
+    signal: AbortSignal.timeout(60_000),
+    headers: { "User-Agent": "Mozilla/5.0", Referer: "https://www.chosic.com/" },
+  });
+  if (!response.ok) {
+    throw new Error(`Moments download: HTTP ${response.status}. Set SHOWCASE_MOMENTS to a local Chosic copy.`);
+  }
+  fs.mkdirSync(cache, { recursive: true });
+  const temporary = fs.mkdtempSync(path.join(cache, "download-"));
+  try {
+    const downloaded = path.join(temporary, "track.mp3");
+    fs.writeFileSync(downloaded, Buffer.from(await response.arrayBuffer()));
+    if (fileHash(downloaded) !== track.sha256) throw new Error("Moments download does not match the verified Chosic copy");
+    fs.renameSync(downloaded, file);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+  return file;
 }
 
 export function mixVideo(ffmpeg, video, loop, output, start, settings = MIX) {
@@ -77,7 +147,7 @@ export function mixVideo(ffmpeg, video, loop, output, start, settings = MIX) {
     // and Chromium, while preserving the original H.264 video stream.
     "-map", "0:v:0", "-map", "[music]", "-c:v", "copy", "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "48000",
     "-disposition:a:0", "default", "-metadata", `comment=${CREDIT}`,
-    "-metadata:s:a:0", `handler_name=${TRACK.title} by ${TRACK.artist}`,
+    "-metadata:s:a:0", `handler_name=${TRACKS.map((track) => track.title).join(" / ")} by Sappheiros`,
     "-movflags", "+faststart", "-t", String(duration), output,
   ]);
   return { startSeconds: start, durationSeconds: duration, fadeInSeconds: fadeIn, fadeOutSeconds: fadeOut };
@@ -126,7 +196,10 @@ async function main() {
   const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
   const capturedSource = sourceHash();
   const featureIds = await Promise.all(featureOrder.map(async (file) => (await import(`../features/${file}`)).default.id));
-  verifyManifest(manifest, media, capturedSource, { featureIds, requireVideo: true });
+  // Only --check demands the recording match today's source. Mixing just needs the recorded files to be
+  // intact (their hashes are still verified), so a music change never forces a re-record.
+  const mixing = args[0] === undefined;
+  verifyManifest(manifest, media, capturedSource, { featureIds, requireVideo: true, allowSourceChange: mixing });
   if (args[0] === "--check") {
     if (manifest.music?.rendererSha256 !== rendererSha256 || manifest.music?.introRendererSha256 !== introSha256) {
       throw new Error("Intro/music settings changed or no music has been mixed; rerun music/mix.mjs");
@@ -136,9 +209,10 @@ async function main() {
         || !fs.existsSync(mixed) || fileHash(mixed) !== manifest.music.videoSha256) {
       throw new Error("Music edition is missing or no longer matches the silent video; rerun music/mix.mjs");
     }
-    for (const [file, hash] of Object.entries({ ...manifest.music.intro.files, ...manifest.music.outro.files })) {
+    const assets = { ...manifest.music.intro.files, ...manifest.music.outro.files };
+    for (const [file, hash] of Object.entries(assets)) {
       if (!fs.existsSync(path.join(media, file)) || fileHash(path.join(media, file)) !== hash) {
-        throw new Error(`Intro asset missing or changed: ${file}; rerun music/mix.mjs`);
+        throw new Error(`Music edition asset missing or changed: ${file}; rerun music/mix.mjs`);
       }
     }
     console.log("✓ Recording, soundtrack and music settings match.");
@@ -152,6 +226,7 @@ async function main() {
   const trimStart = previewStart(timing);
   const start = MIX.start;
   const ffmpeg = process.env.FFMPEG ?? "ffmpeg";
+  const moments = await getMoments(path.join(HERE, ".cache/music"), process.env.SHOWCASE_MOMENTS);
   const track = await getTrack(path.join(HERE, ".cache/music"), process.env.SHOWCASE_MUSIC);
   const name = path.parse(manifest.video);
   const musicVideo = path.join(name.dir, `${name.name}-music.mp4`);
@@ -162,20 +237,26 @@ async function main() {
   try {
     const loop = path.join(temporary, "loop.wav");
     const mixed = path.join(temporary, "showcase.mp4");
+    const playlist = preparePlaylist(ffmpeg, TRACKS.map((entry, i) => ({
+      ...entry, file: [track, moments][i],
+    })), loop);
     console.log("· Rendering the app's animated loading screen as the opening");
-    const { intro, outro } = await renderBookends(ffmpeg, temporary);
+    // Render the bookends at the recorded clips' own size, whatever SHOWCASE_HEIGHT is now.
+    const clipWidth = probe(video).streams.find((stream) => stream.codec_type === "video").width;
+    const { intro, outro } = await renderBookends(ffmpeg, temporary, { pixelRatio: clipWidth / LAYOUT.width });
     const edited = path.join(temporary, "with-intro.mp4");
     replaceOpeningTitle(ffmpeg, manifest.features.map((feature) => path.join(media, feature.clip)), trimStart, intro.clip, edited, outro.clip);
     console.log(`· Music starts during the intro at ${start.toFixed(2)}s; target ${MIX.lufs} LUFS`);
-    prepareLoop(ffmpeg, track, loop);
     const timing = mixVideo(ffmpeg, edited, loop, mixed, start);
     // Check the original recording again before publishing the finished mix.
-    verifyManifest(manifest, media, sourceHash(), { featureIds, requireVideo: true });
+    verifyManifest(manifest, media, sourceHash(), { featureIds, requireVideo: true, allowSourceChange: true });
     if (fileHash(SCRIPT) !== rendererSha256 || introRendererHash() !== introSha256) {
       throw new Error("Intro/music settings changed during rendering; rerun the mix");
     }
     manifest.music = {
-      ...TRACK, ...MIX, ...timing, credit: CREDIT, rendererSha256, introRendererSha256: introSha256,
+      ...MIX, ...timing, cycleSeconds: playlist.cycleSeconds,
+      tracks: TRACKS.map((entry, i) => ({ ...entry, ...playlist.tracks[i], sha256: fileHash([track, moments][i]) })),
+      credit: CREDIT, rendererSha256, introRendererSha256: introSha256,
       video: musicVideo, videoSha256: fileHash(mixed), sourceVideoSha256: manifest.files[manifest.video],
       outro: { seconds: OUTRO.seconds, files: { "outro/outro.mp4": fileHash(outro.clip), "outro/thanks-dark.webp": fileHash(outro.poster) } },
       intro: {

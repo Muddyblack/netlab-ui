@@ -30,18 +30,19 @@ export function fileHash(file) {
   return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-export function sourceHash(root = REPO) {
+export function sourceHash(root = REPO, { excludeFeatures = false } = {}) {
   const inputs = [
     "frontend/src", "frontend/public", "frontend/patches", "frontend/index.html",
     "frontend/package.json", "frontend/package-lock.json", "frontend/vite.config.ts",
     "frontend/tsconfig.json", "frontend/tsconfig.app.json", "frontend/tsconfig.node.json",
-    "backend/app", "backend/services", "backend/pyproject.toml", "flake.nix", "flake.lock",
+    "backend/app", "backend/services", "backend/pyproject.toml", "monitoring/plugin", "flake.nix", "flake.lock",
     "docs/showcase/features", "docs/showcase/labs", "docs/showcase/lib",
     "docs/showcase/showcase.mjs", "docs/showcase/run.sh", "docs/showcase/package.json",
   ];
   const hash = createHash("sha256");
   for (const file of inputs.flatMap((input) => filesUnder(root, input)).sort()) {
     if (file.endsWith(".test.mjs") || file.endsWith(".pyc")) continue;
+    if (excludeFeatures && file.startsWith("docs/showcase/features/")) continue;
     hash.update(file).update("\0").update(fileHash(path.join(root, file))).update("\0");
   }
   return hash.digest("hex");
@@ -59,8 +60,10 @@ export function sealManifest(manifest, directory) {
   return manifest;
 }
 
-export function verifyManifest(manifest, directory, currentSource, { featureIds, requireVideo = false } = {}) {
-  if (manifest.sourceHash !== currentSource) {
+export function verifyManifest(manifest, directory, currentSource, { featureIds, requireVideo = false, allowSourceChange = false } = {}) {
+  // allowSourceChange: reuse clips recorded from older source (their files and
+  // hashes are still verified) so a fix only needs its own scenes re-recorded.
+  if (manifest.sourceHash !== currentSource && !allowSourceChange) {
     throw new Error("Showcase media does not match the current source. Run docs/showcase/run.sh for a fresh full recording.");
   }
   if (featureIds && JSON.stringify(manifest.features.map((f) => f.id)) !== JSON.stringify(featureIds)) {
