@@ -9,6 +9,7 @@ import { readPersistedExplorerUiState, persistExplorerUiState, closeExplorerTran
 import type { WorkspaceEntry } from "../lifecycle/types";
 import type { LabFileEntry } from "../api/client";
 import { requestCopyLab } from "../host/copyLabStore";
+import { requestDeleteLab } from "../host/deleteLabStore";
 import type { RunningLabsStatus } from "./useAppData";
 
 type ExplorerControllerOptions = Parameters<typeof createExplorerController>[0];
@@ -33,6 +34,8 @@ export interface ExplorerActionCallbacks {
   openAddWorkspace: () => void;
   openExampleLabs: () => void;
   newFolder: (parentPath: string) => void;
+  /** A lab was deleted from disk: close its tab and refresh the lab lists. */
+  labDeleted: (topologyPath: string) => void;
   removeWorkspace: (path: string) => void;
   openImageManager: () => void;
   openRunningLabs: () => void;
@@ -45,6 +48,7 @@ export interface ExplorerActionCallbacks {
   openMultiExec: (lab: TopologyRef) => void | Promise<void>;
   openRunningConfigs: (lab: TopologyRef) => void | Promise<void>;
   openTools: (lab: TopologyRef) => void | Promise<void>;
+  openMonitoring: (lab: TopologyRef) => void | Promise<void>;
   exportClabTarball: (lab: TopologyRef) => void | Promise<void>;
   inspectLab: (sid: string) => Promise<void>;
   runFcli: (sid: string, command: string) => Promise<void>;
@@ -254,6 +258,10 @@ async function handleTools({ cb, topoRef }: ActionCtx) {
   if (topoRef) await cb.openTools(topoRef);
 }
 
+async function handleMonitoring({ cb, topoRef }: ActionCtx) {
+  if (topoRef) await cb.openMonitoring(topoRef);
+}
+
 async function handleClabTarball({ cb, topoRef }: ActionCtx) {
   if (topoRef) await cb.exportClabTarball(topoRef);
 }
@@ -265,6 +273,16 @@ async function handleCopyLab({ cb, item, topoRef }: ActionCtx) {
     topologyPath: path,
     labName: topoRef?.labName || path.split("/").slice(-2, -1)[0] || "lab",
     onCopied: (ref) => { void cb.openLab(ref as TopologyRef); },
+  });
+}
+
+function handleDeleteLab({ cb, item, topoRef }: ActionCtx) {
+  const path = topoRef?.yamlPath || item?.path;
+  if (!path) return;
+  requestDeleteLab({
+    topologyPath: path,
+    labName: topoRef?.labName || path.split("/").slice(-2, -1)[0] || "lab",
+    onDeleted: () => cb.labDeleted(path),
   });
 }
 
@@ -416,8 +434,10 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   "netlab.lab.shell.runOnNodes": handleRunOnNodes,
   "netlab.lab.inspect.runningConfigs": handleRunningConfigs,
   "netlab.lab.shell.tools": handleTools,
+  "netlab.lab.shell.monitoring": handleMonitoring,
   "netlab.lab.addtoworkspace.clabTarball": handleClabTarball,
   "netlab.lab.addtoworkspace.copyLab": handleCopyLab,
+  "netlab.lab.delete": handleDeleteLab,
   "containerlab.lab.copyPath": handleCopyPath,
   "containerlab.editor.topoViewerEditor": handleOpenNewLabDialog,
   "containerlab.file.newFile": handleOpenNewLabDialog,
@@ -602,9 +622,12 @@ export function useExplorerController({
             { commandId: "netlab.lab.shell.runOnNodes", contextValues: ["containerlabLabDeployed"], label: "Run Command on Nodes…" },
             { commandId: "netlab.lab.inspect.runningConfigs", contextValues: ["containerlabLabDeployed"], label: "Running Configs & Changes…" },
             { commandId: "netlab.lab.shell.tools", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "External Tools (Graphite, SuzieQ…)…" },
+            { commandId: "netlab.lab.shell.monitoring", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Monitoring…" },
             // ".addtoworkspace." files it under clab-ui's Topology group.
             { commandId: "netlab.lab.addtoworkspace.copyLab", contextValues: ["containerlabLabDeployed", "containerlabLabUndeployed"], label: "Copy Lab to Workspace…" },
-            { commandId: "netlab.lab.addtoworkspace.clabTarball", contextValues: ["containerlabLabDeployed"], label: "Export as Containerlab Tarball" }
+            { commandId: "netlab.lab.addtoworkspace.clabTarball", contextValues: ["containerlabLabDeployed"], label: "Export as Containerlab Tarball" },
+            // Undeployed only: a deployed lab has to be destroyed first (the backend enforces it too).
+            { commandId: "netlab.lab.delete", contextValues: ["containerlabLabUndeployed"], label: "Delete Lab…", destructive: true }
           ],
           contributedToolbarActions: {
             runningLabs: [
@@ -625,8 +648,10 @@ export function useExplorerController({
             ["netlab.lab.shell.runOnNodes", "Run Command on Nodes…"],
             ["netlab.lab.inspect.runningConfigs", "Running Configs & Changes…"],
             ["netlab.lab.shell.tools", "External Tools (Graphite, SuzieQ…)…"],
+            ["netlab.lab.shell.monitoring", "Monitoring…"],
             ["netlab.lab.addtoworkspace.copyLab", "Copy Lab to Workspace…"],
             ["netlab.lab.addtoworkspace.clabTarball", "Export as Containerlab Tarball"],
+            ["netlab.lab.delete", "Delete Lab…"],
             ["netlab.workspace.addToWorkspace", "Add Folder to Workspace…"],
             ["netlab.workspace.cloneHere", "Clone Repo Here…"],
             ["netlab.workspace.remove", "Remove From Workspace"],

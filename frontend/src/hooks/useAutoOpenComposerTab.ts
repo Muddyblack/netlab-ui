@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { tabLabel } from "../app/panelTabLabels";
 
 // clab-ui owns the right-hand palette's active tab in internal state and
 // exposes no prop/callback for it (see useRightPanelTabMemory, which hits the
@@ -13,9 +14,6 @@ import { useEffect, useRef } from "react";
 // MutationObserver reacts to the aria-selected change, or it clicks straight
 // back to the previously remembered tab and undoes this nudge.
 
-function tabLabel(element: Element | null): string {
-  return (element?.textContent ?? "").trim();
-}
 
 function findTab(label: string): HTMLElement | null {
   const tabs = Array.from(document.querySelectorAll<HTMLElement>('[role="tab"]'));
@@ -55,11 +53,15 @@ function openRightPanel(): void {
 /** Each time `open` turns true, open the right panel if it's collapsed and
  * select the palette tab `label` — e.g. the AI agents tab, which only joins
  * the strip when its toolbar button opens it. */
-export function useSelectPanelTabOnOpen(label: string, open: boolean): void {
+export function useSelectPanelTabOnOpen(label: string, open: boolean, nudge = 0): void {
   const wasOpen = useRef(open);
+  const lastNudge = useRef(nudge);
 
   useEffect(() => {
-    const opened = open && !wasOpen.current;
+    // `nudge` re-selects the tab while `open` is already true (e.g. a lab was just created for the agent).
+    const nudged = nudge !== lastNudge.current;
+    lastNudge.current = nudge;
+    const opened = (open && !wasOpen.current) || (open && nudged);
     wasOpen.current = open;
     if (!opened) return;
     openRightPanel();
@@ -74,5 +76,5 @@ export function useSelectPanelTabOnOpen(label: string, open: boolean): void {
       window.clearInterval(interval);
       window.clearTimeout(timeout);
     };
-  }, [label, open]);
+  }, [label, open, nudge]);
 }

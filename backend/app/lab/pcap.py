@@ -143,6 +143,36 @@ async def _capture_target(path: str, node: str, interface: str) -> tuple[int, st
     )
 
 
+async def start_capture(
+    topology_path: str, node: str, interface: str, seconds: float, max_packets: int
+) -> tuple[asyncio.subprocess.Process, bytes]:
+    """Start the capture helper on a node interface; returns it with the pcap
+    header already read, so a bad interface or missing privileges are an
+    HTTP error rather than an empty file. The caller reads ``proc.stdout``
+    and kills the process when done."""
+    if not _IFACE_RE.fullmatch(interface):
+        raise HTTPException(400, f"invalid interface name {interface!r}")
+    pid, capture_on = await _capture_target(topology_path, node, interface)
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        _CAPTURE_SCRIPT,
+        str(pid),
+        capture_on,
+        str(seconds or MAX_SECONDS),
+        str(max_packets),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    assert proc.stdout is not None and proc.stderr is not None
+    header = await proc.stdout.read(24)
+    if len(header) < 24:
+        await proc.wait()
+        detail = (await proc.stderr.read()).decode(errors="replace").strip()
+        raise HTTPException(502, detail or f"capture helper exited with {proc.returncode}")
+    return proc, header
+
+
 @router.get("/capture/pcap")
 async def capture_pcap(
     node: str,
@@ -153,28 +183,8 @@ async def capture_pcap(
     topology: str | None = Query(None, description="topology file path, instead of sessionId"),
 ):
     """Capture on one node interface and stream it as a pcap file."""
-    if not _IFACE_RE.fullmatch(interface):
-        raise HTTPException(400, f"invalid interface name {interface!r}")
-    pid, capture_on = await _capture_target(_topology_path(sessionId, topology), node, interface)
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-c",
-        _CAPTURE_SCRIPT,
-        str(pid),
-        capture_on,
-        str(seconds or MAX_SECONDS),
-        str(maxPackets),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    assert proc.stdout is not None and proc.stderr is not None
-    # The header arrives only once the socket is open — so a bad interface or
-    # missing privileges become a proper HTTP error instead of an empty file.
-    header = await proc.stdout.read(24)
-    if len(header) < 24:
-        await proc.wait()
-        detail = (await proc.stderr.read()).decode(errors="replace").strip()
-        raise HTTPException(502, detail or f"capture helper exited with {proc.returncode}")
+    proc, header = await start_capture(_topology_path(sessionId, topology), node, interface, seconds, maxPackets)
+    assert proc.stdout is not None
 
     async def stream():
         try:

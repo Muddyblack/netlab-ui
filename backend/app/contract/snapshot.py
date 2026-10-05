@@ -21,7 +21,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import hashlib
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -57,6 +58,10 @@ ProjectionSource = Literal[
 ]
 
 
+# How long a failed `netlab create` is believed before the next snapshot tries it again.
+FAILED_RETRY_SECONDS = 20.0
+
+
 @dataclass(frozen=True, slots=True)
 class _CachedProjection:
     """A canvas projection plus the provenance that decides when it goes stale."""
@@ -65,6 +70,7 @@ class _CachedProjection:
     nodes: list[dict]
     edges: list[dict]
     source: ProjectionSource
+    stored_at: float = field(default_factory=time.monotonic)
 
     def is_fresh(self, yaml_hash: str, *, locked: bool) -> bool:
         """Whether this entry can still be served as-is.
@@ -74,11 +80,17 @@ class _CachedProjection:
         the YAML hash is not enough to keep serving it — otherwise the canvas
         stays on the preview forever after the lab is torn down.
 
-        A ``failed-preview`` *does* stay valid while the hash matches: the YAML
-        on disk is what broke `netlab create`, so re-running it on every
-        snapshot request would just be a retry storm.
+        A ``failed-preview`` stays valid while the hash matches, so a broken YAML is
+        not re-run on every snapshot request (a retry storm), but only for
+        ``FAILED_RETRY_SECONDS``: the YAML is not the only input of `netlab create`.
+        A plugin that was briefly unimportable, a plugin link pointing at another
+        environment, or a netlab that was being upgraded all fail the transform for
+        an unchanged file, and without a retry the failure would stick until the YAML
+        was edited or the backend restarted.
         """
         if not yaml_hash or self.yaml_hash != yaml_hash:
+            return False
+        if self.source == "failed-preview" and time.monotonic() - self.stored_at > FAILED_RETRY_SECONDS:
             return False
         return self.source != "locked-preview" or locked
 

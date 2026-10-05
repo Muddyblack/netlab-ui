@@ -104,9 +104,14 @@ def search_path(topology_dir: Path | None = None) -> list[tuple[Path, str]]:
 def _is_plugin_dir(plugin_dir: Path) -> bool:
     """A loadable plugin directory has ``plugin.py`` (legacy) or ``__init__.py``
     (package-style, current netlab)."""
-    if not plugin_dir.is_dir() or plugin_dir.name.startswith((".", "__")):
+    try:
+        if not plugin_dir.is_dir() or plugin_dir.name.startswith((".", "__")):
+            return False
+        return (plugin_dir / "plugin.py").exists() or (plugin_dir / "__init__.py").exists()
+    except OSError:
+        # Unreadable directory (e.g. root-owned container data inside a lab
+        # folder): not a plugin, and must not break discovery of the others.
         return False
-    return (plugin_dir / "plugin.py").exists() or (plugin_dir / "__init__.py").exists()
 
 
 def _plugin_entry_file(plugin_dir: Path) -> Path | None:
@@ -249,6 +254,17 @@ def read_metadata(entry_file: Path) -> PluginMeta:
     return meta
 
 
+def _is_bystander_package(root: Path, source: Path, meta: PluginMeta) -> bool:
+    """A Python package nested in the lab folder that netlab would never call.
+
+    The lab folder holds more than plugins: the monitoring plugin, for one,
+    writes its collector package to ``monitoring/collector/nlmon/``. A nested
+    package with no plugin hook, ``_generator`` or ``_config_name`` is such
+    an artifact, not a ``plugin:`` entry."""
+    nested = source.is_dir() and len(source.relative_to(root).parts) > 1
+    return nested and not (meta.hooks or meta.generator or meta.config_name or meta.error)
+
+
 def discover(
     topology_dir: Path | None = None,
     *,
@@ -276,6 +292,8 @@ def discover(
                 existing.shadows.append(str(source))
                 continue
             meta = read_metadata(entry_file) if entry_file else PluginMeta()
+            if origin == ORIGIN_TOPOLOGY and _is_bystander_package(root, source, meta):
+                continue
             found[plugin_id] = DiscoveredPlugin(
                 id=plugin_id,
                 origin=origin,

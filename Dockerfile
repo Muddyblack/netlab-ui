@@ -45,8 +45,12 @@ WORKDIR /app
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
 COPY backend/services ./services
+# The netlab monitoring plugin (Settings / lab "Monitoring"): the UI links it into
+# ~/.netlab when a lab turns monitoring on.
+COPY monitoring/plugin/monitoring ./monitoring_plugin
+ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # The base install includes the MCP server that the user's own AI agent
-# (Claude Code, Codex, Gemini CLI, Cursor, …) connects to; it is served on the
+# (Claude Code, Codex, Copilot, Cursor, Kiro, …) connects to; it is served on the
 # same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.
 #
 # setuptools-scm has no .git here; the version comes from the build arg below.
@@ -110,6 +114,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir ".[netlab]"
 # The official containerlab image ships the static binary at this path.
 COPY --from=clab /usr/bin/containerlab /usr/bin/containerlab
+# BSD-3 (containerlab) and MIT (netlab) require the notice to travel with the binary.
+COPY licenses/ /usr/share/licenses/
 LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab bundled — topology editor, lab lifecycle and device consoles in one container."
 
 # ---- default image: the UI only ----

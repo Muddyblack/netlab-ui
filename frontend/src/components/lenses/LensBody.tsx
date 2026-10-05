@@ -32,7 +32,7 @@ interface LensBundleContentProps {
   state: NetlabLensesState;
 }
 
-function LensBundleContent({ lens, bundle, validationIssues, onRunValidation, state }: LensBundleContentProps) {
+function LensBundleContent({ lens, bundle, validationIssues, onRunValidation, state, labRunning }: LensBundleContentProps & { labRunning: boolean }) {
   const {
     family, setFamily, search, setSearch, addressResults, hiddenAddressPools, toggleAddressPool,
     routingLayers, setRoutingLayers, selectedAdjacency, selectedRef, setSelectedRef,
@@ -101,6 +101,7 @@ function LensBundleContent({ lens, bundle, validationIssues, onRunValidation, st
         <ValidationDashboard
           validation={bundle.validation}
           validationIssues={validationIssues}
+          labRunning={labRunning}
           selectedNode={selectedNode}
           running={validationRunning}
           onRun={onRunValidation}
@@ -130,13 +131,14 @@ interface LensBodyProps {
   error: string | null;
   loading: boolean;
   validationIssues: ValidationIssue[];
+  labRunning: boolean;
   onToast: (message: string, severity?: "success" | "info" | "warning" | "error") => void;
   onRerunDeployment: (action: string) => void;
   onRunValidation: () => void;
   state: NetlabLensesState;
 }
 
-export function LensBody({ lens, bundle, error, loading, validationIssues, onToast, onRerunDeployment, onRunValidation, state }: LensBodyProps) {
+export function LensBody({ lens, bundle, error, loading, validationIssues, labRunning, onToast, onRerunDeployment, onRunValidation, state }: LensBodyProps) {
   const { deployment, deploymentNode, deploymentLoading, fetchDeployment, selectRef, readinessResult, readinessLoading, fetchReadiness, selectedNode, sessionId } = state;
 
   if (lens === "readiness") {
@@ -179,6 +181,7 @@ export function LensBody({ lens, bundle, error, loading, validationIssues, onToa
       lens={lens}
       bundle={bundle}
       validationIssues={validationIssues}
+      labRunning={labRunning}
       onToast={onToast}
       onRerunDeployment={onRerunDeployment}
       onRunValidation={onRunValidation}

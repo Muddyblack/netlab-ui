@@ -1,10 +1,11 @@
+import { readNumber, writeStored } from "../utils/storage";
 import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { getApiWsBase } from "../api/endpoint";
+import { getApiBase, getApiWsBase } from "../api/endpoint";
 
 const FONT_SIZE_KEY = "netlab.terminal.fontSize";
 const MIN_FONT_SIZE = 11;
@@ -15,8 +16,27 @@ const clampFontSize = (value: number) =>
   Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, Math.round(value)));
 
 function loadFontSize(): number {
-  const raw = Number(localStorage.getItem(FONT_SIZE_KEY));
+  const raw = readNumber(FONT_SIZE_KEY, 0);
   return Number.isFinite(raw) && raw > 0 ? clampFontSize(raw) : DEFAULT_FONT_SIZE;
+}
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+/** Agent CLIs read the backend machine's clipboard, which a browser paste never reaches. So an image pasted or
+ * dropped into an agent or normal terminal is saved in the lab's folder by the backend and its path typed in. */
+async function sendImage(file: File, sessionId: string, term: Terminal): Promise<void> {
+  try {
+    const response = await fetch(`${getApiBase()}/api/shell/paste-image?sessionId=${encodeURIComponent(sessionId)}`, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!response.ok) throw new Error(((await response.json().catch(() => null)) as { detail?: string } | null)?.detail ?? response.statusText);
+    const { path } = (await response.json()) as { path: string };
+    term.paste(`${path} `);
+  } catch (error) {
+    term.write(`\r\n\x1b[31m[could not paste the image: ${error instanceof Error ? error.message : error}]\x1b[0m\r\n`);
+  }
 }
 
 /** A full-screen terminal program on the backend (an interactive wizard, an AI
@@ -66,6 +86,31 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
       return true;
     });
 
+    const imageSession = /^\/api\/(assistant\/harness\/|shell\/local)/.test(path)
+      ? new URLSearchParams(path.split("?")[1] ?? "").get("sessionId")
+      : null;
+    const imageOf = (files: FileList | null | undefined) => Array.from(files ?? []).filter((file) => IMAGE_TYPES.includes(file.type));
+    const handlePaste = (event: ClipboardEvent) => {
+      const images = imageOf(event.clipboardData?.files);
+      if (!imageSession || images.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      images.forEach((image) => void sendImage(image, imageSession, term));
+    };
+    const handleDrop = (event: DragEvent) => {
+      const images = imageOf(event.dataTransfer?.files);
+      if (!imageSession || images.length === 0) return;
+      event.preventDefault();
+      images.forEach((image) => void sendImage(image, imageSession, term));
+    };
+    const handleDragOver = (event: DragEvent) => {
+      if (imageSession && event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    const host = ref.current;
+    host.addEventListener("paste", handlePaste, true);
+    host.addEventListener("drop", handleDrop);
+    host.addEventListener("dragover", handleDragOver);
+
     const ws = new WebSocket(`${getApiWsBase()}${path}`);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
@@ -90,6 +135,9 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
 
     return () => {
       resizeObserver.disconnect();
+      host.removeEventListener("paste", handlePaste, true);
+      host.removeEventListener("drop", handleDrop);
+      host.removeEventListener("dragover", handleDragOver);
       window.removeEventListener("resize", handleResize);
       ws.close();
       term.dispose();
@@ -100,7 +148,7 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
   }, [path, theme.palette.mode]);
 
   useEffect(() => {
-    localStorage.setItem(FONT_SIZE_KEY, String(fontSize));
+    writeStored(FONT_SIZE_KEY, String(fontSize));
     const term = termRef.current;
     const ws = wsRef.current;
     if (!term) return;

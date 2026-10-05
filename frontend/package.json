@@ -49,7 +49,7 @@
     "vite": "^8.1.5"
   },
   "overrides": {
-    "dompurify": "3.4.15",
+    "dompurify": "3.4.16",
     "js-yaml": "4.3.2",
     "maplibre-gl": "6.10.0",
     "markdown-it": "14.3.2",

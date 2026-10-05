@@ -5,7 +5,7 @@ import { Box, Typography, CircularProgress, Paper } from "@mui/material";
 import { useIsLocked, useNodes } from "@containerlab/clab-ui";
 import { CreateUnitDialog } from "../components/dialogs/CreateUnitDialog";
 import { PlaceUnitDialog } from "../components/dialogs/PlaceUnitDialog";
-import { usePanelInsets } from "./units-dock/usePanelInsets";
+import { layoutParent, usePanelInsets } from "./units-dock/usePanelInsets";
 import { useCanvasDropTarget } from "./units-dock/useCanvasDropTarget";
 import { UnitCard } from "./units-dock/UnitCard";
 import { CollapsedStrip } from "./units-dock/CollapsedStrip";
@@ -28,7 +28,7 @@ function useSessionDockBottomOffset(rootRef: RefObject<HTMLDivElement | null>): 
     const measure = () => {
       raf = 0;
       const root = rootRef.current;
-      const container = root?.parentElement;
+      const container = layoutParent(root);
       const sessionDock = document.querySelector<HTMLElement>("[data-netlab-session-dock]");
       if (!container || !sessionDock) {
         setOffset((current) => (current === 0 ? current : 0));

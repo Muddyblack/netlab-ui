@@ -101,6 +101,7 @@ export function createDemoClabUiHost(options?: { explorer?: WindowHostOptions["e
     ...baseHost,
     topoViewer,
     sessionId: null,
+    openCapture() {},
     setRuntimeContainers() {},
     async createLab(labName: string) {
       const existingLabs = readLabIndex();

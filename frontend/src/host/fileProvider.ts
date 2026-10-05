@@ -38,6 +38,11 @@ const DIR_TTL_MS = 30000;
 const dirCache = new Map<string, { at: number; entries: TreeEntry[] }>();
 const dirInflight = new Map<string, Promise<TreeEntry[]>>();
 
+/** Forget every cached directory listing — after something deleted files on disk. */
+export function clearDirCache(): void {
+  dirCache.clear();
+}
+
 async function listDir(path: string): Promise<TreeEntry[]> {
   const cached = dirCache.get(path);
   if (cached && Date.now() - cached.at < DIR_TTL_MS) return cached.entries;

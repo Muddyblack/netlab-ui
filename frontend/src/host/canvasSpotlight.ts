@@ -5,6 +5,8 @@ import { useSyncExternalStore } from "react";
 export interface Spotlight {
   label: string;
   nodes: string[];
+  /** Only the links between these node pairs stay lit (default: every link between lit nodes). */
+  links?: Array<[string, string]>;
 }
 
 let current: Spotlight | null = null;

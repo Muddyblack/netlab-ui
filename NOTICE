@@ -14,5 +14,17 @@ This product includes software developed by third parties:
   Copyright (c) 2020-2025 Ivan Pepelnjak, Jeroen van Bemmel, Stefano Sasso,
   Dan Partelly, Pete Crocker, Julien Dhaille, Jody Lemoine, and others.
   Licensed under the MIT License.
-  Invoked as an external CLI (netlab create/up/down/status/...); not
-  bundled or redistributed as part of this software.
+  Invoked as an external CLI (netlab create/up/down/status/...). The default
+  (`ui`) image does not include it; the optional `full` image installs it
+  from PyPI and ships its license at /usr/share/licenses/netlab-LICENSE.md.
+
+- containerlab (https://github.com/srl-labs/containerlab)
+  Copyright (c) 2021 Nokia. All rights reserved.
+  Licensed under the BSD 3-Clause License.
+  Not part of the default (`ui`) image. The optional `full` image includes
+  the binary and ships its license at /usr/share/licenses/containerlab-LICENSE.
+
+- Ansible (https://github.com/ansible/ansible)
+  Licensed under the GNU GPL v3.0 or later.
+  Installed from PyPI into the optional `full` image only, unmodified;
+  source is available from the upstream project.

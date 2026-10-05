@@ -1,8 +1,10 @@
 import { IconButton, Stack, Tooltip } from "@mui/material";
 import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
 import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
+import SearchIcon from "@mui/icons-material/Search";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { NetlabMascot } from "../components/agents/NetlabMascot";
+import { terminalShortcutLabel, useQuickOpenShortcut } from "./terminalShortcut";
 
 import { blurTrigger } from "../utils/focus";
 
@@ -12,9 +14,19 @@ interface AppToolbarActionsProps {
   notificationPermission: NotificationPermission | "unavailable";
   onToggleNotifications: () => void;
   onOpenSettings: () => void;
-  assistantAvailable: boolean;
+  onQuickOpen: () => void;
   assistantOpen: boolean;
+  /** "connecting": the backend has not answered yet (it is retried); "absent": it runs without the feature. */
+  assistantStatus: "connecting" | "ready" | "absent";
+  hasLab: boolean;
   onToggleAssistant: () => void;
+}
+
+function assistantTooltip(status: AppToolbarActionsProps["assistantStatus"], open: boolean, hasLab: boolean): string {
+  if (status === "absent") return "AI agents are not available: this backend runs without the assistant feature";
+  if (status === "connecting") return "AI agents: waiting for the backend, retrying (click to retry now)";
+  const action = `${open ? "Close" : "Open"} AI agents: connect your own agent over MCP (Ctrl+I)`;
+  return hasLab ? action : `${action}. The panel sits next to a lab: open one first`;
 }
 
 function notificationTooltipFor(notificationsEnabled: boolean, notificationPermission: NotificationPermission | "unavailable"): string {
@@ -29,27 +41,45 @@ export function AppToolbarActions({
   notificationPermission,
   onToggleNotifications,
   onOpenSettings,
-  assistantAvailable,
+  onQuickOpen,
   assistantOpen,
+  assistantStatus,
+  hasLab,
   onToggleAssistant
 }: AppToolbarActionsProps) {
   const notificationTooltip = notificationTooltipFor(notificationsEnabled, notificationPermission);
+  const quickOpenShortcut = useQuickOpenShortcut();
 
   return (
     <Stack direction="row" spacing={0.5} alignItems="center">
-      {assistantAvailable && (
-        <Tooltip title={`${assistantOpen ? "Close" : "Open"} AI agents: connect your own agent over MCP (Ctrl+I)`} arrow>
+      <Tooltip title={`Quick open: labs, files, nodes and commands (${terminalShortcutLabel(quickOpenShortcut)})`} arrow>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            blurTrigger(e.currentTarget);
+            onQuickOpen();
+          }}
+          aria-label="Quick open"
+        >
+          <SearchIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+
+      {/* Always shown: it is the way into the AI agents panel. What it can do right now is in the tooltip. */}
+      <Tooltip title={assistantTooltip(assistantStatus, assistantOpen, hasLab)} arrow>
+        <span>
           <IconButton
             size="small"
             onClick={onToggleAssistant}
+            disabled={assistantStatus === "absent"}
             color={assistantOpen ? "warning" : "default"}
             aria-label={assistantOpen ? "Close AI agents panel" : "Open AI agents panel"}
-            sx={{ opacity: 1, "&:hover": { opacity: 1 } }}
+            sx={assistantStatus === "absent" ? undefined : { opacity: assistantStatus === "connecting" ? 0.6 : 1, "&:hover": { opacity: 1 } }}
           >
             <NetlabMascot size={20} state={assistantOpen ? "idle" : "sleeping"} />
           </IconButton>
-        </Tooltip>
-      )}
+        </span>
+      </Tooltip>
 
       {notificationsSupported && (
         <Tooltip title={notificationTooltip} arrow>

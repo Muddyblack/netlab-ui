@@ -1,17 +1,26 @@
+import { AgentGuideCard } from "../agents/AgentGuideCard";
 import { CaptureDialog } from "./CaptureDialog";
 import { ConfigsDialog } from "./ConfigsDialog";
 import { CopyLabDialog } from "./CopyLabDialog";
+import { DeleteLabDialog } from "./DeleteLabDialog";
+import { MonitoringDialog } from "./MonitoringDialog";
+import { NodeConfigsDialog } from "./NodeConfigsDialog";
 import { ToolsDialog } from "./ToolsDialog";
 
 /** Dialogs opened through small module stores (host/captureStore,
- * host/configsDialogStore, host/copyLabStore, host/toolsDialogStore) from the canvas, the explorer or a lens. */
+ * host/configsDialogStore, host/copyLabStore, host/toolsDialogStore, host/monitoringDialogStore) from the canvas,
+ * the explorer or a lens. */
 export function LabToolDialogs() {
   return (
     <>
       <CaptureDialog />
       <ConfigsDialog />
       <CopyLabDialog />
+      <DeleteLabDialog />
+      <MonitoringDialog />
+      <NodeConfigsDialog />
       <ToolsDialog />
+      <AgentGuideCard />
     </>
   );
 }

@@ -277,3 +277,16 @@ def test_template_generator_expands_with_real_netlab(tmp_path, monkeypatch):
     assert summary["nodes"] == ["r1", "r2", "r3", "r4"]
     assert summary["links"] == 4
     assert not (tmp_path / "__pycache__").exists()
+
+
+def test_discover_skips_python_packages_a_plugin_writes_into_the_lab_folder(tmp_path):
+    # The monitoring plugin writes its collector (a plain package) to monitoring/collector/nlmon.
+    lab = tmp_path / "lab"
+    (lab / "monitoring" / "collector" / "nlmon").mkdir(parents=True)
+    (lab / "monitoring" / "collector" / "nlmon" / "__init__.py").write_text('"""collector."""\n__version__ = "0.1"\n')
+    (lab / "mine").mkdir()
+    (lab / "mine" / "__init__.py").write_text("def post_transform(topology): pass\n")
+    (lab / "pkg" / "inner").mkdir(parents=True)
+    (lab / "pkg" / "inner" / "__init__.py").write_text("def init(topology): pass\n")
+    found = [p.id for p in plugins.discover(paths=[(lab, plugins.ORIGIN_TOPOLOGY)])]
+    assert found == ["mine", "pkg.inner"]

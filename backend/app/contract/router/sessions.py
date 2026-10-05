@@ -34,12 +34,15 @@ class CommandRequest(BaseModel):
 
 
 @router.post("/sessions", response_model=CreateSessionResult)
-def create_session(body: CreateSession):
+async def create_session(body: CreateSession):
     # The single chokepoint where a client-supplied topology path enters the
     # backend: everything downstream (the model store, annotation sidecars, the
     # unit library) derives its paths from `session.topology_path`. Pin it to a
-    # configured workspace here so no later writer has to re-validate.
-    session = store.create(str(common.resolve_workspace_path(body.topologyPath)), body.mode)
+    # configured workspace here so no later writer has to re-validate. The one
+    # exception is a lab netlab is running (listed under "Running Labs"): it opens
+    # wherever it lives, but only for viewing.
+    path, in_workspace = await common.resolve_openable_path(body.topologyPath)
+    session = store.create(str(path), body.mode if in_workspace else "view")
     return {"sessionId": session.id, "topologyRef": session.topology_path, "mode": session.mode}
 
 
@@ -96,6 +99,10 @@ async def get_snapshot(body: SnapshotRequest):
 @router.post("/command", response_model=CommandAck)
 async def apply_command(body: CommandRequest):
     session = session_or_404(body.sessionId)
+    if session.mode == "view":
+        raise HTTPException(
+            403, "this lab is outside your workspaces and open for viewing only; copy it into a workspace to edit it"
+        )
 
     # Route through the per-session host: it owns undo/redo history + revision,
     # rolls back the YAML/annotations files on failure, and (via the inline

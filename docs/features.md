@@ -5,7 +5,8 @@
 | Keys | Opens |
 |---|---|
 | **Ctrl+P** | everything: labs, nodes, actions, and search inside the lab. Context actions (run on nodes, live traffic, running configs) come first while a lab runs. |
-| **Ctrl+`** | Run command on nodes (canvas selection preselected) |
+| **Ctrl+`** (the key can be changed in Settings → General, e.g. for a German layout) | Show or hide the bottom panel; with nothing open in it, start a terminal |
+| **Ctrl+Shift+`** (same key as above) | Another terminal: your normal shell in the lab's folder (on your host when netlab-ui runs in a container). The **+** in the panel does the same. |
 | **Ctrl+I** | AI agents panel (connect your agent over MCP, review its proposals) |
 
 ## Run a command on many nodes
@@ -19,6 +20,13 @@ mix of nodes, groups and `all`, in parallel:
   (`netlab exec`; pipes work); Linux hosts always get the shell. **Shell** /
   **Show** force one.
 - Nodes selected on the canvas are preselected; `all` means the running nodes.
+- **Patterns, for labs too big to click through.** Type into *Run on* and press Enter: `r1-r3` or `r1-3`
+  (a numeric range), `r[1-3,5]` (the list form shown on result cards), `leaf*` / `h?` / `pc#` (`*` any text,
+  `?` one character, `#` digits, as in the bulk-link dialog), `leaf01-leaf16` (zero-padded), or a regular
+  expression such as `(spine|border)-[ab]` (must match the whole name). Patterns can be mixed with names and
+  groups, a line under the field shows how many nodes they match, and the backend does the matching, so a range
+  over a hundred thousand nodes is one request. A name that exists always wins over reading it as a range. The
+  AI assistant's `run_show_command` takes the same patterns.
 - **Quick** chips offer your last commands plus the ones that fit this lab
   (`show ip ospf neighbor` only if it runs OSPF…). One click runs one;
   Shift-click puts it in the command box to edit first.
@@ -117,12 +125,13 @@ dialog with three ways to capture:
 - **Live in your own Wireshark**: copy the
   `curl -sN '…/api/lab/capture/pcap?…&seconds=0' | wireshark -k -i -` command.
 - **Wireshark in the browser** via Edgeshark. If Edgeshark isn't running, the
-  dialog offers *Install Edgeshark*: it downloads Edgeshark's compose file from
-  GitHub, pulls its images and the Wireshark image, and checks the containers
-  stay up (internet needed, a few minutes the first time). Edgeshark's own
-  port 5001 is published on the UI's bind address only, not on every interface. Its web port is now
-  published on the UI's own bind address (`127.0.0.1` by default), no longer
-  on every interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
+  dialog offers *Install Edgeshark*: it starts netlab's own
+  [`edgeshark` tool](https://netlab.tools/extool/edgeshark/) (the same
+  containers `tools: [ edgeshark ]` would start), pulls the Wireshark image,
+  and checks the containers stay up (internet needed, a few minutes the first
+  time). Edgeshark's capture port 5001 and the Wireshark web page are published
+  on the UI's own bind address (`127.0.0.1` by default), not on every
+  interface. Set `NETLAB_APP_CAPTURE_BIND` to change it.
 
 In a regular node shell, **⇄ Sync input** mirrors your typing into every other
 shell that has sync switched on (like tmux's synchronize-panes).
@@ -164,6 +173,16 @@ Where something isn't possible for a node, the UI says why instead of failing.
   Switch one on and netlab starts it with every deploy. For a deployed lab,
   see whether it runs, open its web UI, connect to its CLI (`netlab connect
   suzieq`) or start and stop it. The commands are netlab's own.
+- **Monitoring** (Ctrl+P → *Monitoring*, or a lab's context menu): turns on
+  the netlab [`monitoring` plugin](../monitoring/README.md) shipped with the
+  UI. It shows the lab's health against what the topology defines (BGP
+  sessions, OSPF and IS-IS adjacencies up vs expected, and which are missing),
+  how every node is collected, and opens the Grafana dashboards. *Fault
+  tests* flap one or more links on a fixed schedule (cycles, seconds down,
+  seconds up) and measure each cycle: how fast the lab noticed, how many
+  sessions went down, and how long recovery took. Results are saved with
+  the lab for comparison. Link outages and fault tests show as shaded bands
+  on the dashboards (toggles at the top of each dashboard).
 - **Reports** (Ctrl+P → *Reports*): every [netlab report](https://netlab.tools/netlab/report/) as a table, rendered
   HTML or text, with download in each format netlab offers (`.md`, `.html`,
   text) and *Open* for the HTML version. The HTML is sandboxed: scripts don't

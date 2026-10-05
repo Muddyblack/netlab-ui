@@ -162,6 +162,39 @@ def test_snapshot_serves_fixture_when_empty(client, topo_path, monkeypatch):
     assert "yamlContent" in snap and "annotations" in snap
 
 
+def test_a_running_lab_outside_the_workspaces_opens_for_viewing_only(client, topo_path, tmp_path, monkeypatch):
+    elsewhere = tmp_path.parent / f"{tmp_path.name}-elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "topology.yml").write_text("name: away\nnodes: [r1]\n")
+
+    async def registry():
+        return {"away": {"name": "away", "dir": str(elsewhere), "status": "Running"}}
+
+    # Not running: still refused, like any path outside the workspaces.
+    path = str(elsewhere / "topology.yml")
+    assert client.post("/api/topology/sessions", json={"topologyPath": path}).status_code == 403
+
+    monkeypatch.setattr(runner, "status_cached", registry)
+    res = client.post("/api/topology/sessions", json={"topologyPath": path, "mode": "edit"})
+    assert res.status_code == 200 and res.json()["mode"] == "view"  # the caller's "edit" is not honored
+    sid = res.json()["sessionId"]
+    snap = client.post("/api/topology/snapshot", json={"sessionId": sid})
+    assert snap.status_code == 200
+    # Reading works, changing does not.
+    move = {"type": "move", "id": "r1", "position": {"x": 1, "y": 1}}
+    refused = client.post("/api/topology/command", json={"sessionId": sid, "command": move})
+    assert refused.status_code == 403 and "viewing only" in refused.json()["detail"]
+    # Its files can be read (the file tab), but not written.
+    read = client.get("/api/runtime/file-explorer/file", params={"path": path})
+    assert read.status_code == 200 and "name: away" in read.json()["content"]
+    write = client.put("/api/runtime/file-explorer/file", json={"path": path, "content": "x"})
+    assert write.status_code == 403
+    # Only the registered lab directory is opened up, not its neighbours.
+    other = tmp_path.parent / f"{tmp_path.name}-other"
+    other.mkdir()
+    assert client.post("/api/topology/sessions", json={"topologyPath": str(other / "x.yml")}).status_code == 403
+
+
 def test_move_command_is_layout_only(client, topo_path):
     sid = _new_session(client, topo_path)
     res = client.post(

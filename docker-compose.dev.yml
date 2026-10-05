@@ -1,0 +1,62 @@
+# Development override: everything runs from this checkout, so code changes never need an
+# image rebuild.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# - Backend and monitoring plugin reload on every edit.
+# - Frontend, two ways, both current with your checkout:
+#     http://localhost:8000  the app as it is shipped; the `frontend` service rebuilds it on every
+#                            edit, reload the page to see it
+#     http://localhost:5173  the Vite dev server with hot reload (no reload needed)
+#
+# The image must exist once (pull it, or build it a single time with --build). After that
+# only a Python dependency change (pyproject.toml) or a newer netlab needs an image rebuild.
+# A change to frontend/package-lock.json is picked up on the next start of the frontend service.
+
+services:
+  netlab-ui:
+    # --timeout-graceful-shutdown: the UI keeps event streams open, and without a limit a reload waits for
+    # them forever ("Waiting for connections to close") and the backend stays down until the container is restarted.
+    # The plugin is reloaded too: the backend imports its library (to render the monitoring files when a selection
+    # is applied), and an edited plugin file would otherwise not be used until the container is restarted.
+    command: ["uvicorn", "app.main:app", "--reload", "--reload-dir", "/app/app", "--reload-dir", "/app/services", "--reload-dir", "/app/monitoring_plugin", "--timeout-graceful-shutdown", "2"]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/services:/app/services
+      - ./monitoring/plugin/monitoring:/app/monitoring_plugin
+      # The UI the frontend service keeps building, instead of the one baked into the image.
+      - frontend-dist:/app/frontend_dist
+
+  frontend:
+    image: node:24
+    container_name: netlab-ui-frontend
+    restart: unless-stopped
+    # Host networking, like netlab-ui: the proxy reaches the backend on 127.0.0.1.
+    network_mode: host
+    working_dir: /app/frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://127.0.0.1:${NETLAB_UI_PORT:-8000}
+      # Inotify does not reliably cross a bind mount on every host.
+      CHOKIDAR_USEPOLLING: ${NETLAB_DEV_POLLING:-}
+    volumes:
+      - ./frontend:/app/frontend
+      # The container's own dependencies; the host's node_modules (other platform, other paths) stay out.
+      - frontend-node-modules:/app/frontend/node_modules
+      # Build output goes to a volume, not frontend/dist, so the host's own builds never fight over ownership.
+      - frontend-dist:/dist-out
+    # Install only when the lockfile or patches/ changed since the last install, then keep the built UI current and
+    # start Vite.
+    command:
+      - sh
+      - -c
+      - |
+        stamp=$$(cat package-lock.json patches/* | sha256sum)
+        if [ "$$stamp" != "$$(cat node_modules/.installed-stamp 2>/dev/null)" ]; then
+          npm ci --no-audit --no-fund && echo "$$stamp" > node_modules/.installed-stamp
+        fi
+        npm run build -- --watch --outDir /dist-out --emptyOutDir &
+        exec npm run dev -- --host 127.0.0.1 --port 5173
+
+volumes:
+  frontend-node-modules:
+  frontend-dist:

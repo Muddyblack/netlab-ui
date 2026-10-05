@@ -6,6 +6,8 @@ export interface LabTabsBarTab {
   subtitle?: string;
   path?: string;
   dirty?: boolean;
+  /** A web page tab (Grafana): shows a button that opens it in a browser tab. */
+  externalUrl?: string;
 }
 
 export interface LabTabsBarProps {
@@ -128,6 +130,37 @@ export function LabTabsBar({
               >
                 {tab.subtitle}
               </span>
+            ) : null}
+            {tab.externalUrl ? (
+              <button
+                type="button"
+                aria-label={`Open ${tab.title} in a browser tab`}
+                title="Open in a browser tab"
+                data-testid={`lab-tab-external-${tab.id}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  window.open(tab.externalUrl, "_blank", "noopener,noreferrer");
+                }}
+                style={{
+                  width: 18,
+                  height: 18,
+                  border: "none",
+                  borderRadius: 4,
+                  padding: 0,
+                  color: active ? ACTIVE_FG : INACTIVE_FG,
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  flexShrink: 0
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.backgroundColor = HOVER_BG;
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.backgroundColor = "transparent";
+                }}
+              >
+                ↗
+              </button>
             ) : null}
             <button
               type="button"

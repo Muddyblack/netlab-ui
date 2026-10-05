@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-export type MascotState = "idle" | "thinking" | "sleeping" | "alarm" | "offline";
+export type MascotState = "idle" | "thinking" | "sleeping" | "alarm" | "offline" | "giggle" | "idea" | "stressed" | "hustle";
 
 interface MascotPalette {
   local: string;
@@ -34,6 +34,7 @@ function getMascotVisuals(state: MascotState): {
   alarm: boolean;
   sleeping: boolean;
   thinking: boolean;
+  giggle: boolean;
   stateClass: string;
   stateName: string;
   stateLabel: string;
@@ -42,14 +43,96 @@ function getMascotVisuals(state: MascotState): {
   const alarm = state === "alarm";
   const sleeping = state === "sleeping" || state === "offline";
   const thinking = state === "thinking";
+  const giggle = state === "giggle";
 
-  if (alarm) return { alarm, sleeping, thinking, stateClass: "bg-alarm", stateName: "Idle↔Idle", stateLabel: "session flapping", palette: ALARM_PALETTE };
-  if (sleeping) return { alarm, sleeping, thinking, stateClass: "bg-sleep", stateName: "Idle*", stateLabel: "admin down", palette: SLEEPING_PALETTE };
-  if (thinking) return { alarm, sleeping, thinking, stateClass: "bg-think", stateName: "OpenSent", stateLabel: "negotiating", palette: IDLE_PALETTE };
-  return { alarm, sleeping, thinking, stateClass: "", stateName: "Established", stateLabel: "session established", palette: IDLE_PALETTE };
+  if (alarm) return { alarm, sleeping, thinking, giggle, stateClass: "bg-alarm", stateName: "Idle↔Idle", stateLabel: "session flapping", palette: ALARM_PALETTE };
+  if (sleeping) return { alarm, sleeping, thinking, giggle, stateClass: "bg-sleep", stateName: "Idle*", stateLabel: "admin down", palette: SLEEPING_PALETTE };
+  if (thinking) return { alarm, sleeping, thinking, giggle, stateClass: "bg-think", stateName: "OpenSent", stateLabel: "negotiating", palette: IDLE_PALETTE };
+  if (giggle) return { alarm, sleeping, thinking, giggle, stateClass: "bg-giggle", stateName: "Established", stateLabel: "giggling", palette: IDLE_PALETTE };
+  if (state === "idea") return { alarm, sleeping, thinking, giggle, stateClass: "bg-idea", stateName: "UPDATE", stateLabel: "had an idea", palette: IDLE_PALETTE };
+  if (state === "stressed") return { alarm, sleeping, thinking, giggle, stateClass: "bg-stress", stateName: "Active", stateLabel: "stressed", palette: IDLE_PALETTE };
+  if (state === "hustle") return { alarm, sleeping, thinking, giggle, stateClass: "bg-hustle", stateName: "Converging", stateLabel: "hard at work", palette: IDLE_PALETTE };
+  return { alarm, sleeping, thinking, giggle, stateClass: "", stateName: "Established", stateLabel: "session established", palette: IDLE_PALETTE };
 }
 
-function MascotFace({ alarm, sleeping, palette }: { alarm: boolean; sleeping: boolean; palette: MascotPalette }) {
+function MascotFace({ state, alarm, sleeping, giggle, palette }: { state: MascotState; alarm: boolean; sleeping: boolean; giggle: boolean; palette: MascotPalette }) {
+  if (state === "idea") {
+    return (
+      <g>
+        {/* eyes looking up at a light bulb that pops on */}
+        <rect x="8.5" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
+        <rect x="16" y="14.5" width="4.5" height="5.8" rx="2" fill={palette.eye} />
+        <circle cx="10.75" cy="16" r="1.15" fill={palette.pupil} />
+        <circle cx="18.25" cy="16" r="1.15" fill={palette.pupil} />
+        <path d="M 12.5 22.4 Q 14.5 24.2 16.5 22.4" stroke={palette.eye} strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.85" />
+        <g className="bg-bulb">
+          <g stroke="#ffe27a" strokeWidth="0.9" strokeLinecap="round" className="bg-bulb-rays">
+            <line x1="14.5" y1="-6.6" x2="14.5" y2="-8.4" />
+            <line x1="9.8" y1="-4.6" x2="8.5" y2="-5.9" />
+            <line x1="19.2" y1="-4.6" x2="20.5" y2="-5.9" />
+          </g>
+          <circle cx="14.5" cy="-2.6" r="3" fill="#ffe27a" filter="url(#bg-bulb-glow)" />
+          <rect x="12.9" y="0" width="3.2" height="1.8" rx="0.5" fill="#c9a23a" />
+        </g>
+      </g>
+    );
+  }
+  if (state === "stressed") {
+    return (
+      <g>
+        {/* wide worried eyes, tiny pupils, wobbly mouth and a falling sweat drop */}
+        <g className="bg-brow" stroke={palette.pupil} strokeWidth="1.3" strokeLinecap="round">
+          <path d="M 8 13.4 L 12.4 12" />
+          <path d="M 21 13.4 L 16.6 12" />
+        </g>
+        <circle cx="10.75" cy="17.2" r="2.7" fill={palette.eye} />
+        <circle cx="18.25" cy="17.2" r="2.7" fill={palette.eye} />
+        <circle cx="10.75" cy="17.2" r="0.8" fill={palette.pupil} />
+        <circle cx="18.25" cy="17.2" r="0.8" fill={palette.pupil} />
+        <path d="M 10.8 23 Q 12.2 21.6 13.6 23 T 16.4 23 T 19 23" stroke={palette.eye} strokeWidth="1.1" strokeLinecap="round" fill="none" opacity="0.9" />
+        <path className="bg-sweat" d="M 23 8.5 Q 24.6 11.4 23 12.2 Q 21.4 11.4 23 8.5 Z" fill="#8ad4ff" />
+      </g>
+    );
+  }
+  if (state === "hustle") {
+    return (
+      <g>
+        {/* focused narrow eyes scanning, determined brows, speed lines on the left */}
+        <g stroke={palette.pupil} strokeWidth="1.3" strokeLinecap="round">
+          <path d="M 8 13.6 L 13 14.6" />
+          <path d="M 21 13.6 L 16 14.6" />
+        </g>
+        <rect x="8.5" y="15.4" width="4.5" height="3.6" rx="1.4" fill={palette.eye} />
+        <rect x="16" y="15.4" width="4.5" height="3.6" rx="1.4" fill={palette.eye} />
+        <g className="bg-pupil">
+          <circle cx="10.75" cy="17.2" r="1.1" fill={palette.pupil} />
+          <circle cx="18.25" cy="17.2" r="1.1" fill={palette.pupil} />
+        </g>
+        <path d="M 12 22.4 L 17 22.4" stroke={palette.eye} strokeWidth="1.2" strokeLinecap="round" opacity="0.85" />
+        <g className="bg-speed" stroke={palette.eye} strokeWidth="0.9" strokeLinecap="round" opacity="0.7">
+          <line x1="-3" y1="9" x2="0.5" y2="9" />
+          <line x1="-4" y1="14" x2="0" y2="14" />
+          <line x1="-3" y1="19" x2="0.5" y2="19" />
+        </g>
+      </g>
+    );
+  }
+  if (giggle) {
+    return (
+      <g>
+        {/* happy squinting eyes (^ ^), blushing cheeks and an open laughing mouth */}
+        <g stroke={palette.eye} strokeWidth="1.8" strokeLinecap="round" fill="none">
+          <path d="M 8.3 18 Q 10.75 13.8 13.2 18" />
+          <path d="M 15.8 18 Q 18.25 13.8 20.7 18" />
+        </g>
+        <g fill="#ff7a59" opacity="0.45">
+          <circle cx="7.6" cy="20.6" r="1.4" />
+          <circle cx="21.4" cy="20.6" r="1.4" />
+        </g>
+        <path className="bg-laugh" d="M 11.6 20.4 Q 14.5 25 17.4 20.4 Z" fill={palette.pupil} />
+      </g>
+    );
+  }
   if (alarm) {
     return (
       <g>
@@ -117,8 +200,8 @@ export function NetlabMascot({
     glow: `bg-gl-${uid}`,
   };
 
-  const { alarm, sleeping, stateClass, stateName, stateLabel, palette } = getMascotVisuals(state);
-  const face = <MascotFace alarm={alarm} sleeping={sleeping} palette={palette} />;
+  const { alarm, sleeping, giggle, stateClass, stateName, stateLabel, palette } = getMascotVisuals(state);
+  const face = <MascotFace state={state} alarm={alarm} sleeping={sleeping} giggle={giggle} palette={palette} />;
 
   return (
     <svg
@@ -141,6 +224,14 @@ export function NetlabMascot({
           <stop offset="1" stopColor={palette.peerDark} />
         </linearGradient>
 
+        <filter id="bg-bulb-glow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="0.8" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
         <filter id={ids.glow} x="-160%" y="-160%" width="420%" height="420%">
           <feGaussianBlur stdDeviation="1.2" result="b" />
           <feMerge>
@@ -158,8 +249,46 @@ export function NetlabMascot({
 
           @media (prefers-reduced-motion: no-preference) {
             /* ── idle: Established ── */
-            .bg:not(.bg-think):not(.bg-sleep):not(.bg-alarm) .bg-local {
+            .bg:not(.bg-think):not(.bg-sleep):not(.bg-alarm):not(.bg-giggle):not(.bg-stress):not(.bg-hustle) .bg-local {
               animation: bg-bob 4.2s ease-in-out infinite;
+            }
+
+            /* ── idea: the bulb pops on and flickers ── */
+            .bg-idea .bg-bulb {
+              transform-box: fill-box;
+              transform-origin: center bottom;
+              animation: bg-pop 1.6s ease-in-out infinite;
+            }
+            .bg-idea .bg-bulb-rays { animation: bg-led-fast 0.5s ease-in-out infinite; }
+            .bg-idea .bg-local { animation: bg-bob 2.4s ease-in-out infinite; }
+
+            /* ── stressed: trembling, sweat drop sliding down ── */
+            .bg-stress .bg-local { animation: bg-shake 0.14s ease-in-out infinite; }
+            .bg-stress .bg-brow { animation: bg-glare 0.7s ease-in-out infinite; }
+            .bg-stress .bg-sweat { animation: bg-sweat 1.4s ease-in infinite; }
+            .bg-stress .bg-packet {
+              offset-path: path("M 25 16.5 L 28 16.5");
+              animation: bg-reject 0.7s ease-in-out infinite;
+            }
+
+            /* ── hustle: heads down, packets sprinting, speed lines ── */
+            .bg-hustle .bg-local { animation: bg-hustle 0.45s ease-in-out infinite; }
+            .bg-hustle .bg-pupil { animation: bg-scan 0.5s ease-in-out infinite; }
+            .bg-hustle .bg-speed { animation: bg-speed 0.45s linear infinite; }
+            .bg-hustle .bg-packet {
+              offset-path: path("M 25 16.5 L 28 16.5");
+              animation: bg-sprint 0.3s linear infinite;
+            }
+            .bg-hustle .bg-peer-led { animation: bg-led-fast 0.25s ease-in-out infinite; }
+
+            /* ── giggle: shaking with laughter ── */
+            .bg-giggle .bg-local {
+              animation: bg-giggle 0.36s ease-in-out infinite;
+            }
+            .bg-giggle .bg-laugh {
+              transform-box: fill-box;
+              transform-origin: top center;
+              animation: bg-laugh 0.36s ease-in-out infinite;
             }
             .bg:not(.bg-sleep) .bg-eye {
               animation: bg-blink 4.8s ease-in-out infinite;
@@ -214,6 +343,12 @@ export function NetlabMascot({
             }
           }
 
+          @keyframes bg-pop    { 0%,100% { transform: scale(1); opacity: 1; } 15% { transform: scale(1.25); } 30% { transform: scale(1); } 60% { opacity: 0.75; } 70% { opacity: 1; } }
+          @keyframes bg-sweat  { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(7px); opacity: 0; } }
+          @keyframes bg-hustle { 0%,100% { transform: translate(0,0); } 50% { transform: translate(0.6px,-0.7px); } }
+          @keyframes bg-speed  { 0% { transform: translateX(0); opacity: 0.9; } 100% { transform: translateX(-2.5px); opacity: 0; } }
+          @keyframes bg-giggle { 0%,100% { transform: translateY(0) rotate(-1.2deg); } 50% { transform: translateY(-0.9px) rotate(1.2deg); } }
+          @keyframes bg-laugh  { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(0.6); } }
           @keyframes bg-bob    { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-0.8px); } }
           @keyframes bg-blink  { 0%,92%,100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } 98% { transform: scaleY(1); } }
           @keyframes bg-drift  { 0%,100% { offset-distance: 10%; opacity: 0.85; } 50% { offset-distance: 90%; opacity: 1; } }

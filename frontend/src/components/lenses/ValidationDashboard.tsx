@@ -86,6 +86,7 @@ interface ValidationDashboardProps {
   validation: ValidationLens;
   validationIssues: ValidationIssue[];
   selectedNode: string | null;
+  labRunning: boolean;
   running: boolean;
   onRun: () => void;
   onSelectRef: (ref: string) => void;
@@ -95,6 +96,7 @@ export function ValidationDashboard({
   validation,
   validationIssues,
   selectedNode,
+  labRunning,
   running,
   onRun,
   onSelectRef,
@@ -153,7 +155,7 @@ export function ValidationDashboard({
           size="small"
           color="warning"
           startIcon={running ? <CircularProgress size={15} color="inherit" /> : <PlayArrowIcon />}
-          disabled={running}
+          disabled={running || !labRunning}
           onClick={onRun}
           sx={{ textTransform: "none", flexShrink: 0 }}
         >
@@ -183,6 +185,20 @@ export function ValidationDashboard({
           </ToggleButton>
         </Tooltip>
       </Stack>
+
+      {!labRunning && (
+        <Alert
+          severity="warning"
+          variant="outlined"
+          sx={{
+            bgcolor: "var(--vscode-inputValidation-warningBackground)",
+            color: "text.primary",
+            "& .MuiAlert-icon": { color: "warning.main" },
+          }}
+        >
+          The lab is stopped. Deploy it to run these validation tests.
+        </Alert>
+      )}
 
       {validation.ranAt && (
         <Typography variant="caption" color="text.secondary">

@@ -1,0 +1,23 @@
+# Use the netlab and containerlab already installed on the host instead of the
+# bundled ones: builds/runs the UI-only image and mounts the host's install.
+#
+#   NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
+#     docker compose -f docker-compose.yml -f docker-compose.host.yml up --build
+#
+# Add `-f docker-compose.dev.yml` after it for the dev setup.
+#
+# The install is mounted at the same path it has on the host, so its shebangs
+# and (on NixOS) store references resolve unchanged. HOST_TOOLS_DIR is the
+# directory that holds it: /nix/store on NixOS, or e.g. the venv netlab lives in.
+
+services:
+  netlab-ui:
+    image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}
+    build:
+      target: ui
+    environment:
+      NETLAB_BIN: ${NETLAB_BIN:?set NETLAB_BIN to the host netlab, e.g. NETLAB_BIN=$(command -v netlab)}
+      # containerlab is called directly for a few features (netem, cleanup, link reconcile).
+      PATH: ${CLAB_DIR:-/usr/bin}:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+    volumes:
+      - ${HOST_TOOLS_DIR:-/nix/store}:${HOST_TOOLS_DIR:-/nix/store}:ro

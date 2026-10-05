@@ -1,5 +1,13 @@
 import { useEffect, useState, type RefObject } from "react";
 
+/** Nearest ancestor that generates a box. The dock sits under a
+ * `display: contents` wrapper, whose own rect is all zeros. */
+export function layoutParent(el: HTMLElement | null | undefined): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node && getComputedStyle(node).display === "contents") node = node.parentElement;
+  return node;
+}
+
 /** Horizontal insets that keep the dock clear of clab-ui's context-panel
  * drawer, which overlays the canvas — without this the dock's controls
  * disappear behind the panel when it is open or the window shrinks. Uses the
@@ -11,7 +19,7 @@ export function usePanelInsets(rootRef: RefObject<HTMLDivElement | null>) {
     let raf = 0;
     const measure = () => {
       raf = 0;
-      const container = rootRef.current?.parentElement;
+      const container = layoutParent(rootRef.current);
       if (!container) return;
       const crect = container.getBoundingClientRect();
       let left = 0;

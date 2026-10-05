@@ -7,7 +7,6 @@
   <a href="https://github.com/Muddyblack/netlab-ui/releases"><img src="https://img.shields.io/github/downloads/Muddyblack/netlab-ui/total?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=download&label=release%20downloads" alt="GitHub Release asset downloads" /></a>
   <a href="https://github.com/Muddyblack/netlab-ui/pkgs/container/netlab-ui"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2FMuddyblack%2Fnetlab-ui%2Fnetlab-ui&query=%24.downloadCountRaw&label=container%20pulls&style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=docker" alt="GHCR container pulls" /></a>
   <a href="docs/features.md"><img src="https://img.shields.io/badge/docs-read-ff9f01?style=for-the-badge&labelColor=182431&logoColor=white&logo=readthedocs" alt="Docs" /></a>
-  <a href="https://github.com/Muddyblack/netlab-ui/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Muddyblack/netlab-ui/ci.yml?style=for-the-badge&labelColor=182431&logoColor=white&logo=githubactions&label=ci" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Muddyblack/netlab-ui?style=for-the-badge&labelColor=182431&logoColor=white&color=315b75&logo=apache&label=license" alt="License" /></a>
 </p>
 
@@ -24,14 +23,12 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 **[Try the UI preview](https://muddyblack.github.io/netlab-ui/)** · **[Quick start](#quick-start)** · **[Features and provider support](docs/features.md)**
 
 <p align="center">
-  <a href="docs/showcase/GALLERY.md#showcase-traffic"><img src="docs/showcase/media/traffic/lens-dark.webp" alt="netlab-ui: a running leaf/spine lab with live traffic on every link" width="900" /></a>
+  <a href="https://youtu.be/S67f3rDm6O0"><img src="docs/images/showcase-cover.webp" alt="Watch the 7-minute netlab-ui tour on YouTube: draw labs, deploy them, validate and monitor them" width="900" /></a>
 </p>
 
 ## In action
 
 <!-- showcase:start -->
-**▶ [Watch the tour](docs/showcase/media/netlab-ui-showcase.mp4)**: every recorded feature in one video.
-
 <table>
 <tr>
 <td width="50%" valign="top">
@@ -49,16 +46,30 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 </tr>
 <tr>
 <td width="50%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-running-labs">
+<img src="docs/showcase/media/running-labs/dialog-dark.webp" alt="The running labs dialog with shut down, force cleanup and forget record" />
+</a>
+<p><b>Every running lab, one place to clean up</b><br />See every lab netlab is tracking on the host, then shut one down, force a cleanup, or forget a stale record.</p>
+</td>
+<td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-command-palette">
 <img src="docs/showcase/media/command-palette/spotlight-dark.webp" alt="Canvas spotlight on the spine group" />
 </a>
 <p><b>Everything one keystroke away</b><br />Ctrl+P finds labs, nodes, IP addresses, AS numbers and actions — and lights up what it found on the canvas.</p>
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-node-editor">
 <img src="docs/showcase/media/node-editor/editor-dark.webp" alt="The node editor next to the canvas" />
 </a>
 <p><b>Edit nodes the netlab way</b><br />Device, modules, custom configs and a preview of the exact configuration netlab generates.</p>
+</td>
+<td width="50%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-plugins">
+<img src="docs/showcase/media/plugins/details-dark.webp" alt="The monitoring plugin expanded: where it runs, what it requires and its arguments" />
+</a>
+<p><b>netlab plugins, documented in place</b><br />Browse every netlab plugin, switch them on per lab, see what they hook into, and read the manual behind the info button.</p>
 </td>
 </tr>
 <tr>
@@ -77,30 +88,52 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 </tr>
 <tr>
 <td width="50%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-lenses">
+<img src="docs/showcase/media/lenses/routing-dark.webp" alt="Routing lens: OSPF and iBGP drawn on the topology" />
+</a>
+<p><b>Lenses: one lab, every view</b><br />Physical cabling, addressing, routing, services, paths and live traffic: switch the canvas between views of the same running lab.</p>
+</td>
+<td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-link-faults">
 <img src="docs/showcase/media/link-faults/link-down-dark.webp" alt="Link s1–l2 down, flagged by the traffic lens" />
 </a>
 <p><b>Break things on purpose</b><br />Take a link down or add delay and loss from its menu — then watch the routing protocols react.</p>
 </td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-validation">
+<img src="docs/showcase/media/validation/verdict-dark.webp" alt="A fault test that passed: validate checks while the link was down and after it recovered" />
+</a>
+<p><b>Validate the lab, then break it</b><br />Run the lab's netlab validate tests, then a fault test: take a link down, check the fabric holds, and get a pass/fail verdict.</p>
+</td>
+<td width="50%" valign="top">
+<a href="docs/showcase/GALLERY.md#showcase-monitoring">
+<img src="docs/showcase/media/monitoring/health-dark.webp" alt="The Monitoring dialog: nodes, BGP sessions and OSPF adjacencies up against what the topology defines" />
+</a>
+<p><b>Monitor any lab, with Grafana inside</b><br />Health against the topology, per-link and per-protocol metrics, and Grafana dashboards in a tab, for FRR or any other vendor.</p>
+</td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-config-drift">
 <img src="docs/showcase/media/config-drift/diff-dark.webp" alt="Running-config drift: l1 changed since the snapshot, with its diff" />
 </a>
 <p><b>See what changed on the devices</b><br />Snapshot every node's running config, change things by hand, and get a per-device diff of exactly what moved.</p>
 </td>
-</tr>
-<tr>
 <td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-reports">
 <img src="docs/showcase/media/reports/gallery-dark.webp" alt="The report gallery over the lab" />
 </a>
 <p><b>netlab reports, interactive</b><br />Addressing, BGP, OSPF and wiring reports as searchable tables, rendered HTML or text — download any format.</p>
 </td>
+</tr>
+<tr>
 <td width="50%" valign="top">
 <a href="docs/showcase/GALLERY.md#showcase-ai-agents">
-<img src="docs/showcase/media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change, shown as a diff to apply or reject" />
+<img src="docs/showcase/media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change drawn on the canvas, with Apply and Reject in the panel" />
 </a>
-<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Gemini CLI or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
+<p><b>Bring your own AI agent</b><br />Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
 </td>
 </tr>
 </table>
@@ -122,7 +155,8 @@ Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-us
 | | |
 | --- | --- |
 | [Features](docs/features.md) | Shortcuts, run on nodes, search, running configs, exercises, live traffic, faults, packet capture, providers, reports |
-| [AI agents](docs/ai-agents.md) | Start Claude Code, Codex or Gemini CLI connected to your lab, or connect any MCP tool; review what it proposes |
+| [Monitoring](monitoring/README.md) | The netlab `monitoring` plugin: metrics, routing-protocol state and Grafana dashboards for any lab and vendor — also usable without the UI |
+| [AI agents](docs/ai-agents.md) | Start Claude Code, Codex, Copilot, Kiro and more connected to your lab, or connect any MCP tool; review what it proposes |
 | [Running as a container](docs/container.md) | Images, required flags, several users on one server |
 | [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
 | [Architecture](docs/architecture.md) | How netlab-ui builds on clab-ui and netlab |

@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from app.sessions.store import store
 from services import workspaces as ws_store
+from services.netlab import runner
 
 # SSE headers: disable proxy/browser buffering so lines render as they happen.
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -46,6 +47,34 @@ def resolve_workspace_path(path: str) -> Path:
             return Path(base)
         if target.startswith(base + os.sep):
             return Path(target)
+    raise HTTPException(403, "path is outside the configured workspaces")
+
+
+async def resolve_openable_path(path: str) -> tuple[Path, bool]:
+    """Like :func:`resolve_workspace_path`, but a lab netlab itself is running may be
+    opened wherever it lives. Returns ``(path, inside_workspace)``.
+
+    Running labs come from netlab's own registry (``netlab status --all``), so the
+    directory is one this user already started a lab in, never a client-supplied
+    root. The caller opens such a lab read-only (see ``create_session``).
+    """
+    target = os.path.normpath(os.path.realpath(os.path.expanduser(path)))
+    for ws in ws_store.load():
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(ws)))
+        if target == base:
+            return Path(base), True
+        if target.startswith(base + os.sep):
+            return Path(target), True
+    try:
+        instances = await runner.status_cached()
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        instances = {}
+    for lab in instances.values() if isinstance(instances, dict) else ():
+        if not isinstance(lab, dict) or not lab.get("dir"):
+            continue  # realpath("") would be the working directory
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(str(lab["dir"]))))
+        if target == base or target.startswith(base + os.sep):
+            return Path(target), False
     raise HTTPException(403, "path is outside the configured workspaces")
 
 
@@ -137,3 +166,19 @@ def topology_candidates(workspace_path: Path) -> list[Path]:
             seen.add(resolved)
             candidates.append(path)
     return candidates
+
+
+def is_lab_running(abs_path: str, lab_name: str, stem: str, running_status: dict) -> bool:
+    """Whether a netlab instance record exists for this topology — matched by lab
+    name or by directory, since `netlab status --all` summaries only carry `dir`.
+    Container state is deliberately not required: a crashed deploy must still
+    read as deployed so the UI offers destroy/cleanup instead of a second deploy."""
+    for key, info in (running_status or {}).items():
+        lab_dir = str(info.get("dir") or "")
+        if (
+            key in (lab_name, stem)
+            or info.get("name") == lab_name
+            or (lab_dir != "" and abs_path.startswith(f"{lab_dir}/"))
+        ):
+            return True
+    return False

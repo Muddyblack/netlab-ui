@@ -36,6 +36,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.lab import common
+from services import nodeset
 from services.netlab import runner
 
 router = APIRouter()
@@ -133,7 +134,19 @@ def expand_targets(
                 for member in groups[name]:
                     add(member, seen | {name})
         else:
-            raise HTTPException(400, f"{name!r} is neither a node nor a group of this lab")
+            try:
+                matched = nodeset.select(name, node_names)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            if matched is None:
+                raise HTTPException(
+                    400,
+                    f"{name!r} is neither a node nor a group of this lab "
+                    "(patterns work too: r1-r3, r[1-3,5], leaf*, h#, a regular expression)",
+                )
+            if not matched:
+                raise HTTPException(400, f"{name!r} matches no node of this lab")
+            wanted.update(matched)
 
     for name in requested:
         add(name.strip(), frozenset())
@@ -199,6 +212,37 @@ async def exec_targets(sessionId: str):
         for node in topo.nodes
     ]
     return ExecTargets(nodes=nodes, groups=_groups(topo))
+
+
+class ExecResolveRequest(BaseModel):
+    sessionId: str
+    nodes: list[str] = Field(default_factory=list)
+
+
+class ExecResolved(BaseModel):
+    """What a selection resolves to, for the live "matches N nodes" line under the field."""
+
+    count: int
+    first: list[str]  # a handful of names, enough to recognise the selection
+    error: str = ""
+
+
+PREVIEW_NAMES = 8
+
+
+@router.post("/exec/resolve", response_model=ExecResolved)
+async def exec_resolve(body: ExecResolveRequest):
+    """Resolve a selection (names, groups, "all", patterns) without running anything."""
+    path, topo = _topology(body.sessionId)
+    if not body.nodes:
+        return ExecResolved(count=0, first=[])
+    status = await _status_nodes(path)
+    running = {name for name, info in status.items() if _is_running(info)}
+    try:
+        targets = expand_targets(body.nodes, [n.name for n in topo.nodes], _groups(topo), running)
+    except HTTPException as exc:
+        return ExecResolved(count=0, first=[], error=str(exc.detail))
+    return ExecResolved(count=len(targets), first=targets[:PREVIEW_NAMES])
 
 
 def _kill(proc: asyncio.subprocess.Process) -> None:

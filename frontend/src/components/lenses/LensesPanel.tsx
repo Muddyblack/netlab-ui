@@ -10,6 +10,7 @@ import { LensErrorBanner, LensesPanelHeader, TourPanel } from "./lensViews";
 interface LensesPanelProps {
   state: NetlabLensesState;
   validationIssues: ValidationIssue[];
+  labRunning: boolean;
   onToast: (message: string, severity?: "success" | "info" | "warning" | "error") => void;
   onRerunDeployment: (action: string) => void;
 }
@@ -39,7 +40,7 @@ async function runValidationAndReport(
   }
 }
 
-export function LensesPanel({ state, validationIssues, onToast, onRerunDeployment }: LensesPanelProps) {
+export function LensesPanel({ state, validationIssues, labRunning, onToast, onRerunDeployment }: LensesPanelProps) {
   const {
     sessionId, bundle, lens, setLens, error, loading, setReportOpen,
     teachingOpen, setTeachingOpen, teachingDoc, setTeachingDoc, setTeachingMode, teachingIndex, setTeachingIndex,
@@ -109,6 +110,7 @@ export function LensesPanel({ state, validationIssues, onToast, onRerunDeploymen
           error={error}
           loading={loading}
           validationIssues={validationIssues}
+          labRunning={labRunning}
           onToast={onToast}
           onRerunDeployment={onRerunDeployment}
           onRunValidation={() => void runValidationAndReport(runValidation, onToast)}

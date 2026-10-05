@@ -14,17 +14,22 @@ run side by side.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import shutil
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from app.contract import commands
 from app.lab import common
+from app.sessions.store import store
 from services import events
 from services import workspaces as ws_store
+from services.netlab import runner
 
 # Files the UI keeps next to a topology, named after it.
 SIDECAR_SUFFIXES = (".netlab-ui.json", ".netlab-teaching.json", ".netlab-ui-scripts.json")
@@ -131,3 +136,56 @@ def copy_lab_endpoint(body: CopyLabRequest):
             "source": "standalone",
         },
     }
+
+
+class DeleteLabRequest(BaseModel):
+    topologyPath: str
+    # Only report what would be deleted (the confirmation dialog shows it).
+    dryRun: bool = False
+
+
+class DeleteLabResult(BaseModel):
+    # What goes (or went) off the disk: the lab's folder, or just its topology file.
+    deleted: str
+    kind: Literal["folder", "file"]
+
+
+def _delete_target(topology: Path) -> tuple[Path, Literal["folder", "file"]]:
+    """A lab that is the `topology.yml` of its own folder owns that folder; a lone
+    `<name>.yml` (e.g. labs/sample.yml) owns only itself. A workspace root is never a lab folder."""
+    roots = {Path(os.path.realpath(os.path.expanduser(ws))) for ws in ws_store.load()}
+    parent = topology.parent
+    if topology.stem == "topology" and parent not in roots:
+        return parent, "folder"
+    return topology, "file"
+
+
+@router.post("/delete", response_model=DeleteLabResult)
+async def delete_lab_endpoint(body: DeleteLabRequest):
+    topology = common.resolve_workspace_path(body.topologyPath)
+    if not topology.is_file():
+        raise HTTPException(404, "topology not found")
+    abs_path = str(topology.resolve())
+    running: dict = {}
+    if runner.is_installed():
+        try:
+            running = await runner.status_cached()
+        except Exception:  # noqa: BLE001 — without a status the on-disk state is all we can go by
+            running = {}
+    try:
+        lab_name = commands.load_topology(abs_path).name or topology.stem
+    except Exception:  # noqa: BLE001 — an unparseable YAML is still deletable
+        lab_name = topology.stem
+    if common.is_lab_running(abs_path, lab_name, topology.stem, running):
+        raise HTTPException(409, "the lab is deployed — destroy it before deleting")
+    target, kind = _delete_target(topology)
+    if not body.dryRun:
+        for session in list(store._sessions.values()):
+            if Path(session.topology_path).resolve().is_relative_to(target):
+                store.delete(session.id)
+        if kind == "folder":
+            await asyncio.to_thread(shutil.rmtree, target)
+        else:
+            topology.unlink()
+        events.hub.publish({"type": "files"})
+    return {"deleted": str(target), "kind": kind}

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +59,21 @@ def poke_watcher() -> None:
         _watch_restart.set()
 
 
+def _workspace_filter():
+    """watchfiles' default filter, plus the labs' monitoring metrics store
+    (``<lab>/monitoring/data``): it writes continuously while a lab is monitored
+    and would otherwise turn into a steady stream of ``files`` events."""
+    from watchfiles import DefaultFilter
+
+    marker = f"{os.sep}monitoring{os.sep}data{os.sep}"
+
+    class _Filter(DefaultFilter):
+        def __call__(self, change, path: str) -> bool:
+            return marker not in path and super().__call__(change, path)
+
+    return _Filter()
+
+
 async def watch_workspaces() -> None:
     """Long-running task: watch all workspace roots and publish ``files`` events.
 
@@ -80,8 +96,9 @@ async def watch_workspaces() -> None:
                 await asyncio.wait_for(_watch_restart.wait(), timeout=30)
             continue
         try:
-            # DefaultFilter already skips .git, __pycache__, node_modules etc.
-            async for _changes in awatch(*roots, stop_event=_watch_restart, step=400):
+            # DefaultFilter skips .git, __pycache__, node_modules etc.; see _workspace_filter.
+            watch_filter = _workspace_filter()
+            async for _changes in awatch(*roots, stop_event=_watch_restart, step=400, watch_filter=watch_filter):
                 hub.publish({"type": "files"})
         except Exception:
             logger.exception("workspace watcher crashed; retrying in 10s")

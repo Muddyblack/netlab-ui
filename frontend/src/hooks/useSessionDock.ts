@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
+import { isStringArray, readJson, writeJson } from "../utils/storage";
 
-export type SessionKind = "shell" | "logs" | "drawio" | "multi" | "agent";
+export type SessionKind = "shell" | "logs" | "drawio" | "multi" | "agent" | "terminal";
 export type SessionTab = { key: string; kind: SessionKind; node: string; sessionId?: string | null };
 
 export const sessionTabKey = (kind: SessionKind, node: string) => `${kind}:${node}`;
@@ -9,21 +10,11 @@ const RECENT_NODES_KEY = "netlab:shell-recent-nodes";
 const MAX_RECENT_NODES = 12;
 
 export function loadRecentShellNodes(): string[] {
-  try {
-    const value = JSON.parse(localStorage.getItem(RECENT_NODES_KEY) ?? "[]");
-    return Array.isArray(value) ? value.filter((node): node is string => typeof node === "string") : [];
-  } catch {
-    return [];
-  }
+  return readJson<string[]>(RECENT_NODES_KEY, [], isStringArray);
 }
 
 function recordRecentShellNode(node: string): void {
-  try {
-    const next = [node, ...loadRecentShellNodes().filter((item) => item !== node)].slice(0, MAX_RECENT_NODES);
-    localStorage.setItem(RECENT_NODES_KEY, JSON.stringify(next));
-  } catch {
-    // best-effort; ignore storage failures.
-  }
+  writeJson(RECENT_NODES_KEY, [node, ...loadRecentShellNodes().filter((item) => item !== node)].slice(0, MAX_RECENT_NODES));
 }
 
 /** Tab state for the bottom session dock (node shells + log streams). Tabs stay
@@ -69,5 +60,29 @@ export function useSessionDock(sessionId: string | null) {
   const tabs = useMemo(() => state.tabs.filter((tab) => tab.sessionId === sessionId), [state.tabs, sessionId]);
   const activeKey = tabs.some((tab) => tab.key === state.activeKey) ? state.activeKey : (tabs[0]?.key ?? null);
 
-  return { tabs, activeKey, open, setOpen, openTab, selectTab, closeTab };
+  /** A new normal terminal tab (terminal, terminal 2, …): always a fresh one, like VS Code's "+". */
+  const openTerminal = useCallback(() => {
+    const used = new Set(tabs.filter((tab) => tab.kind === "terminal").map((tab) => tab.node));
+    let number = 1;
+    while (used.has(String(number))) number += 1;
+    openTab("terminal", String(number));
+  }, [tabs, openTab]);
+
+  /** Show an agent's terminal, starting it if it is not running. With `another`, start one more instance of an
+   * agent that is already running (claude, claude~2, claude~3, ...). Returns the tab's node, to identify it. */
+  const openAgent = useCallback((agentId: string, another = false): string => {
+    const used = new Set(tabs.filter((tab) => tab.kind === "agent").map((tab) => tab.node));
+    let node = agentId;
+    if (another && used.has(agentId)) {
+      let number = 2;
+      while (used.has(`${agentId}~${number}`)) number += 1;
+      node = `${agentId}~${number}`;
+    }
+    openTab("agent", node);
+    return node;
+  }, [tabs, openTab]);
+
+  const closeAgent = useCallback((node: string) => closeTab(sessionTabKey("agent", node)), [closeTab]);
+
+  return { tabs, activeKey, open, setOpen, openTab, openTerminal, openAgent, closeAgent, selectTab, closeTab };
 }

@@ -1,4 +1,6 @@
+import { readNumber, writeStored } from "../utils/storage";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import CloseFullscreenIcon from "@mui/icons-material/CloseFullscreen";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
@@ -9,6 +11,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import DynamicFeedIcon from "@mui/icons-material/DynamicFeed";
 import { Box, IconButton, Menu, MenuItem, Paper, Tab, Tabs, Tooltip, Typography } from "@mui/material";
 
+import { TerminalHost, TerminalSlot, setRunningAgents, useAgentSurface } from "../components/agents/AgentSurface";
 import { usePanelInsets } from "../panels/units-dock/usePanelInsets";
 import { loadRecentShellNodes, type SessionTab } from "../hooks/useSessionDock";
 import { tabCloseLabel, tabIcon, tabLabel } from "./sessionTabLabels";
@@ -19,13 +22,14 @@ const NodeLogsPanel = lazy(() => import("./NodeLogsPanel").then((m) => ({ defaul
 const MultiExecPanel = lazy(() => import("./multi-exec/MultiExecPanel").then((m) => ({ default: m.MultiExecPanel })));
 const DrawioWizard = lazy(() => import("./DrawioWizard").then((m) => ({ default: m.DrawioWizard })));
 const AgentTerminal = lazy(() => import("../components/agents/AgentTerminal").then((m) => ({ default: m.AgentTerminal })));
+const LocalTerminal = lazy(() => import("./LocalTerminal").then((m) => ({ default: m.LocalTerminal })));
 
 const HEIGHT_KEY = "netlab.sessionDock.height";
 const MIN_HEIGHT = 140;
 const DEFAULT_HEIGHT = 320;
 
 function loadHeight(): number {
-  const raw = Number(localStorage.getItem(HEIGHT_KEY));
+  const raw = readNumber(HEIGHT_KEY, 0);
   return Number.isFinite(raw) && raw >= MIN_HEIGHT ? Math.round(raw) : DEFAULT_HEIGHT;
 }
 
@@ -49,7 +53,7 @@ function SessionDockTabStrip({ tabs, activeTab, onSelect, onClose }: {
           value={tab.key}
           label={
             <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              {tabIcon(tab.kind)}
+              {tabIcon(tab)}
               <Typography component="span" variant="caption" sx={{ fontFamily: "monospace" }}>{tabLabel(tab)}</Typography>
               <IconButton
                 component="span"
@@ -86,7 +90,7 @@ function RecentConnectionsMenu({ anchorEl, onClose, recentOutsideTabs, onOpenShe
 }
 
 function SessionDockHeader({
-  tabs, activeTab, open, maximized, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onPopOut,
+  tabs, activeTab, open, maximized, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onNewTerminal, onPopOut,
   historyAnchor, setHistoryAnchor, recentOutsideTabs, setRecentNodes, setMaximized,
 }: {
   tabs: SessionTab[];
@@ -98,6 +102,7 @@ function SessionDockHeader({
   onToggleOpen: () => void;
   onOpenShell: (node: string) => void;
   onOpenMulti: () => void;
+  onNewTerminal: () => void;
   onPopOut: (tab: SessionTab) => void;
   historyAnchor: HTMLElement | null;
   setHistoryAnchor: (el: HTMLElement | null) => void;
@@ -109,6 +114,11 @@ function SessionDockHeader({
     <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, pr: 0.5, ...(open ? { borderBottom: 1, borderColor: "divider" } : {}) }}>
       <SessionDockTabStrip tabs={tabs} activeTab={activeTab} onSelect={onSelect} onClose={onClose} />
 
+      <Tooltip title="New terminal (Ctrl+Shift+`)">
+        <IconButton size="small" aria-label="New terminal" onClick={onNewTerminal}>
+          <AddIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
       <Tooltip title="Run a command on several nodes">
         <IconButton size="small" aria-label="Run a command on several nodes" onClick={onOpenMulti}>
           <DynamicFeedIcon fontSize="small" />
@@ -152,7 +162,9 @@ function sessionTabContent(tab: SessionTab, sessionId: string, onClose: (key: st
   if (tab.kind === "shell") return <Shell node={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
   if (tab.kind === "drawio") return <DrawioWizard sessionId={sessionId} onClose={() => onClose(tab.key)} />;
   if (tab.kind === "multi") return <MultiExecPanel sessionId={sessionId} />;
-  if (tab.kind === "agent") return <AgentTerminal agentId={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />;
+  // The terminal itself is hosted by SessionDock (so it survives moving); this is where it shows up.
+  if (tab.kind === "agent") return <TerminalSlot holderKey={`${sessionId}:${tab.key}`} />;
+  if (tab.kind === "terminal") return <LocalTerminal sessionId={sessionId} onClose={() => onClose(tab.key)} />;
   return <NodeLogsPanel node={tab.node} sessionId={sessionId} />;
 }
 
@@ -184,6 +196,7 @@ interface SessionDockProps {
   onToggleOpen: () => void;
   onOpenShell: (node: string) => void;
   onOpenMulti: () => void;
+  onNewTerminal: () => void;
   onPopOut: (tab: SessionTab) => void;
 }
 
@@ -191,7 +204,7 @@ interface SessionDockProps {
  * sibling tabs. Collapsible to a header strip, drag-resizable, maximizable —
  * never a modal, so the canvas stays interactive. All tabs stay mounted (even
  * collapsed) to keep their WebSockets alive. */
-export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onPopOut }: SessionDockProps) {
+export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClose, onToggleOpen, onOpenShell, onOpenMulti, onNewTerminal, onPopOut }: SessionDockProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const insets = usePanelInsets(rootRef);
   const [height, setHeight] = useState(loadHeight);
@@ -200,7 +213,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
   const [recentNodes, setRecentNodes] = useState<string[]>([]);
 
   useEffect(() => {
-    localStorage.setItem(HEIGHT_KEY, String(height));
+    writeStored(HEIGHT_KEY, String(height));
   }, [height]);
 
   const startResize = (event: React.PointerEvent) => {
@@ -222,13 +235,37 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
     window.addEventListener("pointerup", onUp, { once: true });
   };
 
-  const activeTab = tabs.find((tab) => tab.key === activeKey) ?? null;
+  // Agent terminals are always hosted here, but with placement "here" they are shown in the AI agents tab
+  // instead of the strip below, so the dock only lists (and only appears for) everything else.
+  const { placement } = useAgentSurface();
+  const agentTabs = tabs.filter((tab) => tab.kind === "agent");
+  const agentIds = agentTabs.map((tab) => tab.node).join(",");
+  useEffect(() => {
+    setRunningAgents(agentIds ? agentIds.split(",") : []);
+    return () => setRunningAgents([]);
+  }, [agentIds]);
+  const hosts = (
+    <Suspense fallback={null}>
+      {agentTabs.map((tab) => (
+        <TerminalHost key={tab.key} holderKey={`${sessionId}:${tab.key}`}>
+          <AgentTerminal agentId={tab.node} sessionId={sessionId} onClose={() => onClose(tab.key)} />
+        </TerminalHost>
+      ))}
+    </Suspense>
+  );
+  const dockTabs = placement === "here" ? tabs.filter((tab) => tab.kind !== "agent") : tabs;
+  const dockActiveKey = dockTabs.some((tab) => tab.key === activeKey) ? activeKey : (dockTabs[0]?.key ?? null);
+  const activeTab = dockTabs.find((tab) => tab.key === dockActiveKey) ?? null;
   const recentOutsideTabs = recentNodes.filter((node) => !tabs.some((tab) => tab.kind === "shell" && tab.node === node));
   let dockHeight: number | string = "auto";
   if (open) dockHeight = maximized ? "100%" : height;
 
+  // Always the same element tree: returning `hosts` alone while no dock tab is open would remount (and so
+  // kill) every agent terminal the moment a normal terminal opens or closes.
   return (
-    <Box
+    <>
+    {hosts}
+    {dockTabs.length > 0 && <Box
       ref={rootRef}
       data-netlab-session-dock
       sx={{
@@ -262,7 +299,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
         )}
 
         <SessionDockHeader
-          tabs={tabs}
+          tabs={dockTabs}
           activeTab={activeTab}
           open={open}
           maximized={maximized}
@@ -271,6 +308,7 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
           onToggleOpen={onToggleOpen}
           onOpenShell={onOpenShell}
           onOpenMulti={onOpenMulti}
+          onNewTerminal={onNewTerminal}
           onPopOut={onPopOut}
           historyAnchor={historyAnchor}
           setHistoryAnchor={setHistoryAnchor}
@@ -281,8 +319,9 @@ export function SessionDock({ sessionId, tabs, activeKey, open, onSelect, onClos
 
         {/* Collapsing shrinks this to zero height instead of unmounting so
             shells and log streams keep their connections. */}
-        <SessionDockPanels tabs={tabs} sessionId={sessionId} activeKey={activeKey} open={open} onClose={onClose} />
+        <SessionDockPanels tabs={dockTabs} sessionId={sessionId} activeKey={dockActiveKey} open={open} onClose={onClose} />
       </Paper>
-    </Box>
+    </Box>}
+    </>
   );
 }
