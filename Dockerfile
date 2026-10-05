@@ -2,20 +2,12 @@
 # static assets straight from the FastAPI backend on one port — one image,
 # `docker compose up` (docker-compose.yml) or `docker run`, open a browser.
 #
-# Two targets: the default (`ui`) is the UI only; `--target full` adds netlab,
-# Ansible and containerlab for a self-contained install (see the bottom).
-#
 # Scope of the default image: the *UI*, not a netlab distribution. netlab, Ansible and
 # containerlab all stay on the host, where whoever runs this already has them.
 # The container talks to that host install through NETLAB_BIN / Settings →
 # Environment and the mounted Docker socket. Keeping the toolchain out means
 # no version skew against the netlab the user actually runs, and it is what
 # lets this ship as a netlab *tool* rather than a parallel install of one.
-
-# containerlab version for the `full` target. COPY --from can't expand a
-# variable, so the image is pulled in as its own stage from this global ARG.
-ARG CLAB_VERSION=0.79.0
-FROM ghcr.io/srl-labs/clab:${CLAB_VERSION} AS clab
 
 # ---- frontend build stage ----
 # Pinned to the *build* platform: the frontend output is arch-independent, so
@@ -99,24 +91,6 @@ CMD ["uvicorn", "app.main:app"]
 # "no description" placeholder a pulled-from-nowhere image would show.
 LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" \
       org.opencontainers.image.licenses="Apache-2.0"
-
-# ---- "full" image: UI + netlab + Ansible + containerlab ----
-# `docker build --target full .` — for machines that have Docker but no
-# netlab install, or anyone who wants one pinned, self-contained toolchain.
-# Everything runs against the host's Docker daemon exactly like the UI-only
-# image; the difference is only where the netlab/containerlab binaries live.
-FROM runtime AS full
-# openssh-client/sshpass: Ansible's network_cli for SSH-managed devices.
-# iproute2: containerlab and netlab's link/bridge helpers.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        openssh-client sshpass iproute2 \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir ".[netlab]"
-# The official containerlab image ships the static binary at this path.
-COPY --from=clab /usr/bin/containerlab /usr/bin/containerlab
-# BSD-3 (containerlab) and MIT (netlab) require the notice to travel with the binary.
-COPY licenses/ /usr/share/licenses/
-LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab bundled — topology editor, lab lifecycle and device consoles in one container."
 
 # ---- default image: the UI only ----
 # netlab, Ansible and containerlab stay on the host, where whoever runs this

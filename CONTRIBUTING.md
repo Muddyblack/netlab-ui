@@ -103,5 +103,5 @@ The gallery in the README and [docs/showcase/GALLERY.md](docs/showcase/GALLERY.m
 
 ## Releases
 
-- **Container images:** `.github/workflows/container-release.yml` publishes `ghcr.io/muddyblack/netlab-ui:<ver>` (UI only) and `<ver>-full` on a release.
+- **Container images:** `.github/workflows/container-release.yml` publishes `ghcr.io/muddyblack/netlab-ui:<ver>` (UI only) on a release.
 - **Desktop app:** push a `desktop-v*` tag; see [docs/desktop.md](docs/desktop.md).

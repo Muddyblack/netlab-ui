@@ -1,10 +1,16 @@
 # netlab-ui as a container — `docker compose up -d`, then open
 # http://localhost:8000.
 #
-# Uses the "full" image (UI + netlab + Ansible + containerlab), so the host only
-# needs Docker. Already have netlab on the host and want the UI to use it?
-# Switch `image:` to the UI-only tag and mount that install instead — see the
-# README's "Container" section.
+# The UI only: netlab and containerlab stay on the host, where you installed
+# them, and the container uses that install. Set NETLAB_BIN to the host's netlab
+# and CLAB_DIR to the directory holding containerlab:
+#
+#   NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
+#     docker compose up -d
+#
+# The install is mounted at the same path it has on the host, so its shebangs
+# and (on NixOS) store references resolve unchanged. HOST_TOOLS_DIR is the
+# directory that holds it: /nix/store on NixOS, or e.g. the venv netlab lives in.
 #
 # Why each setting is here (the UI checks all of them itself and explains any
 # that are missing under Settings → Environment → Container Setup):
@@ -23,11 +29,11 @@
 
 services:
   netlab-ui:
-    image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}-full
+    image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}
     # `docker compose build` builds the same image from a checkout.
     build:
       context: .
-      target: full
+      target: ui
     container_name: netlab-ui
     restart: unless-stopped
     privileged: true
@@ -42,11 +48,15 @@ services:
       # Set NETLAB_UI_AUTH=user:password (e.g. in .env) before exposing it.
       NETLAB_UI_AUTH: ${NETLAB_UI_AUTH:-}
       NETLAB_GUI_CONTAINER: netlab-ui
+      NETLAB_BIN: ${NETLAB_BIN:?set NETLAB_BIN to the host netlab, e.g. NETLAB_BIN=$(command -v netlab)}
+      # containerlab is called directly for a few features (netem, cleanup, link reconcile).
+      PATH: ${CLAB_DIR:-/usr/bin}:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/run/netns:/var/run/netns
       - ${LABS_DIR:-${PWD}/labs}:${LABS_DIR:-${PWD}/labs}
       - ${HOME}/.netlab:/root/.netlab
+      - ${HOST_TOOLS_DIR:-/nix/store}:${HOST_TOOLS_DIR:-/nix/store}:ro
       # UI settings, workspaces list, assistant history.
       - netlab-ui-state:/root
 

@@ -142,13 +142,14 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 
 ## Quick start
 
-Everything included (netlab, Ansible, containerlab); the host only needs Docker:
+The container is the UI; it uses the netlab and containerlab you have installed on the host:
 
 ```bash
-docker compose up -d          # uses docker-compose.yml; labs live in ./labs
+NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
+  docker compose up -d        # uses docker-compose.yml; labs live in ./labs
 ```
 
-Open `http://localhost:8000`. The flags that matter, the UI-only image, multi-user setups and building it yourself are in [docs/container.md](docs/container.md). To run from source instead, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Open `http://localhost:8000`. The flags that matter, multi-user setups and building it yourself are in [docs/container.md](docs/container.md). To run from source instead, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 

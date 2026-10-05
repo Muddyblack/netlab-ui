@@ -40,19 +40,6 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
 
-      # Same tags with a -full suffix (latest → latest-full) for the image that
-      # bundles netlab, Ansible and containerlab (Dockerfile target `full`).
-      - id: metadata-full
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          flavor: |
-            suffix=-full,onlatest=true
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -70,24 +57,8 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
           provenance: mode=max
           sbom: true
-          # One cache scope per target, or the second build overwrites the first's.
           cache-from: type=gha,scope=ui
           cache-to: type=gha,mode=max,scope=ui
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: full
-          platforms: linux/amd64,linux/arm64
-          build-args: |
-            NETLAB_GUI_VERSION=${{ github.ref_name }}
-          push: true
-          tags: ${{ steps.metadata-full.outputs.tags }}
-          labels: ${{ steps.metadata-full.outputs.labels }}
-          provenance: mode=max
-          sbom: true
-          cache-from: type=gha,scope=full
-          cache-to: type=gha,mode=max,scope=full
 
   release:
     needs: publish
@@ -113,25 +84,15 @@ jobs:
           body: |
             ## Run it
 
-            Everything included (netlab, Ansible, containerlab) — the host only
-            needs Docker. Download `docker-compose.yml` from this release, then:
+            This is the UI. netlab and containerlab stay on your host (install
+            them with your package manager, pip or Nix), and the container
+            talks to that install. Download `docker-compose.yml` from this
+            release, then:
 
             ```bash
-            docker compose up -d        # → http://localhost:8000
-            ```
-
-            or the equivalent `docker run`:
-
-            ```bash
-            mkdir -p "$PWD/labs"
-            docker run -d --name netlab-ui \
-              --privileged --network host --pid host \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v /var/run/netns:/var/run/netns \
-              -v "$PWD/labs:$PWD/labs" -e NETLAB_WORKSPACE="$PWD/labs" \
-              -v "$HOME/.netlab:/root/.netlab" \
-              -e UVICORN_HOST=127.0.0.1 \
-              ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}-full
+            NETLAB_BIN=$(command -v netlab) \
+            CLAB_DIR=$(dirname "$(command -v containerlab)") \
+              docker compose up -d        # → http://localhost:8000
             ```
 
             The labs directory must be mounted at the **same path** as on the
@@ -140,17 +101,4 @@ jobs:
             with the host. The UI checks all of this itself: see
             **Settings → Environment → Container Setup**.
 
-            ### UI-only image
-
-            `ghcr.io/muddyblack/netlab-ui:${{ steps.version.outputs.tag }}` (no `-full`)
-            leaves netlab, Ansible and containerlab on your host. Use the same
-            flags, plus mount your netlab install at its own path and point the
-            UI at it:
-
-            ```bash
-              -v /opt/netlab-venv:/opt/netlab-venv:ro \
-              -e NETLAB_BIN=/opt/netlab-venv/bin/netlab \
-              -v /usr/bin/containerlab:/usr/bin/containerlab:ro
-            ```
-
-            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest` / `latest-full`.
+            Images: `linux/amd64`, `linux/arm64`. Also tagged `latest`.
