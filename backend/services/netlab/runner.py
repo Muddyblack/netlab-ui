@@ -137,9 +137,8 @@ async def _spawn(
         # its cached login to the session, so a `sudo -v` done in the terminal
         # that started the backend still covers netlab's `sudo containerlab`.
         # The run script keeps that login fresh, so nothing prompts.
-        detach: dict[str, Any] = (
-            {"preexec_fn": os.setpgrp} if os.environ.get("NETLAB_APP_KEEP_SESSION") == "1" else {"start_new_session": True}
-        )
+        keep_session = os.environ.get("NETLAB_APP_KEEP_SESSION") == "1"
+        detach: dict[str, Any] = {"preexec_fn": os.setpgrp} if keep_session else {"start_new_session": True}
         return await asyncio.create_subprocess_exec(
             netlab_bin,
             *args,

@@ -21,6 +21,11 @@ interface AppSidebarPortalsProps {
   handleCloseLab: (id: string) => Promise<void>;
 }
 
+function tabPath(tab: OpenTab): string | undefined {
+  if (tab.kind === "topology") return tab.topologyRef?.yamlPath;
+  return tab.kind === "file" ? tab.path : tab.url;
+}
+
 export function AppSidebarPortals({
   sessionId,
   netlabLinksPaletteContainer,
@@ -72,7 +77,7 @@ export function AppSidebarPortals({
       {tabBarContainer && openTabs.length > 0 && createPortal(
         <LabTabsBar
           activeTabId={activeTabId}
-          tabs={openTabs.map((t) => ({ id: t.id, title: t.title, subtitle: t.subtitle, path: t.kind === "topology" ? t.topologyRef?.yamlPath : t.kind === "file" ? t.path : t.url, dirty: t.kind === "file" ? t.content !== t.originalContent : false, externalUrl: t.kind === "web" ? t.url : undefined }))}
+          tabs={openTabs.map((t) => ({ id: t.id, title: t.title, subtitle: t.subtitle, path: tabPath(t), dirty: t.kind === "file" ? t.content !== t.originalContent : false, externalUrl: t.kind === "web" ? t.url : undefined }))}
           onActivate={(id) => void handleActivateLabTab(id)}
           onClose={(id) => void handleCloseLab(id)}
         />,

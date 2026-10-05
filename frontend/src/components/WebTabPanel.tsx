@@ -86,9 +86,12 @@ export function WebTabPanel({ tab, active }: { tab: OpenWebTab; active: boolean 
         pointerEvents: "auto",
       }}
     >
+      {/* Grafana runs on its own host:port, so allow-same-origin only lets it use its own storage and cookies, never the app's. */}
       <iframe
         title={tab.title}
         src={embeddedUrl(tab.url)}
+        // oxlint-disable-next-line react/iframe-missing-sandbox
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
         style={{ flex: 1, width: "100%", border: 0, background: "#fff" }}
       />
     </div>
