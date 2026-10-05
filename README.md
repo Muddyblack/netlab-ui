@@ -32,106 +32,106 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 <table>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-canvas">
-<img src="docs/showcase/media/canvas/new-link-dark.webp" alt="A new s1–s2 link drawn on the canvas" />
+<a href="docs/images/canvas-new-link.webp">
+<img src="docs/images/canvas-new-link.webp" alt="A new s1–s2 link drawn on the canvas" />
 </a>
 <p><b>Draw labs on a canvas</b><br />Open a netlab topology as a diagram and edit it there — nodes, links and netlab's own interface names.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-deploy">
-<img src="docs/showcase/media/deploy/progress-dark.webp" alt="netlab up running, with its live output" />
+<a href="docs/images/deploy-progress.webp">
+<img src="docs/images/deploy-progress.webp" alt="netlab up running, with its live output" />
 </a>
 <p><b>Deploy with live progress</b><br />One click on Deploy, then watch nodes come up as containerlab starts them and Ansible configures them.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-running-labs">
-<img src="docs/showcase/media/running-labs/dialog-dark.webp" alt="The running labs dialog with shut down, force cleanup and forget record" />
+<a href="docs/images/running-labs-dialog.webp">
+<img src="docs/images/running-labs-dialog.webp" alt="The running labs dialog with shut down, force cleanup and forget record" />
 </a>
 <p><b>Every running lab, one place to clean up</b><br />See every lab netlab is tracking on the host, then shut one down, force a cleanup, or forget a stale record.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-command-palette">
-<img src="docs/showcase/media/command-palette/spotlight-dark.webp" alt="Canvas spotlight on the spine group" />
+<a href="docs/images/command-palette-spotlight.webp">
+<img src="docs/images/command-palette-spotlight.webp" alt="Canvas spotlight on the spine group" />
 </a>
 <p><b>Everything one keystroke away</b><br />Ctrl+P finds labs, nodes, IP addresses, AS numbers and actions — and lights up what it found on the canvas.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-node-editor">
-<img src="docs/showcase/media/node-editor/editor-dark.webp" alt="The node editor next to the canvas" />
+<a href="docs/images/node-editor-editor.webp">
+<img src="docs/images/node-editor-editor.webp" alt="The node editor next to the canvas" />
 </a>
 <p><b>Edit nodes the netlab way</b><br />Device, modules, custom configs and a preview of the exact configuration netlab generates.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-plugins">
-<img src="docs/showcase/media/plugins/details-dark.webp" alt="The monitoring plugin expanded: where it runs, what it requires and its arguments" />
+<a href="docs/images/plugins-details.webp">
+<img src="docs/images/plugins-details.webp" alt="The monitoring plugin expanded: where it runs, what it requires and its arguments" />
 </a>
 <p><b>netlab plugins, documented in place</b><br />Browse every netlab plugin, switch them on per lab, see what they hook into, and read the manual behind the info button.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-shell">
-<img src="docs/showcase/media/shell/vtysh-dark.webp" alt="A web shell on s1 showing OSPF neighbors and the BGP summary" />
+<a href="docs/images/shell-vtysh.webp">
+<img src="docs/images/shell-vtysh.webp" alt="A web shell on s1 showing OSPF neighbors and the BGP summary" />
 </a>
 <p><b>A shell on every node</b><br />Terminals in the browser — the device CLI or Linux shell netlab connect would give you.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-run-on-nodes">
-<img src="docs/showcase/media/run-on-nodes/focused-dark.webp" alt="The current Run on nodes panel with s1's output expanded" />
+<a href="docs/images/run-on-nodes-focused.webp">
+<img src="docs/images/run-on-nodes-focused.webp" alt="The current Run on nodes panel with s1's output expanded" />
 </a>
 <p><b>One command, every node</b><br />Send a command to a group of nodes and read every answer, one collapsible section per node. show commands go to each device's CLI.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-lenses">
-<img src="docs/showcase/media/lenses/routing-dark.webp" alt="Routing lens: OSPF and iBGP drawn on the topology" />
+<a href="docs/images/lenses-routing.webp">
+<img src="docs/images/lenses-routing.webp" alt="Routing lens: OSPF and iBGP drawn on the topology" />
 </a>
 <p><b>Lenses: one lab, every view</b><br />Physical cabling, addressing, routing, services, paths and live traffic: switch the canvas between views of the same running lab.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-link-faults">
-<img src="docs/showcase/media/link-faults/link-down-dark.webp" alt="Link s1–l2 down, flagged by the traffic lens" />
+<a href="docs/images/link-faults-link-down.webp">
+<img src="docs/images/link-faults-link-down.webp" alt="Link s1–l2 down, flagged by the traffic lens" />
 </a>
 <p><b>Break things on purpose</b><br />Take a link down or add delay and loss from its menu — then watch the routing protocols react.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-validation">
-<img src="docs/showcase/media/validation/verdict-dark.webp" alt="A fault test that passed: validate checks while the link was down and after it recovered" />
+<a href="docs/images/validation-verdict.webp">
+<img src="docs/images/validation-verdict.webp" alt="A fault test that passed: validate checks while the link was down and after it recovered" />
 </a>
 <p><b>Validate the lab, then break it</b><br />Run the lab's netlab validate tests, then a fault test: take a link down, check the fabric holds, and get a pass/fail verdict.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-monitoring">
-<img src="docs/showcase/media/monitoring/health-dark.webp" alt="The Monitoring dialog: nodes, BGP sessions and OSPF adjacencies up against what the topology defines" />
+<a href="docs/images/monitoring-health.webp">
+<img src="docs/images/monitoring-health.webp" alt="The Monitoring dialog: nodes, BGP sessions and OSPF adjacencies up against what the topology defines" />
 </a>
 <p><b>Monitor any lab, with Grafana inside</b><br />Health against the topology, per-link and per-protocol metrics, and Grafana dashboards in a tab, for FRR or any other vendor.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-config-drift">
-<img src="docs/showcase/media/config-drift/diff-dark.webp" alt="Running-config drift: l1 changed since the snapshot, with its diff" />
+<a href="docs/images/config-drift-diff.webp">
+<img src="docs/images/config-drift-diff.webp" alt="Running-config drift: l1 changed since the snapshot, with its diff" />
 </a>
 <p><b>See what changed on the devices</b><br />Snapshot every node's running config, change things by hand, and get a per-device diff of exactly what moved.</p>
 </td>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-reports">
-<img src="docs/showcase/media/reports/gallery-dark.webp" alt="The report gallery over the lab" />
+<a href="docs/images/reports-gallery.webp">
+<img src="docs/images/reports-gallery.webp" alt="The report gallery over the lab" />
 </a>
 <p><b>netlab reports, interactive</b><br />Addressing, BGP, OSPF and wiring reports as searchable tables, rendered HTML or text — download any format.</p>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
-<a href="docs/showcase/GALLERY.md#showcase-ai-agents">
-<img src="docs/showcase/media/ai-agents/proposal-dark.webp" alt="An agent's proposed topology change drawn on the canvas, with Apply and Reject in the panel" />
+<a href="docs/images/ai-agents-proposal.webp">
+<img src="docs/images/ai-agents-proposal.webp" alt="An agent's proposed topology change drawn on the canvas, with Apply and Reject in the panel" />
 </a>
 <p><b>Bring your own AI agent</b><br />Claude Code, Codex, Copilot, Kiro or any MCP tool, connected to the lab. It proposes changes; you review the diff.</p>
 </td>
