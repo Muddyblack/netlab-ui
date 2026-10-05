@@ -1,0 +1,14 @@
+{# netlab monitoring: enable gNMI (OpenConfig) over plaintext gRPC for the monitoring stack #}
+system {
+  services {
+    extension-service {
+      request-response {
+        grpc {
+          clear-text {
+            port 32767;
+          }
+        }
+      }
+    }
+  }
+}

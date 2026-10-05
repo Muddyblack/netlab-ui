@@ -1,0 +1,18 @@
+# Self-contained so the monitoring plugin can be split into its own repo.
+# The collector must stay stdlib-only.
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "SIM", "RUF", "ARG", "BLE"]
+ignore = ["B008"]
+
+[lint.per-file-ignores]
+# pytest fixtures used for their side effects look like unused arguments
+"tests/*" = ["ARG001"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

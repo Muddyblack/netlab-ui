@@ -1,0 +1,3 @@
+{
+  "show evpn vni json": "{\n  \"10\":{\n    \"vni\":10,\n    \"type\":\"L2\",\n    \"vxlanIf\":\"vxlan10\",\n    \"numMacs\":0,\n    \"numArpNd\":0,\n    \"numRemoteVteps\":0,\n    \"tenantVrf\":\"default\",\n    \"vlan\":1,\n    \"bridge\":\"br10\"\n  },\n  \"5000\":{\n    \"vni\":5000,\n    \"vxlanIf\":\"vxlan5000\",\n    \"vlan\":1,\n    \"bridge\":\"br5000\",\n    \"numMacs\":0,\n    \"numArpNd\":0,\n    \"numRemoteVteps\":\"n/a\",\n    \"type\":\"L3\",\n    \"tenantVrf\":\"tenant\"\n  }\n}\n"
+}

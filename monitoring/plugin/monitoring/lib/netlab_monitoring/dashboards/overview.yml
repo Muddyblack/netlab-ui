@@ -1,0 +1,167 @@
+# The lab overview: health against the topology, traffic, links.
+#
+# A built-in dashboard in the same format as the dashboards users write (see spec.py): rows of
+# panels with plain queries. `@NAME@` is a macro from `macros`. Queries use netlab_* metrics and
+# netlab labels only, so one board serves FRR, gNMI, SNMP and host-only nodes alike.
+---
+uid: netlab-overview
+title: netlab / Lab overview
+description: 'Health of the whole lab: nodes, expected vs actual adjacencies and sessions, busiest links'
+macros:
+  MISSING_BGP: netlab_expected_bgp_session{lab="$lab"} unless on(lab,node,peer,vrf) (netlab_bgp_session_up{lab="$lab"} == 1)
+  MISSING_OSPF: netlab_expected_ospf_adjacency{lab="$lab"} unless on(lab,node,peer_node,ifname) (netlab_ospf_neighbor_up{lab="$lab"} == 1)
+  MISSING_ISIS: netlab_expected_isis_adjacency{lab="$lab"} unless on(lab,node,peer_node,ifname) (netlab_isis_adjacency_up{lab="$lab"} == 1)
+rows:
+
+  - title: Lab health
+    panels:
+      - type: stat
+        title: Nodes up
+        description: Running containers and VMs
+        expr: sum(netlab_node_up{lab="$lab"})
+        width: 4
+        height: 4
+      - type: stat
+        title: Nodes in lab
+        expr: count(netlab_node_info{lab="$lab"})
+        width: 4
+        height: 4
+      - type: stat
+        title: BGP sessions up
+        description: Established BGP sessions (both directions counted)
+        expr: (sum(netlab_bgp_session_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_bgp_session{lab="$lab"}) > 0)
+        no_value: —
+        width: 4
+        height: 4
+      - type: stat
+        title: OSPF adjacencies up
+        expr: (sum(netlab_ospf_neighbor_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_ospf_adjacency{lab="$lab"}) > 0)
+        no_value: —
+        width: 4
+        height: 4
+      - type: stat
+        title: IS-IS adjacencies up
+        expr: (sum(netlab_isis_adjacency_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_isis_adjacency{lab="$lab"}) > 0)
+        no_value: —
+        width: 4
+        height: 4
+      - type: stat
+        title: Missing (vs topology)
+        description: Sessions and adjacencies the netlab topology defines that are not up
+        expr: count(@MISSING_BGP@) + count(@MISSING_OSPF@) + count(@MISSING_ISIS@) or vector(0)
+        thresholds:
+          - color: red
+            value: 1
+        color_mode: background
+        width: 4
+        height: 4
+      - type: table
+        title: Missing sessions and adjacencies
+        description: Expected by the netlab topology but not up right now
+        queries:
+          - label_replace(@MISSING_BGP@, "protocol", "BGP", "", "")
+          - label_replace(@MISSING_OSPF@, "protocol", "OSPF", "", "")
+          - label_replace(@MISSING_ISIS@, "protocol", "IS-IS", "", "")
+        rename:
+          node: Node
+          peer_node: Peer
+          peer: Peer address
+          ifname: Interface
+          protocol: Protocol
+          vrf: VRF
+          area: Area
+          type: Type
+        hide:
+          - Value
+          - 'Value #A'
+          - 'Value #B'
+          - 'Value #C'
+        no_value: 'Nothing missing: everything the topology defines is up'
+        width: 24
+        height: 7
+
+  - title: Nodes
+    panels:
+      - type: table
+        title: Node status
+        description: One row per node
+        queries:
+          - netlab_node_up{lab="$lab"}
+          - rate(netlab_node_cpu_seconds_total{lab="$lab"}[$__rate_interval]) * 100
+          - netlab_node_memory_bytes{lab="$lab"}
+          - sum by (node) (netlab_bgp_session_up{lab="$lab"})
+          - sum by (node) (netlab_ospf_neighbor_up{lab="$lab"})
+          - sum by (node) (netlab_isis_adjacency_up{lab="$lab"})
+        rename:
+          node: Node
+          'Value #A': Up
+          'Value #B': CPU %
+          'Value #C': Memory
+          'Value #D': BGP up
+          'Value #E': OSPF up
+          'Value #F': IS-IS up
+        overrides:
+          - field: Up
+            colors: up_down
+          - matcher:
+              id: byName
+              options: Memory
+            properties:
+              - id: unit
+                value: bytes
+          - matcher:
+              id: byName
+              options: CPU %
+            properties:
+              - id: unit
+                value: percent
+              - id: decimals
+                value: 1
+        width: 12
+        height: 10
+      - type: timeseries
+        title: CPU per node (top 10)
+        expr: topk(10, rate(netlab_node_cpu_seconds_total{lab="$lab"}[$__rate_interval]) * 100)
+        legend: '{{node}}'
+        unit: percent
+        width: 12
+        height: 5
+      - type: timeseries
+        title: Memory per node (top 10)
+        expr: topk(10, netlab_node_memory_bytes{lab="$lab"})
+        legend: '{{node}}'
+        unit: bytes
+        width: 12
+        height: 5
+
+  - title: Links
+    panels:
+      - type: timeseries
+        title: Busiest links (top 10, both directions)
+        description: Average of both link ends, bits per second
+        expr: topk(10, sum by (link) (rate(netlab_if_rx_bytes_total{lab="$lab", link!~"mgmt|"}[$__rate_interval]) + rate(netlab_if_tx_bytes_total{lab="$lab", link!~"mgmt|"}[$__rate_interval])) * 4)
+        legend: '{{link}}'
+        unit: bps
+        width: 12
+        height: 8
+      - type: timeseries
+        title: Interface errors and drops per minute
+        expr: sum by (node, ifname) (increase(netlab_if_rx_errors_total{lab="$lab"}[1m]) + increase(netlab_if_tx_errors_total{lab="$lab"}[1m]) + increase(netlab_if_rx_drops_total{lab="$lab"}[1m]) + increase(netlab_if_tx_drops_total{lab="$lab"}[1m])) > 0
+        legend: '{{node}} {{ifname}}'
+        unit: short
+        width: 12
+        height: 8
+      - type: timeseries
+        title: Link state changes (last 5 min)
+        description: Carrier up/down transitions
+        expr: sum by (node, ifname) (increase(netlab_if_carrier_changes_total{lab="$lab", link!="mgmt"}[5m])) > 0
+        legend: '{{node}} {{ifname}}'
+        width: 24
+        height: 6
+
+  - title: Topology graph
+    collapsed: true
+    panels:
+      - type: topology
+        width: 24
+        height: 12
