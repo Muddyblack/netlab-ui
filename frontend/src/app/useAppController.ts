@@ -363,6 +363,16 @@ export function useAppController() {
       netlabRestart: (sid) => handleNetlabRestartRef.current(sid),
       netlabValidate: (sid) => handleNetlabValidateRef.current(sid),
       netlabCollect: (sid) => handleNetlabCollectRef.current(sid),
+      saveLabConfigs: async (sid) => {
+        addToast("Saving device configs…", "info");
+        try {
+          const res = await api.labSave(sid);
+          if (res.code !== 0) addToast(`Save configs failed — ${res.stderr || res.stdout || `exit ${res.code}`}`, "error");
+          else addToast("Device configs saved as startup config", "success");
+        } catch (err) {
+          addToast(`Save configs failed — ${String(err)}`, "error");
+        }
+      },
       openNewLabDialog: () => setNewLabDialogOpen(true),
       openCloneDialog: (target?: string) => { setCloneTarget(target); setCloneOpen(true); },
       openAddWorkspace: () => setFolderBrowserOpen(true),
@@ -845,7 +855,7 @@ export function useAppController() {
     host.onNodeAction = (action: string, nodeName: string) => {
       if (action === "shell" || action === "ssh") sessionDock.openTab("shell", nodeName);
       if (action === "logs") sessionDock.openTab("logs", nodeName);
-      if (action === "start" || action === "stop" || action === "restart") {
+      if (action === "start" || action === "stop" || action === "restart" || action === "save") {
         handleNodeLifecycle(nodeName, action);
       }
     };

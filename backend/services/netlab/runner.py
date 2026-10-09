@@ -1088,6 +1088,20 @@ async def collect(topology_path: str | Path) -> CommandResult:
     return await _run_lifecycle("collect", topology_path)
 
 
+async def clab_save(lab_dir: Path, node: str = "", preferred_runtime: str = "") -> CommandResult:
+    """`containerlab save`: each node persists its running config as startup
+    config (the command depends on the node kind). ``node`` limits it to one node."""
+    clab_topology = lab_dir / "clab.yml"
+    if not clab_topology.is_file():
+        return CommandResult(1, "", "No clab.yml in the lab directory: run `netlab create` or `netlab up` first")
+    args = ["save", "-t", str(clab_topology)]
+    if node:
+        args += ["--node-filter", node]
+    if preferred_runtime:
+        args += ["--runtime", preferred_runtime]
+    return await _run_external("containerlab", args)
+
+
 async def validate(topology_path: str | Path) -> CommandResult:
     return await _run_lifecycle("validate", topology_path)
 

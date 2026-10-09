@@ -237,10 +237,15 @@ async def lab_node_action(body: NodeAction):
     if body.action != "save" and body.action not in runner.NODE_ACTIONS:
         raise HTTPException(400, f"Unsupported node action {body.action!r}")
     path, info = await _running_node_info(body.sessionId, body.node)
-    if body.action == "save":
-        result = await runner.run_command(["collect", "-l", body.node], cwd=Path(path).parent)
-        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
     from app.contract import commands
+
+    if body.action == "save":
+        if info.get("provider") == "clab":
+            topo = commands.load_topology(path)
+            result = await runner.clab_save(Path(path).parent, body.node, runtime_state.clab_runtime(topo))
+        else:
+            result = await runner.run_command(["collect", "-l", body.node], cwd=Path(path).parent)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
     if info.get("provider") == "libvirt":
         domain, _node = await _vm_target(path, body.node, info)
@@ -729,6 +734,18 @@ async def lab_collect(body: LabAction):
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
+
+
+@router.post("/save", response_model=CommandResult)
+async def lab_save(body: LabAction):
+    """Persist every node's running config as its startup config
+    (`containerlab save`; containerlab provider only)."""
+    from app.contract import commands
+
+    path = common.session_path(body.sessionId)
+    topo = commands.load_topology(path)
+    result = await runner.clab_save(Path(path).parent, "", runtime_state.clab_runtime(topo))
+    return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 
 @router.post("/validate", response_model=ValidationResult)
