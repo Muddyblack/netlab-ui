@@ -1088,9 +1088,14 @@ async def collect(topology_path: str | Path) -> CommandResult:
     return await _run_lifecycle("collect", topology_path)
 
 
-async def clab_save(lab_dir: Path, node: str = "", preferred_runtime: str = "") -> CommandResult:
+async def clab_save(
+    lab_dir: Path, node: str = "", preferred_runtime: str = "", copy_to: Path | None = None
+) -> CommandResult:
     """`containerlab save`: each node persists its running config as startup
-    config (the command depends on the node kind). ``node`` limits it to one node."""
+    config (the command depends on the node kind). ``node`` limits it to one node.
+    ``copy_to`` (already validated by the caller) also copies the saved configs
+    to ``<copy_to>/<lab name>/``; the lab's own ``clab-<name>/`` dir is removed
+    by `netlab down`, so a copy is what survives a lab teardown."""
     clab_topology = lab_dir / "clab.yml"
     if not clab_topology.is_file():
         return CommandResult(1, "", "No clab.yml in the lab directory: run `netlab create` or `netlab up` first")
@@ -1099,6 +1104,8 @@ async def clab_save(lab_dir: Path, node: str = "", preferred_runtime: str = "") 
         args += ["--node-filter", node]
     if preferred_runtime:
         args += ["--runtime", preferred_runtime]
+    if copy_to is not None:
+        args += ["--copy", str(copy_to)]
     return await _run_external("containerlab", args)
 
 

@@ -733,10 +733,10 @@ export const api = {
     }),
 
   /** `containerlab save` for every node: running config becomes startup config. */
-  labSave: (sessionId: string) =>
+  labSave: (sessionId: string, copy?: string) =>
     http<CommandResult>("/api/lab/save", {
       method: "POST",
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ sessionId, copy }),
     }, 1, 120000),
 
   labValidate: (sessionId: string) =>
