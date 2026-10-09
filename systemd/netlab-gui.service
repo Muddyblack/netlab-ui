@@ -5,7 +5,12 @@ Wants=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/mnt/projects/netlab_gui
+# Default assumes a checkout at ~/netlab_gui. Don't edit this file for your own
+# path; override it locally instead:
+#   systemctl --user edit netlab-gui
+#   [Service]
+#   WorkingDirectory=/path/to/netlab_gui
+WorkingDirectory=%h/netlab_gui
 ExecStart=/usr/bin/env nix run
 Restart=always
 RestartSec=5s
