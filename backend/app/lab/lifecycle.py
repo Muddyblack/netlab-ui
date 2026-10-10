@@ -14,6 +14,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -237,10 +238,15 @@ async def lab_node_action(body: NodeAction):
     if body.action != "save" and body.action not in runner.NODE_ACTIONS:
         raise HTTPException(400, f"Unsupported node action {body.action!r}")
     path, info = await _running_node_info(body.sessionId, body.node)
-    if body.action == "save":
-        result = await runner.run_command(["collect", "-l", body.node], cwd=Path(path).parent)
-        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
     from app.contract import commands
+
+    if body.action == "save":
+        if info.get("provider") == "clab":
+            topo = commands.load_topology(path)
+            result = await runner.clab_save(Path(path).parent, body.node, runtime_state.clab_runtime(topo))
+        else:
+            result = await runner.run_command(["collect", "-l", body.node], cwd=Path(path).parent)
+        return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
     if info.get("provider") == "libvirt":
         domain, _node = await _vm_target(path, body.node, info)
@@ -729,6 +735,39 @@ async def lab_collect(body: LabAction):
     except runner.NetlabNotInstalled as exc:
         raise HTTPException(503, str(exc)) from exc
     return {"code": res.code, "stdout": res.stdout, "stderr": res.stderr}
+
+
+class LabSave(LabAction):
+    copy: str | None = None  # directory inside the lab dir to also copy the saved configs to
+
+
+def _save_copy_dir(lab_dir: Path, copy: str | None) -> Path | None:
+    """Validate the `--copy` target: a relative path that stays inside the lab
+    directory (which itself is inside a configured workspace)."""
+    if not copy or not copy.strip():
+        return None
+    if os.path.isabs(copy) or "\0" in copy:
+        raise HTTPException(400, "copy must be a relative path inside the lab directory")
+    base = os.path.normpath(os.path.realpath(str(lab_dir)))
+    target = os.path.normpath(os.path.realpath(os.path.join(base, copy)))
+    if not target.startswith(base + os.sep):
+        raise HTTPException(400, "copy must stay inside the lab directory")
+    return Path(common.resolve_workspace_path(target))
+
+
+@router.post("/save", response_model=CommandResult)
+async def lab_save(body: LabSave):
+    """Persist every node's running config as its startup config
+    (`containerlab save`; containerlab provider only). With ``copy`` the saved
+    configs are also copied into that lab-relative directory."""
+    from app.contract import commands
+
+    path = common.session_path(body.sessionId)
+    lab_dir = Path(path).parent
+    copy_to = _save_copy_dir(lab_dir, body.copy)
+    topo = commands.load_topology(path)
+    result = await runner.clab_save(lab_dir, "", runtime_state.clab_runtime(topo), copy_to)
+    return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 
 @router.post("/validate", response_model=ValidationResult)

@@ -732,6 +732,13 @@ export const api = {
       body: JSON.stringify({ sessionId }),
     }),
 
+  /** `containerlab save` for every node: running config becomes startup config. */
+  labSave: (sessionId: string, copy?: string) =>
+    http<CommandResult>("/api/lab/save", {
+      method: "POST",
+      body: JSON.stringify({ sessionId, copy }),
+    }, 1, 120000),
+
   labValidate: (sessionId: string) =>
     http<ValidationResult>("/api/lab/validate", {
       method: "POST",

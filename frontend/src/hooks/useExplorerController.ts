@@ -29,6 +29,7 @@ export interface ExplorerActionCallbacks {
   netlabRestart: (sid: string) => Promise<void>;
   netlabValidate: (sid: string) => Promise<void>;
   netlabCollect: (sid: string) => Promise<void>;
+  saveLabConfigs: (sid: string) => Promise<void>;
   openNewLabDialog: () => void;
   openCloneDialog: (targetWorkspace?: string) => void;
   openAddWorkspace: () => void;
@@ -419,6 +420,10 @@ const ACTION_HANDLERS: Record<string, (ctx: ActionCtx) => void | Promise<void>> 
   // a *running* lab, where netlab refuses a second `up` in the same directory
   // ("Cannot start another lab in the same directory"), so they run
   // `netlab restart` (down + up) — mirrors topoViewerHost.runLifecycle.
+  "containerlab.lab.save": async ({ cb, topoRef }) => {
+    const sid = topoRef ? await resolveSession(cb, topoRef) : null;
+    if (sid) await cb.saveLabConfigs(sid);
+  },
   "containerlab.lab.deploy": handleDeployLab,
   "containerlab.lab.deploy.cleanup": handleDeployLab,
   "containerlab.lab.redeploy": handleNetlabRestart,
