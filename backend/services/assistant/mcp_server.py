@@ -27,7 +27,7 @@ from mcp.types import ToolAnnotations
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from services.assistant import guide, howto, insight, notes, packets, tools
+from services.assistant import guide, howto, insight, notes, packets, sketch, tools
 from services.assistant.config import MCP_MOUNT_PATH, MCP_SERVER_NAME, mcp_token
 
 logger = logging.getLogger(__name__)
@@ -327,6 +327,13 @@ _TOOLS: tuple[tuple[Callable[..., Awaitable[Any]], ToolAnnotations, str], ...] =
         _UI,
         "Fill in a fault test (flap a link: cycles, seconds down/up) in the Monitoring dialog for the user "
         "to review and start. Nothing runs until the user presses Run.",
+    ),
+    (
+        sketch.get_sketch,
+        _READ,
+        "The user's hand-drawn sketch of the lab they want (path of a PNG to open, plus the nodes and annotations "
+        "already on the canvas). Read it when asked to build from a drawing, ask about anything unclear, then "
+        "propose_topology_edit.",
     ),
     (
         notes.read_lab_notes,

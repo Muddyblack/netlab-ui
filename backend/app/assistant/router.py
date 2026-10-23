@@ -30,7 +30,7 @@ from app.assistant.responses import (
 )
 from app.sessions.store import store
 from services import host
-from services.assistant import guide, harness, mcp_server, notes, proposals, tools
+from services.assistant import guide, harness, mcp_server, notes, proposals, sketch, tools
 from services.assistant.config import mcp_base_url, mcp_token
 from services.events import hub
 from services.netlab import runner
@@ -339,4 +339,57 @@ def delete_note(note_id: str, session_id: str = Query(alias="sessionId")):
             raise HTTPException(404, "no such note")
     except tools.ToolError as exc:
         raise HTTPException(500, str(exc)) from exc
+    return {"ok": True}
+
+
+# -------------------------------------------------------------------- sketch
+class SketchUpload(BaseModel):
+    sessionId: str
+    imageBase64: str
+    strokes: list[Any] = []
+    nodes: list[dict[str, Any]] = []
+
+
+class SketchSaved(BaseModel):
+    path: str
+
+
+@router.post("/sketch", response_model=SketchSaved)
+async def save_sketch(body: SketchUpload):
+    """Store the user's drawing in the lab's folder for ``get_sketch``."""
+    import base64
+    import binascii
+
+    try:
+        image = base64.b64decode(body.imageBase64, validate=True)
+        path = await asyncio.to_thread(
+            sketch.save, _notes_dir(body.sessionId), image, {"strokes": body.strokes, "nodes": body.nodes}
+        )
+    except (binascii.Error, ValueError, tools.ToolError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"path": str(path)}
+
+
+class SketchStrokes(BaseModel):
+    strokes: list[Any] = []
+
+
+class SketchStrokesUpload(SketchStrokes):
+    sessionId: str
+
+
+@router.get("/sketch/strokes", response_model=SketchStrokes)
+async def get_sketch_strokes(session_id: str = Query(alias="sessionId")):
+    """The pen strokes saved for this lab, so a reload brings the drawing back."""
+    data = await asyncio.to_thread(sketch.load, _notes_dir(session_id))
+    return {"strokes": (data or {}).get("strokes", [])}
+
+
+@router.put("/sketch/strokes", response_model=AssistantAck)
+async def put_sketch_strokes(body: SketchStrokesUpload):
+    """Autosave the pen strokes (no picture; Generate renders that)."""
+    try:
+        await asyncio.to_thread(sketch.save_strokes, _notes_dir(body.sessionId), body.strokes)
+    except tools.ToolError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return {"ok": True}
