@@ -41,11 +41,13 @@ TOPICS: dict[str, tuple[str, str, tuple[str, ...]]] = {
         "Change, build or scale a topology",
         "Read with get_topology_yaml, then propose_topology_edit with setYamlContent (whole file; keeps comments). "
         "The user reviews and applies it, so say what you proposed, never that it is done. Check unfamiliar netlab "
-        "syntax first with netlab_show / read_netlab_docs / netlab_examples. To scale a lab ('8 leaves'), use a "
+        "syntax first with netlab_show / read_netlab_docs / netlab_examples. When the user drew the lab they want, "
+        "read it with get_sketch first. To scale a lab ('8 leaves'), use a "
         "generator: detect_topology_patterns, then propose_generator (adapt new_generator_template if none fits). "
         "Prefer idiomatic netlab (modules, groups, defaults) over spelling everything per node.",
         (
             "get_topology_yaml",
+            "get_sketch",
             "propose_topology_edit",
             "netlab_show",
             "read_netlab_docs",
