@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    ignore:
+      # Needs its patch-package patches ported by hand; tracked by clab-ui-watch.yml
+      - dependency-name: "@containerlab/clab-ui"
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
