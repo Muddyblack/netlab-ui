@@ -30,6 +30,7 @@
     "lowlight": "^3.3.0",
     "monaco-editor": "^0.57.0",
     "monaco-yaml": "^5.4.1",
+    "perfect-freehand": "1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
