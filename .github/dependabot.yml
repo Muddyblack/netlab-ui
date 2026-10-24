@@ -4,6 +4,9 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
     ignore:
       # Needs its patch-package patches ported by hand; tracked by clab-ui-watch.yml
       - dependency-name: "@containerlab/clab-ui"
@@ -11,11 +14,21 @@ updates:
     directory: /desktop
     schedule:
       interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
   - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
+    groups:
+      pip-minor-patch:
+        update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # One PR so upload-artifact and download-artifact always move together
+      actions:
+        patterns: ["*"]
