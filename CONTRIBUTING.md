@@ -51,7 +51,7 @@ The first run executes `npm install` for the frontend.
 | `backend/`, `frontend/`, `desktop/` | The product: FastAPI service, React UI, Electron shell |
 | `plugins/monitoring/` | The optional netlab `monitoring` plugin, self-contained (own ruff config and tests) so it can be split out |
 | `packaging/` | Distribution: `docker/` (Dockerfile, dev compose), `nix/` (NixOS module), `install.sh`. `flake.nix` and `docker-compose.yml` stay at the root where Nix and `docker compose up` expect them |
-| `scripts/` | Dev and release helpers (`tag.sh`, `build-wheel.sh`) |
+| `scripts/` | Dev and release helpers (`tag.sh`, `build-wheel.sh`, `smoke-test.sh`, `release-notes.sh`) |
 | `docs/` | All long-form docs, screenshots (`images/`, `monitoring/`), sample labs (`examples/`) and the showcase generator. `labs/` is the git-ignored default workspace |
 
 ## Local commit checks
@@ -117,7 +117,16 @@ The gallery in the README and [docs/showcase/GALLERY.md](docs/showcase/GALLERY.m
 
 ## Releases
 
-**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. Merging that PR into `main` is the release: `.github/workflows/release.yml` creates the tag and the GitHub release, publishes the package to PyPI (`_pypi.yml`) and pushes `ghcr.io/muddyblack/netlab-ui:<ver>` and `:latest` (`_container.yml`, UI only). A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`), so it is hard to merge one by accident. `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
+**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`). `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
+
+Merging that PR into `main` is the release (`.github/workflows/release.yml`):
+
+1. The full CI suite runs on the release commit.
+2. The wheel is built and installed into a clean venv, and the image is built and run (`_wheel.yml`, `_image.yml`, `scripts/smoke-test.sh`). Each must answer on `/api/health` and serve the bundled UI.
+3. Only then is the tested wheel uploaded to PyPI and the tested image tagged `:<ver>` and `:latest` (by digest, no rebuild).
+4. Last, the tag and GitHub release are created, with the wheel, sdist, a `docker-compose.yml` pinned to the version, `SHA256SUMS` and notes grouped by commit type (`scripts/release-notes.sh`). Write commit subjects as `feat:` / `fix:` for them to read well, and mark breaking changes with `feat!:` or a `BREAKING CHANGE:` line in the body: those are listed first as upgrade notes.
+
+If a run fails part way, use **Re-run failed jobs**, not a new run: that reuses the wheel and image already built. A fresh run rebuilds, and the rebuild can differ from a file already on PyPI (the run warns when that happens).
 
 PyPI needs a trusted publisher for this repo and `release.yml` (environment `pypi`) set up once on pypi.org.
 

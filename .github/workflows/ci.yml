@@ -3,13 +3,16 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+  # release.yml runs the whole suite on the release commit before it publishes anything.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are superseded by a newer push; a release's run must finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   hygiene:
@@ -119,7 +122,7 @@ jobs:
 
           # The release image is only ever built on a tag push, so without this
           # a broken Dockerfile stays invisible until release day. It also copies backend, frontend and the plugin.
-          if match '^(backend/|frontend/|plugins/monitoring/plugin/|\.dockerignore|packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_container)\.yml)'; then
+          if match '^(backend/|frontend/|plugins/monitoring/plugin/|\.dockerignore|packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_image)\.yml)'; then
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
             echo "docker=false" >> "$GITHUB_OUTPUT"
@@ -206,7 +209,7 @@ jobs:
         env:
           NODE_OPTIONS: --max_old_space_size=4096
 
-  # Builds the release image exactly as _container.yml would, minus the
+  # Builds the release image exactly as _image.yml would, minus the
   # push — so Dockerfile regressions surface on the PR instead of on a tag.
   docker:
     needs: changes
