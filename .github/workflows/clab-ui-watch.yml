@@ -1,0 +1,42 @@
+name: clab-ui update watch
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare pinned version with npm
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pinned=$(jq -r '.dependencies["@containerlab/clab-ui"]' frontend/package.json | sed 's/^[^0-9]*//')
+          latest=$(npm view @containerlab/clab-ui version)
+          echo "pinned=$pinned latest=$latest"
+          if [ "$pinned" = "$latest" ]; then
+            exit 0
+          fi
+          title="clab-ui $latest available (pinned $pinned)"
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "issue #$existing already open"
+            exit 0
+          fi
+          cat > body.md <<BODY
+          A newer \`@containerlab/clab-ui\` is on npm: **$latest** (pinned: $pinned).
+
+          Upgrading is not just \`npm install\` — the patches in \`frontend/patches/\` must be ported:
+
+          $(ls frontend/patches | grep '^@containerlab+clab-ui' | sed 's/^/- `/; s/$/`/')
+
+          See "Installing / upgrading clab-ui" in AGENTS.md. Upstream: https://github.com/srl-labs/containerlab-app/releases
+          BODY
+          gh issue create --title "$title" --body-file body.md
