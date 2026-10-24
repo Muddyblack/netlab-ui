@@ -11,6 +11,8 @@
 # The install is mounted at the same path it has on the host, so its shebangs
 # and (on NixOS) store references resolve unchanged. HOST_TOOLS_DIR is the
 # directory that holds it: /nix/store on NixOS, or e.g. the venv netlab lives in.
+# For a normal Linux host the native package (`pipx install netlab-gui-backend`, then
+# `netlab-gui install-service`) is simpler than this container.
 #
 # Why each setting is here (the UI checks all of them itself and explains any
 # that are missing under Settings → Environment → Container Setup):
@@ -56,7 +58,7 @@ services:
       - /var/run/netns:/var/run/netns
       - ${LABS_DIR:-${PWD}/labs}:${LABS_DIR:-${PWD}/labs}
       - ${HOME}/.netlab:/root/.netlab
-      - ${HOST_TOOLS_DIR:-/nix/store}:${HOST_TOOLS_DIR:-/nix/store}:ro
+      - ${HOST_TOOLS_DIR:?set HOST_TOOLS_DIR to the directory holding the host netlab install, e.g. /nix/store or ~/.local/pipx/venvs/networklab}:${HOST_TOOLS_DIR}:ro
       # UI settings, workspaces list, assistant history.
       - netlab-ui-state:/root
 
