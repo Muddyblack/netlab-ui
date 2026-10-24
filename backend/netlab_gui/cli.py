@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
+import json
 import os
 import secrets
 import shlex
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 from netlab_gui.app import auth
@@ -103,8 +106,62 @@ def _token(args: argparse.Namespace) -> int:
     return 0
 
 
+PACKAGE = "netlab-gui-backend"
+
+
+def installed_version() -> str:
+    try:
+        return importlib.metadata.version(PACKAGE)
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def latest_version() -> str | None:
+    """Newest release on PyPI, or None when it cannot be reached."""
+    try:
+        with urllib.request.urlopen(f"https://pypi.org/pypi/{PACKAGE}/json", timeout=10) as res:
+            return json.load(res)["info"]["version"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def upgrade_command(prefix: str = sys.prefix) -> list[str] | None:
+    """The command that upgrades this install, or None when the package manager owns it (nix, a checkout)."""
+    if "/nix/store/" in prefix:
+        return None
+    if "/pipx/venvs/" in prefix or "/.local/share/pipx" in prefix:
+        return ["pipx", "upgrade", PACKAGE]
+    if Path(__file__).resolve().parents[2].joinpath(".git").exists():
+        return None
+    return [sys.executable, "-m", "pip", "install", "--upgrade", PACKAGE]
+
+
+def _upgrade(args: argparse.Namespace) -> int:
+    current, latest = installed_version(), latest_version()
+    if latest is None:
+        print("could not reach PyPI to look for a newer version", file=sys.stderr)
+    elif latest == current:
+        print(f"netlab-gui {current} is the latest version")
+        return 0
+    else:
+        print(f"netlab-gui {current} -> {latest}")
+    if args.check:
+        return 0 if latest is None or latest == current else 10
+    command = upgrade_command()
+    if command is None:
+        print("this install is managed elsewhere (nix or a source checkout): update it there", file=sys.stderr)
+        return 1
+    subprocess.run(command, check=True)
+    # Pick up the new code if the service is running as a user unit (a system unit needs root: say so).
+    restarted = subprocess.run(["systemctl", "--user", "try-restart", UNIT_NAME], check=False).returncode == 0
+    if not restarted and Path("/etc/systemd/system", UNIT_NAME).exists():
+        print(f"restart the system service to finish: sudo systemctl restart {UNIT_NAME}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="netlab-gui", description=__doc__)
+    parser.add_argument("--version", action="version", version=f"netlab-gui {installed_version()}")
     sub = parser.add_subparsers(dest="command")
 
     serve = sub.add_parser("serve", help="run the web UI and API (default)")
@@ -117,14 +174,20 @@ def main(argv: list[str] | None = None) -> int:
     service.add_argument("--uninstall", action="store_true", help="stop and remove the service")
     service.set_defaults(func=_install_service)
 
-    argv = sys.argv[1:] if argv is None else argv
-    # `netlab-gui` and `netlab-gui --port 9000` both mean `serve`.
-    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
-        argv = ["serve", *argv]
+    upgrade = sub.add_parser("upgrade", help="upgrade netlab-gui to the latest release and restart the service")
+    upgrade.add_argument(
+        "--check", action="store_true", help="only report whether a newer version exists (exit 10 if so)"
+    )
+    upgrade.set_defaults(func=_upgrade)
+
     token = sub.add_parser("token", help="print the API token for remote clients, creating it if needed")
     token.add_argument("--rotate", action="store_true", help="replace the stored token with a new one")
     token.set_defaults(func=_token)
 
+    argv = sys.argv[1:] if argv is None else argv
+    # `netlab-gui` and `netlab-gui --port 9000` both mean `serve`.
+    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help", "--version")):
+        argv = ["serve", *argv]
     args = parser.parse_args(argv)
     return args.func(args)
 

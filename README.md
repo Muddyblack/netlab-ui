@@ -142,7 +142,14 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 
 ## Quick start
 
-The container is the UI; it uses the netlab and containerlab you have installed on the host:
+On Linux, install the package (it uses the netlab and containerlab you already have; `netlab-gui upgrade` updates it):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/scripts/install.sh | bash
+netlab-gui                  # then open http://127.0.0.1:8000
+```
+
+See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it uses the netlab and containerlab on the host:
 
 ```bash
 NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
@@ -158,6 +165,7 @@ Open `http://localhost:8000`. The flags that matter, multi-user setups and build
 | [Features](docs/features.md) | Shortcuts, run on nodes, search, running configs, exercises, live traffic, faults, packet capture, providers, reports |
 | [Monitoring](monitoring/README.md) | The netlab `monitoring` plugin: metrics, routing-protocol state and Grafana dashboards for any lab and vendor — also usable without the UI |
 | [AI agents](docs/ai-agents.md) | Start Claude Code, Codex, Copilot, Kiro and more connected to your lab, or connect any MCP tool; review what it proposes |
+| [Installing on Linux](docs/install.md) | The install script, updating, NixOS module, remote access |
 | [Running as a container](docs/container.md) | Images, required flags, several users on one server |
 | [Desktop app](docs/desktop.md) | The Electron shell around the same UI |
 | [Architecture](docs/architecture.md) | How netlab-ui builds on clab-ui and netlab |

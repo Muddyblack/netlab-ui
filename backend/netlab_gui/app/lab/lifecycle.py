@@ -38,7 +38,7 @@ from netlab_gui.app.contract.responses import (
 )
 from netlab_gui.app.lab import common
 from netlab_gui.services import lab_limits, monitoring, owners
-from netlab_gui.services.host_env import SUDO_HINT
+from netlab_gui.services.host_env import SUDO_HINT, deploy_warning
 from netlab_gui.services.netlab import config_snapshots, deploy_diff, deployment, libvirt, multilab, runner
 from netlab_gui.services.netlab import runtime as runtime_state
 from netlab_gui.services.netlab import validation as validation_store
@@ -494,6 +494,8 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
         try:
             if recovery_note:
                 yield f"data: {json.dumps({'stream': 'stdout', 'line': recovery_note})}\n\n"
+            if body.action in {"up", "restart"} and (warning := await asyncio.to_thread(deploy_warning)):
+                yield f"data: {json.dumps({'stream': 'stderr', 'line': warning})}\n\n"
             yield f"data: {json.dumps({'stream': 'stdout', 'line': f'Running netlab {args[0]}…'})}\n\n"
             async for stream, line in _run_sequence(steps):
                 if stream == "exit":

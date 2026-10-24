@@ -11,6 +11,7 @@ from netlab_gui.services import host_env
 def _fresh(monkeypatch):
     monkeypatch.setattr(host_env, "_cache", None)
     monkeypatch.setattr(host_env.container_env, "in_container", lambda: False)
+    monkeypatch.setattr(host_env, "_passwordless_sudo", lambda: False)
 
 
 def _fake_clab(monkeypatch, tmp_path, *, mode, uid=0, gid=1234):
@@ -85,3 +86,18 @@ def test_ready_ignores_warnings(monkeypatch, tmp_path):
     monkeypatch.setattr(host_env, "_netem_check", lambda: warn)
     monkeypatch.setattr(host_env, "_workspace_checks", lambda: [ok])
     assert host_env.diagnose(refresh=True)["ready"] is True
+
+
+def test_passwordless_sudo_is_accepted_for_a_plain_binary(monkeypatch, tmp_path):
+    path = _fake_clab(monkeypatch, tmp_path, mode=0o755)
+    monkeypatch.setattr(host_env, "_passwordless_sudo", lambda: True)
+    assert host_env._privilege_check(path)["ok"]
+
+
+def test_deploy_warning_only_when_privileges_are_missing(monkeypatch):
+    failing = host_env._check("clab-privileges", False, "error", "not set up", "d", "do this")
+    monkeypatch.setattr(host_env, "diagnose", lambda **_kw: {"checks": [failing]})
+    assert host_env.deploy_warning() == "Warning: not set up. do this"
+    ok = host_env._check("clab-privileges", True, "error", "fine", "d")
+    monkeypatch.setattr(host_env, "diagnose", lambda **_kw: {"checks": [ok]})
+    assert host_env.deploy_warning() is None

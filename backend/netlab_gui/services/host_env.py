@@ -13,6 +13,7 @@ import grp
 import os
 import shutil
 import stat
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -82,6 +83,28 @@ def _containerlab_check() -> list[dict[str, Any]]:
     return checks
 
 
+def _passwordless_sudo() -> bool:
+    """Would `sudo` run without asking for a password (so netlab's `sudo containerlab` works)?"""
+    sudo = shutil.which("sudo")
+    if not sudo:
+        return False
+    try:
+        return subprocess.run([sudo, "-n", "true"], capture_output=True, timeout=5, check=False).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def deploy_warning() -> str | None:
+    """A line to show before a deploy when containerlab is not set up to run without a password, else None.
+
+    Only warns: a lab on another provider, or a setup this check does not understand, may still deploy."""
+    result = diagnose()
+    for check in result["checks"]:
+        if check["id"] == "clab-privileges" and not check["ok"]:
+            return f"Warning: {check['title']}. {check['fix'] or check['detail']}"
+    return None
+
+
 def _privilege_check(path: str) -> dict[str, Any]:
     """Can this process run containerlab as root without a password prompt?"""
     if os.geteuid() == 0:
@@ -91,6 +114,14 @@ def _privilege_check(path: str) -> dict[str, Any]:
     except OSError:
         info = None
     if info is None or not (info.st_uid == 0 and info.st_mode & stat.S_ISUID):
+        if _passwordless_sudo():
+            return _check(
+                "clab-privileges",
+                True,
+                "error",
+                "containerlab runs through passwordless sudo",
+                "Works, but containerlab's setuid + clab_admins setup avoids granting sudo for everything.",
+            )
         return _check(
             "clab-privileges",
             False,
