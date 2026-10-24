@@ -1165,7 +1165,7 @@ export function useAppController() {
   useEffect(() => {
     let bc: BroadcastChannel | null = null;
     try {
-      bc = new BroadcastChannel("netlab_gui_events");
+      bc = new BroadcastChannel("netlab_ui_events");
       bc.onmessage = (event) => {
         if (event.data?.type === "topology_changed" || event.data?.type === "file_changed") {
           void handlePluginPanelChangedRef.current();

@@ -4,14 +4,14 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.contract.responses import LensBundleResult
-from netlab_gui.app.main import app
-from netlab_gui.services.lenses import config_diff, path_explorer, readiness, reports, teaching, validation_results
-from netlab_gui.services.lenses.analyzer import build_bundle
-from netlab_gui.services.lenses.derivation import build_derivation
-from netlab_gui.services.lenses.service_explorer import build_service_explorer
-from netlab_gui.services.lenses.validation_lens import build_validation
-from netlab_gui.services.netlab import runner
+from netlab_ui.app.contract.responses import LensBundleResult
+from netlab_ui.app.main import app
+from netlab_ui.services.lenses import config_diff, path_explorer, readiness, reports, teaching, validation_results
+from netlab_ui.services.lenses.analyzer import build_bundle
+from netlab_ui.services.lenses.derivation import build_derivation
+from netlab_ui.services.lenses.service_explorer import build_service_explorer
+from netlab_ui.services.lenses.validation_lens import build_validation
+from netlab_ui.services.netlab import runner
 
 
 def _transformed() -> dict:
@@ -339,7 +339,7 @@ def test_lens_endpoint_resolves_the_live_session(tmp_path: Path, monkeypatch):
         assert revision == 1
         return _bundle()
 
-    monkeypatch.setattr("netlab_gui.app.lenses.router.service.bundle_for", fake_bundle)
+    monkeypatch.setattr("netlab_ui.app.lenses.router.service.bundle_for", fake_bundle)
     client = TestClient(app)
     session = client.post("/api/topology/sessions", json={"topologyPath": str(topology)}).json()
 
@@ -683,7 +683,7 @@ def test_readiness_flags_missing_images_and_inactive_modules(monkeypatch):
 
     monkeypatch.setattr(readiness.runner, "create", fake_create)
     monkeypatch.setattr(readiness.runner, "is_containerlab_installed", lambda: True)
-    monkeypatch.setattr("netlab_gui.app.lab.images.list_docker_images", fake_images)
+    monkeypatch.setattr("netlab_ui.app.lab.images.list_docker_images", fake_images)
 
     result = asyncio.run(readiness.build_readiness("/work/lab.yml"))
     checks = {check["id"]: check for check in result["checks"]}
@@ -716,7 +716,7 @@ def test_readiness_groups_missing_images_by_image(monkeypatch):
 
     monkeypatch.setattr(readiness.runner, "create", fake_create)
     monkeypatch.setattr(readiness.runner, "is_containerlab_installed", lambda: True)
-    monkeypatch.setattr("netlab_gui.app.lab.images.list_docker_images", fake_images)
+    monkeypatch.setattr("netlab_ui.app.lab.images.list_docker_images", fake_images)
 
     result = asyncio.run(readiness.build_readiness("/work/lab.yml"))
     checks = {check["id"]: check for check in result["checks"]}

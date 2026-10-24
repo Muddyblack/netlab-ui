@@ -1,4 +1,4 @@
-from netlab_gui.services import owners
+from netlab_ui.services import owners
 
 
 def test_owner_is_recorded_and_forgotten(tmp_path, monkeypatch):

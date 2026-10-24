@@ -13,11 +13,11 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.lab import pcap
-from netlab_gui.app.main import app
-from netlab_gui.app.sessions.store import store
-from netlab_gui.services.model.topology import Topology
-from netlab_gui.services.netlab import libvirt, runner, runtime
+from netlab_ui.app.lab import pcap
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.model.topology import Topology
+from netlab_ui.services.netlab import libvirt, runner, runtime
 
 DOMIFLIST = """\
  Interface   Type      Source       Model    MAC

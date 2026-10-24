@@ -10,11 +10,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.contract import snapshot
-from netlab_gui.app.main import app
-from netlab_gui.services import annotations as ann_store
-from netlab_gui.services.model import serialize
-from netlab_gui.services.netlab import runner
+from netlab_ui.app.contract import snapshot
+from netlab_ui.app.main import app
+from netlab_ui.services import annotations as ann_store
+from netlab_ui.services.model import serialize
+from netlab_ui.services.netlab import runner
 
 
 @pytest.fixture(autouse=True)
@@ -150,7 +150,7 @@ def test_icon_delete_removes_icon_from_netlab_icon_directory(client, tmp_path, m
 
 
 def test_snapshot_serves_fixture_when_empty(client, topo_path, monkeypatch):
-    from netlab_gui.services.netlab import runner as netlab_runner
+    from netlab_ui.services.netlab import runner as netlab_runner
 
     monkeypatch.setattr(netlab_runner, "is_installed", lambda: False)
 
@@ -547,8 +547,8 @@ def test_remove_node_sweeps_stale_interface_reference(topo_path, monkeypatch):
     """A surviving link whose explicit ``interfaces:`` list still references the
     deleted node (a desync the endpoint filter alone misses, e.g. introduced via
     a group) gets that stale entry swept, without losing the link itself."""
-    from netlab_gui.app.contract import commands
-    from netlab_gui.services.model.topology import Link, Node, Topology
+    from netlab_ui.app.contract import commands
+    from netlab_ui.services.model.topology import Link, Node, Topology
 
     desynced = Topology(name="lab")
     desynced.nodes = [Node(name="r1"), Node(name="r2"), Node(name="r3")]
@@ -583,7 +583,7 @@ def test_snapshot_reports_structured_yaml_syntax_error(client, topo_path):
 
 
 def test_snapshot_applies_saved_position_to_node(client, topo_path, monkeypatch):
-    from netlab_gui.services.netlab import runner as netlab_runner
+    from netlab_ui.services.netlab import runner as netlab_runner
 
     monkeypatch.setattr(netlab_runner, "is_installed", lambda: False)
     sid = _new_session(client, topo_path)
@@ -736,7 +736,7 @@ def test_unknown_session_404(client):
 
 
 def test_plugins_endpoint_merges_docs_and_installed_catalog(client, monkeypatch):
-    from netlab_gui.app.plugins import router as plugins_router
+    from netlab_ui.app.plugins import router as plugins_router
 
     monkeypatch.setattr(
         plugins_router,
@@ -780,7 +780,7 @@ def test_plugins_endpoint_merges_docs_and_installed_catalog(client, monkeypatch)
 
 def test_plugins_endpoint_discovers_from_installed_netsim(client, monkeypatch, tmp_path):
     """Plugins resolve straight from the installed `netsim/extra/` package."""
-    from netlab_gui.app.plugins import router as plugins_router
+    from netlab_ui.app.plugins import router as plugins_router
 
     monkeypatch.setattr(plugins_router, "_plugin_docs_dirs", lambda: [])
 
@@ -808,7 +808,7 @@ def test_plugins_endpoint_discovers_nested_package_layout(client, monkeypatch, t
     Namespace dirs (``bgp/``) and submodules under a top-level plugin
     (``tunnel/gre/``) must not pollute the catalog.
     """
-    from netlab_gui.app.plugins import router as plugins_router
+    from netlab_ui.app.plugins import router as plugins_router
 
     monkeypatch.setattr(plugins_router, "_plugin_docs_dirs", lambda: [])
 
@@ -851,7 +851,7 @@ def test_plugins_endpoint_discovers_nested_package_layout(client, monkeypatch, t
 
 def _pin_search_path(monkeypatch, user_dirs, extra_dirs=()):
     """Pin both legs of the plugin search path so discovery is hermetic."""
-    from netlab_gui.app.plugins import router as plugins_router
+    from netlab_ui.app.plugins import router as plugins_router
 
     monkeypatch.setattr(plugins_router, "_plugin_docs_dirs", lambda: [])
     monkeypatch.setattr(plugins_router, "_plugin_extra_dirs", lambda: list(extra_dirs))
@@ -863,7 +863,7 @@ def test_plugins_endpoint_discovers_single_file_user_plugin(client, monkeypatch,
     and is how most hand-written ones ship. Discovery used to only look at
     directories under ``netsim/extra``, so these were invisible in the GUI even
     though ``netlab up`` loaded them fine."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     user_dir = tmp_path / "dot-netlab"
     user_dir.mkdir()
@@ -900,7 +900,7 @@ def test_plugins_endpoint_discovers_single_file_user_plugin(client, monkeypatch,
 def test_plugins_endpoint_reports_unreadable_plugin_instead_of_hiding_it(client, monkeypatch, tmp_path):
     """netlab fatals on a plugin it can't parse. Dropping it from the catalog
     would leave the user wondering where their plugin went."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     user_dir = tmp_path / "dot-netlab"
     user_dir.mkdir()
@@ -915,7 +915,7 @@ def test_plugins_endpoint_reports_unreadable_plugin_instead_of_hiding_it(client,
 def test_plugins_endpoint_records_shadowed_plugin_copies(client, monkeypatch, tmp_path):
     """Earlier search-path entries win. Saying which copy lost is the only way
     to explain "I edited the plugin and nothing changed"."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     topo_dir = tmp_path / "lab"
     user_dir = tmp_path / "dot-netlab"
@@ -938,7 +938,7 @@ def test_plugin_pipeline_resolves_execution_order_and_missing_requires(client, m
     """netlab sorts plugins by ``_requires``/``_execute_after``, so the order in
     ``plugin:`` is not the order they run in — and a missing ``_requires`` is
     fatal at transform time."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     user_dir = tmp_path / "dot-netlab"
     user_dir.mkdir()
@@ -973,7 +973,7 @@ def test_plugin_pipeline_keeps_unknown_plugins_visible(client, monkeypatch, tmp_
 def test_plugin_import_writes_uploaded_plugin_to_search_path(client, monkeypatch, tmp_path):
     """Uploading from the browser is the only import route that works in the
     web app, where the user's file never exists on the server."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     dest = tmp_path / "dot-netlab"
     _pin_search_path(monkeypatch, [(dest, plugin_svc.ORIGIN_USER)])
@@ -1000,7 +1000,7 @@ def test_plugin_import_writes_uploaded_plugin_to_search_path(client, monkeypatch
 def test_plugin_import_symlinks_instead_of_copying(client, monkeypatch, tmp_path):
     """Linking keeps the user's own file as the source of truth, so their next
     edit takes effect without a re-import."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     original = tmp_path / "src" / "my_tweak.py"
     original.parent.mkdir()
@@ -1027,7 +1027,7 @@ def test_plugin_import_symlinks_instead_of_copying(client, monkeypatch, tmp_path
 def test_plugin_import_rejects_unparsable_python(client, monkeypatch, tmp_path):
     """Better to fail the import than to let a broken file abort the user's
     next `netlab up` with a loader stack trace."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     dest = tmp_path / "dot-netlab"
     _pin_search_path(monkeypatch, [(dest, plugin_svc.ORIGIN_USER)])
@@ -1045,7 +1045,7 @@ def test_plugin_import_rejects_unparsable_python(client, monkeypatch, tmp_path):
 def test_plugin_import_warns_when_no_hooks_are_defined(client, monkeypatch, tmp_path):
     """A file with no netlab hooks loads fine and does nothing — silently
     accepting it would look like the plugin simply didn't work."""
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     dest = tmp_path / "dot-netlab"
     _pin_search_path(monkeypatch, [(dest, plugin_svc.ORIGIN_USER)])
@@ -1060,7 +1060,7 @@ def test_plugin_import_warns_when_no_hooks_are_defined(client, monkeypatch, tmp_
 
 
 def test_plugin_import_refuses_overwrite_and_path_escape(client, monkeypatch, tmp_path):
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     dest = tmp_path / "dot-netlab"
     dest.mkdir()
@@ -1103,13 +1103,13 @@ def test_plugin_template_is_a_valid_plugin(client):
     body = res.json()
     assert body["name"] == "my_tweak"
 
-    from netlab_gui.services.netlab import plugins as plugin_svc
+    from netlab_ui.services.netlab import plugins as plugin_svc
 
     assert plugin_svc.validate_source(body["content"], "my_tweak") == []
 
 
 def test_plugins_endpoint_reports_discovery_error_when_empty(client, monkeypatch):
-    from netlab_gui.app.plugins import router as plugins_router
+    from netlab_ui.app.plugins import router as plugins_router
 
     monkeypatch.setattr(plugins_router, "_load_docs_plugins", lambda: {})
     monkeypatch.setattr(plugins_router, "_load_installed_plugins", lambda *_: {})
@@ -1294,7 +1294,7 @@ def test_resolved_placement_honors_custom_output_dir_template(client, topo_path)
         },
     )
     # Add the custom template directly (panel PUT doesn't expose output_dir).
-    from netlab_gui.services.model import serialize
+    from netlab_ui.services.model import serialize
 
     topo = serialize.from_yaml(Path(topo_path).read_text())
     topo.attrs["multiserver"]["output_dir"] = "worker_{server_name}"
@@ -1333,7 +1333,7 @@ def test_resolved_placement_honors_server_id_in_template(client, topo_path):
             "vxlan": {"dev": "eth0"},
         },
     )
-    from netlab_gui.services.model import serialize
+    from netlab_ui.services.model import serialize
 
     topo = serialize.from_yaml(Path(topo_path).read_text())
     topo.attrs["multiserver"]["output_dir"] = "srv{server_id}"

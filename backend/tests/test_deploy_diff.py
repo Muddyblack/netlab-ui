@@ -1,4 +1,4 @@
-from netlab_gui.services.netlab import deploy_diff
+from netlab_ui.services.netlab import deploy_diff
 
 
 def test_compare_tracks_changes_since_recorded_deploy(tmp_path):

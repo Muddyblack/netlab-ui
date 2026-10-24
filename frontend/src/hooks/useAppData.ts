@@ -57,7 +57,7 @@ interface Options {
 // Cache the last successful health result so a page reload (e.g. Vite HMR
 // falling back to a full reload on dev edits) skips the "Checking netlab
 // environment" splash and re-validates the backend in the background instead.
-const HEALTH_CACHE_KEY = "netlab-gui.lastHealth";
+const HEALTH_CACHE_KEY = "netlab-ui.lastHealth";
 
 function readCachedHealth(): HealthStatus | null {
   try {

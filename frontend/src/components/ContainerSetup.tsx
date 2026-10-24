@@ -7,7 +7,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CloseIcon from "@mui/icons-material/Close";
 import { api, type ContainerCheck, type ContainerDiagnostics } from "../api/client";
 
-const DISMISS_KEY = "netlab-gui:container-setup-dismissed";
+const DISMISS_KEY = "netlab-ui:container-setup-dismissed";
 
 export function CheckIcon({ check }: { check: ContainerCheck }) {
   if (check.ok) return <CheckCircleOutlineIcon color="success" sx={{ fontSize: 18, mt: "2px" }} />;
@@ -50,7 +50,7 @@ export function ContainerSetupPanel({ active }: { active: boolean }) {
       {!data.inspected && (
         <Alert severity="info" sx={{ mb: 1.5 }}>
           Running in a container, but it could not inspect itself through the Docker socket, so only basic
-          checks ran. Set <code>NETLAB_GUI_CONTAINER</code> to this container&apos;s name if it uses a custom hostname.
+          checks ran. Set <code>NETLAB_UI_CONTAINER</code> to this container&apos;s name if it uses a custom hostname.
         </Alert>
       )}
       <Card variant="outlined" sx={{ p: 2 }}>

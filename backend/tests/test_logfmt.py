@@ -1,6 +1,6 @@
 """Tests for the netlab output reshaper (services/netlab/logfmt.py)."""
 
-from netlab_gui.services.netlab.logfmt import LineFilter, strip_ansi
+from netlab_ui.services.netlab.logfmt import LineFilter, strip_ansi
 
 
 def run(lines: list[tuple[str, str]]) -> list[str]:

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build the netlab-gui-backend wheel + sdist with the UI and the monitoring plugin bundled inside:
-#   netlab_gui/_frontend           <- frontend/dist
-#   netlab_gui/_monitoring_plugin  <- monitoring/plugin/monitoring
+# Build the netlab-ui wheel + sdist with the UI and the monitoring plugin bundled inside:
+#   netlab_ui/_frontend           <- frontend/dist
+#   netlab_ui/_monitoring_plugin  <- monitoring/plugin/monitoring
 # Output lands in backend/dist/. The copied directories are git-ignored.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-pkg="$root/backend/netlab_gui"
+pkg="$root/backend/netlab_ui"
 
 (cd "$root/frontend" && npm ci && npm run build)
 

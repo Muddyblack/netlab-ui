@@ -1,4 +1,4 @@
-from netlab_gui.services.nodeset import format_nodeset
+from netlab_ui.services.nodeset import format_nodeset
 
 
 def test_consecutive_run_collapses():

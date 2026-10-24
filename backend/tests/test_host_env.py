@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from netlab_gui.services import host_env
+from netlab_ui.services import host_env
 
 
 @pytest.fixture(autouse=True)

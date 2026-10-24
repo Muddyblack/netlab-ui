@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from netlab_gui.services import host
-from netlab_gui.services.assistant import harness
-from netlab_gui.services.assistant.config import mcp_token
+from netlab_ui.services import host
+from netlab_ui.services.assistant import harness
+from netlab_ui.services.assistant.config import mcp_token
 
 PASSWD = "alice:x:1000:100:Alice:/home/alice:/bin/zsh\n"
 
@@ -28,7 +28,7 @@ def fresh():
 @pytest.fixture
 def on_host(monkeypatch, tmp_path):
     """A container that may enter the host, where the mounted ~/.netlab belongs to uid 1000."""
-    monkeypatch.setenv("NETLAB_GUI_IN_CONTAINER", "1")
+    monkeypatch.setenv("NETLAB_UI_IN_CONTAINER", "1")
     monkeypatch.delenv("NETLAB_UI_AGENTS", raising=False)
     monkeypatch.setenv("NETLAB_UI_HOST_UID", "1000")
     monkeypatch.setattr(host, "_MOUNTED_NETLAB_DIR", tmp_path / ".netlab")
@@ -46,7 +46,7 @@ def on_host(monkeypatch, tmp_path):
 
 
 def test_outside_a_container_nothing_changes(monkeypatch, tmp_path):
-    monkeypatch.delenv("NETLAB_GUI_IN_CONTAINER", raising=False)
+    monkeypatch.delenv("NETLAB_UI_IN_CONTAINER", raising=False)
     assert host.mode() == "native" and host.note() == ""
     assert host.wrap(["claude", "--x"], {"A": "b"}, tmp_path) == (["claude", "--x"], {"A": "b"})
     written, visible = host.shared_dir()
@@ -54,7 +54,7 @@ def test_outside_a_container_nothing_changes(monkeypatch, tmp_path):
 
 
 def test_a_container_without_host_access_says_what_is_missing(monkeypatch):
-    monkeypatch.setenv("NETLAB_GUI_IN_CONTAINER", "1")
+    monkeypatch.setenv("NETLAB_UI_IN_CONTAINER", "1")
     monkeypatch.delenv("NETLAB_UI_AGENTS", raising=False)
     monkeypatch.setattr(host.shutil, "which", lambda _name: "/usr/bin/nsenter")
     monkeypatch.setattr(host, "_run_on_host", lambda *_a, **_k: completed("", 1))
@@ -65,7 +65,7 @@ def test_a_container_without_host_access_says_what_is_missing(monkeypatch):
 
 
 def test_a_container_without_nsenter_or_the_netlab_mount_explains_itself(monkeypatch, tmp_path):
-    monkeypatch.setenv("NETLAB_GUI_IN_CONTAINER", "1")
+    monkeypatch.setenv("NETLAB_UI_IN_CONTAINER", "1")
     monkeypatch.delenv("NETLAB_UI_HOST_UID", raising=False)
     monkeypatch.delenv("NETLAB_UI_AGENTS", raising=False)
     monkeypatch.setattr(host.shutil, "which", lambda _name: None)

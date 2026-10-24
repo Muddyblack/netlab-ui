@@ -70,7 +70,7 @@ export function clearApiBase(): void {
 
 const TOKEN_KEY = "netlab.apiToken";
 
-/** API token for a backend started with NETLAB_GUI_TOKEN (see `netlab-gui token`). */
+/** API token for a backend started with NETLAB_UI_TOKEN (see `netlab-ui token`). */
 export function getApiToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -110,7 +110,7 @@ function withToken(url: string | URL, token: string): string {
  *
  * The app has dozens of `fetch`/`EventSource`/`WebSocket` call sites, so the token is added here instead of at each
  * one: a header on `fetch`, a query parameter on the two that cannot carry headers. A `?token=` in the page URL is
- * stored (and removed from the address bar) so a link from `netlab-gui token` is enough to sign in. Does nothing
+ * stored (and removed from the address bar) so a link from `netlab-ui token` is enough to sign in. Does nothing
  * when no token is set, so a same-origin deployment behind Basic auth behaves exactly as before.
  */
 export function installApiAuth(): void {

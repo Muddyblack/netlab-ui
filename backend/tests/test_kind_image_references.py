@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.main import app
+from netlab_ui.app.main import app
 
 
 @pytest.fixture

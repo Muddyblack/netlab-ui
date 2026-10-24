@@ -6,7 +6,7 @@ import { MarkdownDocumentDialog } from "./MarkdownDocumentDialog";
 import { EmbeddedDocumentationDialog } from "./EmbeddedDocumentationDialog";
 import type { HealthStatus } from "../api/client";
 
-const ENV_WARNING_DISMISS_KEY = "netlab-gui:env-warning-dismissed";
+const ENV_WARNING_DISMISS_KEY = "netlab-ui:env-warning-dismissed";
 
 function buildInstallMarkdown(missing: string[]): string {
   const sections: string[] = [];

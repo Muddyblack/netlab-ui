@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from netlab_gui.app import auth
+from netlab_ui.app import auth
 
 
 def _client() -> TestClient:
@@ -144,12 +144,12 @@ def test_basic_login_still_works_beside_a_token():
 
 
 def test_configured_token_sources(monkeypatch, tmp_path):
-    monkeypatch.delenv("NETLAB_GUI_TOKEN", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOKEN", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    monkeypatch.delenv("NETLAB_GUI_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOKEN_FILE", raising=False)
     assert auth.configured_token() is None
-    (tmp_path / "netlab-gui").mkdir()
-    (tmp_path / "netlab-gui" / "token").write_text("from-default-file\n")
+    (tmp_path / "netlab-ui").mkdir()
+    (tmp_path / "netlab-ui" / "token").write_text("from-default-file\n")
     assert auth.configured_token() == "from-default-file"
-    monkeypatch.setenv("NETLAB_GUI_TOKEN", "from-env")
+    monkeypatch.setenv("NETLAB_UI_TOKEN", "from-env")
     assert auth.configured_token() == "from-env"

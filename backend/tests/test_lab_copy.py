@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.lab import lab_copy
-from netlab_gui.app.main import app
+from netlab_ui.app.lab import lab_copy
+from netlab_ui.app.main import app
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-from netlab_gui.services.netlab import deployment
+from netlab_ui.services.netlab import deployment
 
 
 def test_deployment_registry_returns_overview_and_node_detail(tmp_path):

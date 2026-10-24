@@ -1,6 +1,6 @@
 """Test batch command handling."""
 
-from netlab_gui.app.contract import commands
+from netlab_ui.app.contract import commands
 
 
 def test_batch_command_executes_multiple_commands(tmp_path):

@@ -6,7 +6,7 @@
 
 ```bash
 # Run (from repo root)
-uvicorn netlab_gui.app.main:app --reload --app-dir backend   # :8000
+uvicorn netlab_ui.app.main:app --reload --app-dir backend   # :8000
 
 # Tests
 cd backend && pytest
@@ -51,10 +51,10 @@ nix develop          # dev shell
 ## Repository layout
 
 ```
-netlab_gui/
+netlab_ui/
   backend/           FastAPI backend — implements clab-ui's ClabUiHost contract
-    netlab_gui/      the installable package (`netlab-gui` command); `app/` and `services/` below live inside it
-    netlab_gui/      the installable package (`netlab-gui` command); `app/` and `services/` live inside it
+    netlab_ui/      the installable package (`netlab-ui` command); `app/` and `services/` below live inside it
+    netlab_ui/      the installable package (`netlab-ui` command); `app/` and `services/` live inside it
     app/
       contract/      API routes, commands.py, snapshot.py, responses.py
       lab/           /api/lab surface, split by concern:
@@ -88,7 +88,7 @@ netlab_gui/
 
 ### The two-layer model
 
-**clab-ui** is a generic topology canvas library originally built for the Containerlab VS Code extension, consumed here as a published npm package (`@containerlab/clab-ui`). The netlab-gui treats it as an opaque dependency and extends it only through its public prop surface — never by patching its source, since there is none checked into this repo.
+**clab-ui** is a generic topology canvas library originally built for the Containerlab VS Code extension, consumed here as a published npm package (`@containerlab/clab-ui`). The netlab-ui treats it as an opaque dependency and extends it only through its public prop surface — never by patching its source, since there is none checked into this repo.
 
 **The backend** implements the `ClabUiHost` contract (`/api/topology/sessions`, `/api/topology/snapshot`, `/api/topology/command`) that clab-ui expects. It translates between netlab topology files and the graph JSON format clab-ui renders.
 

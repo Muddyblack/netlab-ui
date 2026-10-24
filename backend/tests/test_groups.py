@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from netlab_gui.app.contract.router.groups import GroupPut, delete_group, save_group
-from netlab_gui.app.sessions.store import store
-from netlab_gui.services.model import serialize
+from netlab_ui.app.contract.router.groups import GroupPut, delete_group, save_group
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.model import serialize
 
 
 def session_for(tmp_path: Path, yaml: str):

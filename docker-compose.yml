@@ -11,8 +11,8 @@
 # The install is mounted at the same path it has on the host, so its shebangs
 # and (on NixOS) store references resolve unchanged. HOST_TOOLS_DIR is the
 # directory that holds it: /nix/store on NixOS, or e.g. the venv netlab lives in.
-# For a normal Linux host the native package (`pipx install netlab-gui-backend`, then
-# `netlab-gui install-service`) is simpler than this container.
+# For a normal Linux host the native package (`pipx install netlab-ui`, then
+# `netlab-ui install-service`) is simpler than this container.
 #
 # Why each setting is here (the UI checks all of them itself and explains any
 # that are missing under Settings → Environment → Container Setup):
@@ -49,7 +49,7 @@ services:
       UVICORN_PORT: ${NETLAB_UI_PORT:-8000}
       # Set NETLAB_UI_AUTH=user:password (e.g. in .env) before exposing it.
       NETLAB_UI_AUTH: ${NETLAB_UI_AUTH:-}
-      NETLAB_GUI_CONTAINER: netlab-ui
+      NETLAB_UI_CONTAINER: netlab-ui
       NETLAB_BIN: ${NETLAB_BIN:?set NETLAB_BIN to the host netlab, e.g. NETLAB_BIN=$(command -v netlab)}
       # containerlab is called directly for a few features (netem, cleanup, link reconcile).
       PATH: ${CLAB_DIR:-/usr/bin}:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin

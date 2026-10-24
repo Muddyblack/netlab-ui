@@ -1,8 +1,8 @@
 import asyncio
 
-from netlab_gui.app.contract import snapshot
-from netlab_gui.services.model import serialize
-from netlab_gui.services.netlab import validation
+from netlab_ui.app.contract import snapshot
+from netlab_ui.services.model import serialize
+from netlab_ui.services.netlab import validation
 
 
 def test_snapshot_runtime_fields_do_not_leak_into_yaml(tmp_path, monkeypatch):

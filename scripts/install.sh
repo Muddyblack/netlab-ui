@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install netlab-gui on this Linux machine, the way containerlab's installer does:
+# Install netlab-ui on this Linux machine, the way containerlab's installer does:
 #
 #   curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/scripts/install.sh | bash
 #
@@ -9,10 +9,10 @@
 #   --service              install and start a systemd user service
 #   --version X.Y.Z        install a specific release instead of the latest
 #
-# Update later with:  netlab-gui upgrade
+# Update later with:  netlab-ui upgrade
 set -euo pipefail
 
-PACKAGE="netlab-gui-backend"
+PACKAGE="netlab-ui"
 with_netlab=0
 with_clab=0
 service=0
@@ -67,14 +67,14 @@ export PATH="$HOME/.local/bin:$PATH"
 
 if [[ $service -eq 1 ]]; then
   say "installing the systemd user service"
-  netlab-gui install-service
+  netlab-ui install-service
 fi
 
 cat <<EOF
 
-netlab-gui is installed.
-  start it now      netlab-gui            (then open http://127.0.0.1:8000)
-  run as a service  netlab-gui install-service
-  update later      netlab-gui upgrade
+netlab-ui is installed.
+  start it now      netlab-ui            (then open http://127.0.0.1:8000)
+  run as a service  netlab-ui install-service
+  update later      netlab-ui upgrade
 The first time you open the UI it checks this machine (netlab, containerlab, Docker access) and says what is missing.
 EOF

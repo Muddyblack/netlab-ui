@@ -142,11 +142,11 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 
 ## Quick start
 
-On Linux, install the package (it uses the netlab and containerlab you already have; `netlab-gui upgrade` updates it):
+On Linux, install the package (it uses the netlab and containerlab you already have; `netlab-ui upgrade` updates it):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/scripts/install.sh | bash
-netlab-gui                  # then open http://127.0.0.1:8000
+netlab-ui                  # then open http://127.0.0.1:8000
 ```
 
 See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it uses the netlab and containerlab on the host:

@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from netlab_gui.services import units
-from netlab_gui.services.model import serialize
+from netlab_ui.services import units
+from netlab_ui.services.model import serialize
 
 
 def _save(units_dir, name, nodes=(), links=(), includes=(), source=None):
@@ -191,7 +191,7 @@ def test_export_import_round_trips_topology_and_view_state(tmp_path):
             "module": ["ospf"],
         },
     )
-    from netlab_gui.services import annotations as ann_store
+    from netlab_ui.services import annotations as ann_store
 
     path = units._unit_path(tmp_path, "rack")
     ann = ann_store.load(path)
@@ -300,7 +300,7 @@ def test_bare_multi_instance_reference_is_accepted(tmp_path):
 
 
 def test_update_composition_preserves_canvas_owned_yaml_and_layout(tmp_path):
-    from netlab_gui.services import annotations as ann_store
+    from netlab_ui.services import annotations as ann_store
 
     _save(tmp_path, "wp", nodes=[{"name": "pc", "device": "linux"}])
     path = _save(

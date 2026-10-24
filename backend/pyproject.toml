@@ -1,5 +1,5 @@
 [project]
-name = "netlab-gui-backend"
+name = "netlab-ui"
 dynamic = ["version"]
 description = "Backend adapter/BFF for a netlab APP — drives the netlab CLI and speaks the clab-ui ClabUiHost contract"
 requires-python = ">=3.11"
@@ -33,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-netlab-gui = "netlab_gui.cli:main"
+netlab-ui = "netlab_ui.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -44,12 +44,12 @@ requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = { find = { include = ["netlab_gui*"] } }
+packages = { find = { include = ["netlab_ui*"] } }
 include-package-data = true
 
 [tool.setuptools.package-data]
 # _frontend and _monitoring_plugin are copied in by scripts/build-wheel.sh.
-netlab_gui = ["_frontend/**", "_monitoring_plugin/**", "app/schema/*.json"]
+netlab_ui = ["_frontend/**", "_monitoring_plugin/**", "app/schema/*.json"]
 
 [tool.setuptools_scm]
 fallback_version = "0.0+unknown"

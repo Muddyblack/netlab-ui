@@ -123,4 +123,4 @@ The MCP server is part of the default install (the `mcp` package) and served on 
 
 The [Agent Client Protocol](https://agentclientprotocol.com) (ACP, from Zed) drives Claude Code, Codex and others through one protocol. netlab-ui could use it for a native chat panel (one generic UI, no per-provider code, diffs and approvals from the protocol) instead of the agent's terminal UI. Not built: the terminal gives the same agents with far less code to maintain.
 
-Everything AI-related lives in `backend/netlab_gui/services/assistant/`, `backend/netlab_gui/app/assistant/` and `frontend/src/components/agents/`.
+Everything AI-related lives in `backend/netlab_ui/services/assistant/`, `backend/netlab_ui/app/assistant/` and `frontend/src/components/agents/`.

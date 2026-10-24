@@ -1,4 +1,4 @@
-from netlab_gui import cli
+from netlab_ui import cli
 
 
 def test_user_unit_has_no_user_line_and_targets_default():
@@ -20,17 +20,17 @@ def test_bare_flags_mean_serve(monkeypatch):
     assert cli.main(["--port", "9123", "--host", "0.0.0.0"]) == 0
     assert seen["port"] == 9123
     assert seen["host"] == "0.0.0.0"
-    assert seen["target"] == "netlab_gui.app.main:app"
+    assert seen["target"] == "netlab_ui.app.main:app"
 
 
 def test_token_command_creates_a_private_token_once(monkeypatch, tmp_path, capsys):
-    monkeypatch.delenv("NETLAB_GUI_TOKEN", raising=False)
-    monkeypatch.delenv("NETLAB_GUI_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOKEN", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOKEN_FILE", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert cli.main(["token"]) == 0
     first = capsys.readouterr().out.strip()
     assert len(first) >= 32
-    assert (tmp_path / "netlab-gui" / "token").stat().st_mode & 0o077 == 0
+    assert (tmp_path / "netlab-ui" / "token").stat().st_mode & 0o077 == 0
     assert cli.main(["token"]) == 0
     assert capsys.readouterr().out.strip() == first
     assert cli.main(["token", "--rotate"]) == 0
@@ -38,7 +38,7 @@ def test_token_command_creates_a_private_token_once(monkeypatch, tmp_path, capsy
 
 
 def test_upgrade_command_follows_how_it_was_installed():
-    assert cli.upgrade_command("/home/a/.local/share/pipx/venvs/netlab-gui-backend") == ["pipx", "upgrade", cli.PACKAGE]
+    assert cli.upgrade_command("/home/a/.local/share/pipx/venvs/netlab-ui") == ["pipx", "upgrade", cli.PACKAGE]
     assert cli.upgrade_command("/nix/store/abc-python3") is None
 
 

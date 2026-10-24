@@ -3,8 +3,8 @@ import react from "@vitejs/plugin-react";
 import { execFileSync } from "node:child_process";
 
 function appVersion() {
-  if (process.env.NETLAB_GUI_VERSION) return process.env.NETLAB_GUI_VERSION;
-  if (process.env.VITE_NETLAB_GUI_VERSION) return process.env.VITE_NETLAB_GUI_VERSION;
+  if (process.env.NETLAB_UI_VERSION) return process.env.NETLAB_UI_VERSION;
+  if (process.env.VITE_NETLAB_UI_VERSION) return process.env.VITE_NETLAB_UI_VERSION;
   try {
     return execFileSync("git", ["describe", "--tags", "--dirty", "--always"], { encoding: "utf-8" }).trim() || "dev";
   } catch {

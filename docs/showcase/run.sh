@@ -57,9 +57,9 @@ backend="$repo/backend"
 # The backend's Python: backend/.venv if there is one, otherwise whatever is on
 # PATH (the Nix dev shell / direnv provides uvicorn with every dependency).
 # A venv whose interpreter was garbage-collected (Nix store path) doesn't count.
-if [[ -x "$backend/.venv/bin/uvicorn" ]] && (cd "$backend" && .venv/bin/python3 -c "import netlab_gui.app.main" >/dev/null 2>&1); then
+if [[ -x "$backend/.venv/bin/uvicorn" ]] && (cd "$backend" && .venv/bin/python3 -c "import netlab_ui.app.main" >/dev/null 2>&1); then
   export PATH="$backend/.venv/bin:$PATH"
-elif ! command -v uvicorn >/dev/null || ! (cd "$backend" && python3 -c "import netlab_gui.app.main" >/dev/null 2>&1); then
+elif ! command -v uvicorn >/dev/null || ! (cd "$backend" && python3 -c "import netlab_ui.app.main" >/dev/null 2>&1); then
   echo "no backend environment: create backend/.venv or enter the Nix dev shell (see CONTRIBUTING.md)" >&2
   exit 1
 fi
@@ -135,7 +135,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "· netlab-ui on http://127.0.0.1:$port (log: docs/showcase/.work/backend.log)"
-(cd "$backend" && exec uvicorn netlab_gui.app.main:app --host 127.0.0.1 --port "$port" >"$work/backend.log" 2>&1) &
+(cd "$backend" && exec uvicorn netlab_ui.app.main:app --host 127.0.0.1 --port "$port" >"$work/backend.log" 2>&1) &
 backend_pid=$!
 for _ in $(seq 1 60); do
   curl -sf "http://127.0.0.1:$port/api/health" >/dev/null && break

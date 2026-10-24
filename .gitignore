@@ -52,6 +52,6 @@ labs/*
 .pasted-images/
 
 # Bundled into the wheel by scripts/build-wheel.sh
-backend/netlab_gui/_frontend/
-backend/netlab_gui/_monitoring_plugin/
+backend/netlab_ui/_frontend/
+backend/netlab_ui/_monitoring_plugin/
 backend/dist/

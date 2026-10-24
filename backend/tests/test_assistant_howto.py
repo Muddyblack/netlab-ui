@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from netlab_gui.services.assistant import howto, mcp_server
+from netlab_ui.services.assistant import howto, mcp_server
 
 
 def ask(question: str) -> dict:

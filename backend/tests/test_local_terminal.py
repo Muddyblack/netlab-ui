@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from netlab_gui.app import auth
-from netlab_gui.app.main import app
-from netlab_gui.app.sessions.store import store
-from netlab_gui.app.shell import ws
-from netlab_gui.services import host
+from netlab_ui.app import auth
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.app.shell import ws
+from netlab_ui.services import host
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def open_terminal(session):
 
 def test_the_terminal_is_the_users_shell_in_the_lab_folder(lab, spawned, monkeypatch, tmp_path):
     monkeypatch.setattr(auth, "local_process_allowed", lambda _host: True)
-    monkeypatch.delenv("NETLAB_GUI_IN_CONTAINER", raising=False)
+    monkeypatch.delenv("NETLAB_UI_IN_CONTAINER", raising=False)
     monkeypatch.setenv("SHELL", "/bin/zsh")
     assert open_terminal(lab) == "hello"
     assert spawned["argv"] == ["/bin/zsh", "-i"] and spawned["cwd"] == Path(tmp_path)
@@ -49,7 +49,7 @@ def test_the_terminal_is_the_users_shell_in_the_lab_folder(lab, spawned, monkeyp
 
 def test_the_terminal_does_not_hand_on_the_login_to_netlab_ui(lab, spawned, monkeypatch):
     monkeypatch.setattr(auth, "local_process_allowed", lambda _host: True)
-    monkeypatch.delenv("NETLAB_GUI_IN_CONTAINER", raising=False)
+    monkeypatch.delenv("NETLAB_UI_IN_CONTAINER", raising=False)
     open_terminal(lab)
     assert spawned["env"]["NETLAB_UI_AUTH"] == "" and spawned["env"]["NETLAB_APP_ASSISTANT_TOKEN"] == ""
 
@@ -78,6 +78,6 @@ def test_only_this_machine_may_open_one_without_a_login(lab, spawned, monkeypatc
 
 def test_with_a_login_configured_remote_clients_may(lab, spawned, monkeypatch):
     monkeypatch.setattr(auth, "configured_users", lambda: {"alice": "secret"})
-    monkeypatch.delenv("NETLAB_GUI_IN_CONTAINER", raising=False)
+    monkeypatch.delenv("NETLAB_UI_IN_CONTAINER", raising=False)
     assert auth.local_process_allowed("192.168.1.20")
     assert open_terminal(lab) == "hello" and spawned["argv"][-1] == "-i"

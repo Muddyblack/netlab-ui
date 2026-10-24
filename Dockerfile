@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git docker-cli 
 
 WORKDIR /app
 COPY backend/pyproject.toml ./
-COPY backend/netlab_gui ./netlab_gui
+COPY backend/netlab_ui ./netlab_ui
 # The netlab monitoring plugin (Settings / lab "Monitoring"): the UI links it into
 # ~/.netlab when a lab turns monitoring on.
 COPY monitoring/plugin/monitoring ./monitoring_plugin
@@ -45,17 +45,17 @@ ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.
 #
 # setuptools-scm has no .git here; the version comes from the build arg below.
-ARG NETLAB_GUI_VERSION=0.0+container
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=${NETLAB_GUI_VERSION}
+ARG NETLAB_UI_VERSION=0.0+container
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${NETLAB_UI_VERSION}
 RUN pip install --no-cache-dir .
 
 COPY --from=frontend-build /app/dist ./frontend_dist
 ENV FRONTEND_DIST_DIR=/app/frontend_dist
 # Shown in the About dialog; release builds pass the tag.
-ENV NETLAB_GUI_VERSION=${NETLAB_GUI_VERSION}
+ENV NETLAB_UI_VERSION=${NETLAB_UI_VERSION}
 # Enables the container self-checks (Settings → Environment → Container
 # Setup) even where /.dockerenv is missing (podman, some runtimes).
-ENV NETLAB_GUI_IN_CONTAINER=1
+ENV NETLAB_UI_IN_CONTAINER=1
 # The image runs as root with the privileges described below. netlab's default
 # clab commands prepend sudo, which this image neither needs nor installs.
 # These defaults also cover `docker exec ... netlab up`, outside the UI.
@@ -84,7 +84,7 @@ EXPOSE 8000
 # default 0.0.0.0 bind and the compose file's 127.0.0.1.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('UVICORN_PORT', '8000'), timeout=4)"
-CMD ["uvicorn", "netlab_gui.app.main:app"]
+CMD ["uvicorn", "netlab_ui.app.main:app"]
 
 # Populates the GHCR package page (README, repo link, license) instead of the
 # "no description" placeholder a pulled-from-nowhere image would show.

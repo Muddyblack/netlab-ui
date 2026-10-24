@@ -4,7 +4,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { api, type HostDiagnostics } from "../api/client";
 import { CheckIcon } from "./ContainerSetup";
 
-const DISMISS_KEY = "netlab-gui:host-setup-dismissed";
+const DISMISS_KEY = "netlab-ui:host-setup-dismissed";
 
 function useHostDiagnostics(enabled: boolean) {
   const [data, setData] = useState<HostDiagnostics | null>(null);

@@ -51,7 +51,7 @@ jobs:
           # Python stage is emulated — the frontend stage builds natively.
           platforms: linux/amd64,linux/arm64
           build-args: |
-            NETLAB_GUI_VERSION=${{ github.ref_name }}
+            NETLAB_UI_VERSION=${{ github.ref_name }}
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}

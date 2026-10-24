@@ -8,7 +8,7 @@ const form = document.getElementById("connect-form");
 
 const MESSAGES = {
   unreachable: "Could not reach that server. Is the backend running?",
-  unauthorized: "The server rejected that token. Check it with `netlab-gui token` on the server.",
+  unauthorized: "The server rejected that token. Check it with `netlab-ui token` on the server.",
 };
 
 window.netlabDesktop.getServerUrl().then((url) => {

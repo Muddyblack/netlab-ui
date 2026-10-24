@@ -29,12 +29,12 @@ def _reload_app(monkeypatch, *, mode: str, block_mcp: bool = False):
         monkeypatch.setattr(builtins, "__import__", fake_import)
         monkeypatch.setattr(importlib.util, "find_spec", lambda name, *_a, **_k: None if name == "mcp" else True)
 
-    import netlab_gui.services.assistant as assistant_pkg
+    import netlab_ui.services.assistant as assistant_pkg
 
-    importlib.reload(importlib.import_module("netlab_gui.services.assistant.config"))
+    importlib.reload(importlib.import_module("netlab_ui.services.assistant.config"))
     importlib.reload(assistant_pkg)
     assistant_pkg._available = None
-    return importlib.reload(importlib.import_module("netlab_gui.app.main"))
+    return importlib.reload(importlib.import_module("netlab_ui.app.main"))
 
 
 @pytest.fixture(autouse=True)
@@ -42,12 +42,12 @@ def _restore(monkeypatch):
     yield
     # Leave the shared module state as the rest of the suite expects it.
     monkeypatch.undo()
-    import netlab_gui.services.assistant as assistant_pkg
+    import netlab_ui.services.assistant as assistant_pkg
 
-    importlib.reload(importlib.import_module("netlab_gui.services.assistant.config"))
+    importlib.reload(importlib.import_module("netlab_ui.services.assistant.config"))
     importlib.reload(assistant_pkg)
     assistant_pkg._available = None
-    importlib.reload(importlib.import_module("netlab_gui.app.main"))
+    importlib.reload(importlib.import_module("netlab_ui.app.main"))
 
 
 def test_disabled_by_env(monkeypatch):

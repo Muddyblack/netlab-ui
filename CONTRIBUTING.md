@@ -13,7 +13,7 @@ cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 # pip install -e ".[netlab]"           # if you don't already have netlab + ansible installed locally
-uvicorn netlab_gui.app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
+uvicorn netlab_ui.app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
 ```
 
 The backend doesn't bundle netlab or Ansible. Use **Settings → Environment** to select an existing `netlab` executable, or set `NETLAB_BIN=/path/to/netlab`. A pipx or separate virtualenv installation works: the backend uses that executable's Python environment for `netsim` metadata and prepends its `bin/` directory when netlab launches child tools.
@@ -74,7 +74,7 @@ cd frontend && npm run lint && npm run build     # build = tsc --noEmit + vite b
 
 Response shapes are defined once in Python, and the frontend's TypeScript types are generated from them.
 
-- **Source of truth:** every API response is a Pydantic model (in `backend/netlab_gui/app/contract/responses/`, `backend/app/assistant/responses.py`, …), attached to its endpoint via `response_model=`.
+- **Source of truth:** every API response is a Pydantic model (in `backend/netlab_ui/app/contract/responses/`, `backend/app/assistant/responses.py`, …), attached to its endpoint via `response_model=`.
 - **Generated types:** `frontend/src/api/generated.ts`, produced with [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript). Don't edit it by hand.
 - **Consumer:** `frontend/src/api/client.ts` uses those generated types (`Schemas["CommandResult"]`, …).
 

@@ -1,5 +1,5 @@
 {
-  "name": "netlab-gui-frontend",
+  "name": "netlab-ui-frontend",
   "private": true,
   "type": "module",
   "engines": {

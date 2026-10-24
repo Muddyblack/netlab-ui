@@ -7,11 +7,11 @@ import json
 
 import pytest
 
-from netlab_gui.app.sessions.store import store
-from netlab_gui.services import monitoring
-from netlab_gui.services.assistant import guide, mcp_server
-from netlab_gui.services.assistant.tools import ToolError
-from netlab_gui.services.events import hub
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services import monitoring
+from netlab_ui.services.assistant import guide, mcp_server
+from netlab_ui.services.assistant.tools import ToolError
+from netlab_ui.services.events import hub
 
 TOPOLOGY = "name: demo\nnodes:\n  r1:\n    device: frr\n  r2:\n    device: frr\nlinks:\n- r1-r2\n"
 PLAN = {
@@ -215,9 +215,9 @@ def test_list_fault_tests_gives_tests_links_and_an_example(session):
 def test_propose_fault_test_waits_for_approval_then_runs(session, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from netlab_gui.app.main import app
-    from netlab_gui.services import monitoring_scenarios
-    from netlab_gui.services.assistant import proposals
+    from netlab_ui.app.main import app
+    from netlab_ui.services import monitoring_scenarios
+    from netlab_ui.services.assistant import proposals
 
     with open(session.topology_path, "a") as handle:
         handle.write(FAULTS)
@@ -240,7 +240,7 @@ def test_propose_fault_test_waits_for_approval_then_runs(session, monkeypatch):
 
 
 def test_get_fault_test_results_link_grafana_to_the_run(session, monkeypatch):
-    from netlab_gui.services import monitoring_scenarios
+    from netlab_ui.services import monitoring_scenarios
 
     monkeypatch.setattr(
         monitoring_scenarios,

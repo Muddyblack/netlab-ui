@@ -2,9 +2,9 @@
 
 import pytest
 
-from netlab_gui.services.model import serialize
-from netlab_gui.services.model.templates import instantiate
-from netlab_gui.services.model.topology import IncludeRef, Link, Node, Template, Topology
+from netlab_ui.services.model import serialize
+from netlab_ui.services.model.templates import instantiate
+from netlab_ui.services.model.topology import IncludeRef, Link, Node, Template, Topology
 
 
 def _room_template() -> Template:
@@ -154,7 +154,7 @@ def test_sibling_links_between_included_instances():
 def test_instance_layout_names_match_expansion():
     """services.units.instance_layout must mirror expansion naming exactly —
     every node instantiate creates gets a position, none invented."""
-    from netlab_gui.services.units import instance_layout
+    from netlab_ui.services.units import instance_layout
 
     units = {
         "ws": {

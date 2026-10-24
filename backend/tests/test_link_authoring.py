@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from netlab_gui.app.contract.router.groups import NetlabLinkPut, save_netlab_link
-from netlab_gui.app.sessions.store import store
-from netlab_gui.services.model import serialize
-from netlab_gui.services.model.topology import Node, Topology
-from netlab_gui.services.netlab import link_authoring
+from netlab_ui.app.contract.router.groups import NetlabLinkPut, save_netlab_link
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.model import serialize
+from netlab_ui.services.model.topology import Node, Topology
+from netlab_ui.services.netlab import link_authoring
 
 
 def topology() -> Topology:

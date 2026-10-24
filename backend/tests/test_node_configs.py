@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from netlab_gui.services.netlab import node_configs
+from netlab_ui.services.netlab import node_configs
 
 
 def _lab(tmp_path):

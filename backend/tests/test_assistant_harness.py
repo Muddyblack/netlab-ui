@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from netlab_gui.services import host
-from netlab_gui.services.assistant import harness
-from netlab_gui.services.assistant.config import mcp_token
+from netlab_ui.services import host
+from netlab_ui.services.assistant import harness
+from netlab_ui.services.assistant.config import mcp_token
 
 
 @pytest.fixture
@@ -128,7 +128,7 @@ def test_a_failing_setup_step_is_reported_but_never_fatal(tmp_path):
     import asyncio
     import shutil
 
-    from netlab_gui.app.assistant import router
+    from netlab_ui.app.assistant import router
 
     assert asyncio.run(router._run_setup(["/bin/sh", "-c", "exit 0"], {}, tmp_path)) is None
     note = asyncio.run(router._run_setup(["/bin/sh", "-c", "echo boom; exit 3"], {}, tmp_path))
@@ -148,7 +148,7 @@ def test_missing_cli_is_reported(monkeypatch):
 
 
 def test_agent_terminals_need_loopback_or_a_login(monkeypatch):
-    from netlab_gui.app.assistant import router
+    from netlab_ui.app.assistant import router
 
     monkeypatch.setattr(router.auth, "configured_users", dict)
     assert router._harness_allowed("127.0.0.1")

@@ -5,9 +5,9 @@ import json
 
 from fastapi.testclient import TestClient
 
-from netlab_gui.app.main import app
-from netlab_gui.app.sessions.store import store
-from netlab_gui.services import monitoring
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services import monitoring
 
 
 def test_toggle_adds_and_removes_the_plugin_and_placement():
@@ -207,7 +207,7 @@ def test_annotation_is_skipped_without_grafana(tmp_path):
 def test_workspace_watcher_ignores_the_metrics_store():
     from watchfiles import Change
 
-    from netlab_gui.services import events
+    from netlab_ui.services import events
 
     keep = events._workspace_filter()
     assert keep(Change.modified, "/ws/lab/topology.yml")
