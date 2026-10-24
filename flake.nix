@@ -161,6 +161,9 @@
             # pip); uvicorn auto-detects them when importable.
             ps.uvloop
             ps.httptools
+            # WebSocket transport (also in uvicorn[standard]): without it every
+            # terminal, node shell and log stream upgrade is refused with a 404.
+            ps.websockets
           ]
           ++ backendDevDeps
           ++ [
@@ -216,7 +219,7 @@
                   export PATH="${containerlab}/bin:$PATH"
                 fi
                 cd "$(git rev-parse --show-toplevel)"
-                exec ${python}/bin/uvicorn app.main:app --reload --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
+                exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
               ''
             );
           };
@@ -264,7 +267,7 @@
                 set -m
 
                 pids=()
-                ( cd "$root" && exec ${python}/bin/uvicorn app.main:app --reload --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
+                ( cd "$root" && exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
                 pids+=($!)
                 ( cd "$root/frontend" && npm install && exec npm run dev ) &
                 pids+=($!)
