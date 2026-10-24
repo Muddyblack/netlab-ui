@@ -42,9 +42,8 @@ Vagrantfile
 # UI layout sidecars are per-user view state, not source
 *.netlab-ui.json
 
-# labs/ holds user-specific lab data; only the sample lab is tracked
-labs/*
-!labs/sample.yml
+# labs/ holds user-specific lab data (the sample lab lives in examples/)
+labs/
 
 .ruff_cache/
 

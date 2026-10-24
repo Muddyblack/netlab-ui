@@ -120,7 +120,7 @@ export FRONTEND_DIST_DIR="$repo/frontend/dist"
 # ~/.netlab (here the isolated home). The UI makes the same link when you
 # switch monitoring on.
 mkdir -p "$HOME/.netlab"
-ln -sfn "$repo/monitoring/plugin/monitoring" "$HOME/.netlab/monitoring"
+ln -sfn "$repo/plugins/monitoring/plugin/monitoring" "$HOME/.netlab/monitoring"
 
 cleanup() {
   for lab in "$work"/workspace/*/; do

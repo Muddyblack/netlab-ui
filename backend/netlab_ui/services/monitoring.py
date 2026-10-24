@@ -1,6 +1,6 @@
 """Lab monitoring: the netlab ``monitoring`` plugin shipped in this repository.
 
-The plugin (``monitoring/plugin/monitoring``) does the work -- it runs inside netlab,
+The plugin (``plugins/monitoring/plugin/monitoring``) does the work -- it runs inside netlab,
 writes ``<lab>/monitoring/`` at ``netlab create`` and starts the stack with the lab
 (see monitoring/README.md). This module is the UI side of it:
 
@@ -29,7 +29,7 @@ from typing import Any
 from netlab_ui.services.netlab import runner
 
 PLUGIN = "monitoring"
-_REPO_PLUGIN = Path(__file__).resolve().parents[3] / "monitoring" / "plugin" / PLUGIN
+_REPO_PLUGIN = Path(__file__).resolve().parents[3] / "plugins" / "monitoring" / "plugin" / PLUGIN
 # Copied into the wheel at build time (scripts/build-wheel.sh), next to the bundled frontend.
 _BUNDLED_PLUGIN = Path(__file__).resolve().parents[1] / "_monitoring_plugin"
 PLACEMENTS = ("tool", "node")

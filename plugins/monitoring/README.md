@@ -30,16 +30,16 @@ config and mapping tests, but no run against a real device yet, so expect to fix
 time. Details per feature are in [What is tested where](#what-is-tested-where). Vendor mappings are
 written when someone has the device to test them on, not ahead of that.
 
-![Routing and convergence dashboard during a link flap](docs/dashboard-routing.png)
+![Routing and convergence dashboard during a link flap](../../docs/monitoring/dashboard-routing.png)
 
-![netlab-ui Monitoring dialog](docs/netlab-ui-dialog.png)
+![netlab-ui Monitoring dialog](../../docs/monitoring/netlab-ui-dialog.png)
 
 ## Use it
 
 ### From the netlab CLI
 
 ```bash
-ln -s /path/to/netlab-ui/monitoring/plugin/monitoring ~/.netlab/monitoring   # once
+ln -s /path/to/netlab-ui/plugins/monitoring/plugin/monitoring ~/.netlab/monitoring   # once
 ```
 
 ```yaml
@@ -77,7 +77,7 @@ SPF and neighbor markers come from the devices' own timestamps, so they sit at t
 router did it, not at the next scrape. Turn them on next to a fault test to see which
 routers recalculated, and how often, after a link went down and came back.
 
-![SPF runs and neighbor changes around two fault-test cycles](docs/dashboard-markers.png)
+![SPF runs and neighbor changes around two fault-test cycles](../../docs/monitoring/dashboard-markers.png)
 
 ### Fault tests (repeatable link flaps)
 
@@ -139,7 +139,7 @@ Runs are saved in `monitoring/scenarios/*.json` next to the topology, and each c
 on the dashboards. API: `GET /api/lab/monitoring/faults`, `POST /api/lab/monitoring/scenarios`
 (`{"sessionId": ..., "name": "core_link"}`).
 
-![Fault tests in netlab-ui: a named test, its verdict and netlab validate results](docs/netlab-ui-fault-tests.png)
+![Fault tests in netlab-ui: a named test, its verdict and netlab validate results](../../docs/monitoring/netlab-ui-fault-tests.png)
 
 In the lab this was developed on, `core_link` recovers in 10.1 s on every cycle: FRR's OSPF
 hello interval (10 s) decides it, and `netlab validate` agrees (9.6-9.8 s).
@@ -398,5 +398,5 @@ about 1.6 s per cycle, well inside a 15-second interval.
 ## Tests
 
 ```bash
-python -m pytest monitoring/tests      # needs netlab's Python (python-box, PyYAML)
+python -m pytest plugins/monitoring/tests      # needs netlab's Python (python-box, PyYAML)
 ```

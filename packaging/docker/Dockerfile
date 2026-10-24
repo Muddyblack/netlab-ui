@@ -38,7 +38,7 @@ COPY backend/pyproject.toml ./
 COPY backend/netlab_ui ./netlab_ui
 # The netlab monitoring plugin (Settings / lab "Monitoring"): the UI links it into
 # ~/.netlab when a lab turns monitoring on.
-COPY monitoring/plugin/monitoring ./monitoring_plugin
+COPY plugins/monitoring/plugin/monitoring ./monitoring_plugin
 ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # The base install includes the MCP server that the user's own AI agent
 # (Claude Code, Codex, Copilot, Cursor, Kiro, …) connects to; it is served on the

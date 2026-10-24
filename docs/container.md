@@ -1,6 +1,6 @@
 # Running It as One Container
 
-The dev setup (see [CONTRIBUTING](../CONTRIBUTING.md)) runs the backend and frontend as two separate processes. The root [`Dockerfile`](../Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
+The dev setup (see [CONTRIBUTING](../CONTRIBUTING.md)) runs the backend and frontend as two separate processes. The [`Dockerfile`](../packaging/docker/Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
 
 The image is the UI only. netlab, Ansible and containerlab stay on the host (install them with your package manager, pip or Nix) and the container uses that install, so the UI never drifts from the netlab you actually run.
 
@@ -54,7 +54,7 @@ You don't have to remember any of this: the backend inspects its own container a
 ## Building locally
 
 ```bash
-docker build -t netlab-ui .     # the UI image
+docker build -f packaging/docker/Dockerfile -t netlab-ui .     # the UI image
 docker compose build            # the compose file's image
 ```
 

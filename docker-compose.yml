@@ -35,6 +35,7 @@ services:
     # `docker compose build` builds the same image from a checkout.
     build:
       context: .
+      dockerfile: packaging/docker/Dockerfile
       target: ui
     container_name: netlab-ui
     restart: unless-stopped

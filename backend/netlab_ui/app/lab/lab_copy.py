@@ -152,7 +152,7 @@ class DeleteLabResult(BaseModel):
 
 def _delete_target(topology: Path) -> tuple[Path, Literal["folder", "file"]]:
     """A lab that is the `topology.yml` of its own folder owns that folder; a lone
-    `<name>.yml` (e.g. labs/sample.yml) owns only itself. A workspace root is never a lab folder."""
+    `<name>.yml` (e.g. a top-level labs/demo.yml) owns only itself. A workspace root is never a lab folder."""
     roots = {Path(os.path.realpath(os.path.expanduser(ws))) for ws in ws_store.load()}
     parent = topology.parent
     if topology.stem == "topology" and parent not in roots:

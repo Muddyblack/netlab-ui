@@ -41,7 +41,7 @@ backend/
   Discovery uses `find_spec("netsim")` — so whatever Python runs uvicorn must
   have netlab installed.
 - Make sure netlab is reachable in each runtime:
-  - **Docker** (root `Dockerfile`): the `full` target installs `.[netlab]`;
+  - **Docker** (`packaging/docker/Dockerfile`): the `full` target installs `.[netlab]`;
     the default `ui` target uses a mounted host install (`NETLAB_BIN`).
   - **Nix** (`flake.nix`): the `python` env bundles the `netlab` package, so
     `nix run` / `nix run .#backend` resolve `netsim` automatically.

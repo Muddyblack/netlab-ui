@@ -5,7 +5,7 @@ netlab-ui is a normal Python package. It uses the netlab, Ansible and containerl
 ## Install script
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/packaging/install.sh | bash
 ```
 
 Add options after `bash -s --`, for example `... | bash -s -- --with-netlab --service`:

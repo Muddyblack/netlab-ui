@@ -1,7 +1,7 @@
 # Development override: everything runs from this checkout, so code changes never need an
 # image rebuild.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   docker compose -f docker-compose.yml -f packaging/docker/docker-compose.dev.yml up
 #
 # - Backend and monitoring plugin reload on every edit.
 # - Frontend, two ways, both current with your checkout:
@@ -22,7 +22,7 @@ services:
     command: ["uvicorn", "netlab_ui.app.main:app", "--reload", "--reload-dir", "/app/netlab_ui", "--reload-dir", "/app/monitoring_plugin", "--timeout-graceful-shutdown", "2"]
     volumes:
       - ./backend/netlab_ui:/app/netlab_ui
-      - ./monitoring/plugin/monitoring:/app/monitoring_plugin
+      - ./plugins/monitoring/plugin/monitoring:/app/monitoring_plugin
       # The UI the frontend service keeps building, instead of the one baked into the image.
       - frontend-dist:/app/frontend_dist
 

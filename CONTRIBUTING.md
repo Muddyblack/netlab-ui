@@ -40,6 +40,21 @@ nix develop        # the dev shell (or `direnv allow`)
 
 The first run executes `npm install` for the frontend.
 
+### One command for everything
+
+`make help` lists the root targets (`make dev`, `make test`, `make lint`, `make build`, `make wheel`). They only call each package's own tooling, the same commands CI runs.
+
+## Repo layout
+
+| Path | What |
+| --- | --- |
+| `backend/`, `frontend/`, `desktop/` | The product: FastAPI service, React UI, Electron shell |
+| `plugins/monitoring/` | The optional netlab `monitoring` plugin, self-contained (own ruff config and tests) so it can be split out |
+| `packaging/` | Distribution: `docker/` (Dockerfile, dev compose), `nix/` (NixOS module), `install.sh`. `flake.nix` and `docker-compose.yml` stay at the root where Nix and `docker compose up` expect them |
+| `scripts/` | Dev and release helpers (`tag.sh`, `build-wheel.sh`) |
+| `docs/` | All long-form docs, screenshots (`images/`, `monitoring/`) and the showcase generator |
+| `examples/` | Sample labs. `labs/` is the git-ignored default workspace |
+
 ## Local commit checks
 
 Install the lightweight hooks once per clone:
@@ -103,7 +118,7 @@ The gallery in the README and [docs/showcase/GALLERY.md](docs/showcase/GALLERY.m
 
 ## Releases
 
-**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. Merging that PR into `main` is the release: `.github/workflows/release.yml` creates the tag and the GitHub release, publishes the package to PyPI (`pypi-release.yml`) and pushes `ghcr.io/muddyblack/netlab-ui:<ver>` and `:latest` (`container-release.yml`, UI only). A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`), so it is hard to merge one by accident. `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
+**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. Merging that PR into `main` is the release: `.github/workflows/release.yml` creates the tag and the GitHub release, publishes the package to PyPI (`_pypi.yml`) and pushes `ghcr.io/muddyblack/netlab-ui:<ver>` and `:latest` (`_container.yml`, UI only). A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`), so it is hard to merge one by accident. `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
 
 PyPI needs a trusted publisher for this repo and `release.yml` (environment `pypi`) set up once on pypi.org.
 

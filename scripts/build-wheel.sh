@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the netlab-ui wheel + sdist with the UI and the monitoring plugin bundled inside:
 #   netlab_ui/_frontend           <- frontend/dist
-#   netlab_ui/_monitoring_plugin  <- monitoring/plugin/monitoring
+#   netlab_ui/_monitoring_plugin  <- plugins/monitoring/plugin/monitoring
 # Output lands in backend/dist/. The copied directories are git-ignored.
 set -euo pipefail
 
@@ -12,7 +12,7 @@ pkg="$root/backend/netlab_ui"
 
 rm -rf "$pkg/_frontend" "$pkg/_monitoring_plugin"
 cp -r "$root/frontend/dist" "$pkg/_frontend"
-cp -r "$root/monitoring/plugin/monitoring" "$pkg/_monitoring_plugin"
+cp -r "$root/plugins/monitoring/plugin/monitoring" "$pkg/_monitoring_plugin"
 find "$pkg/_monitoring_plugin" -name __pycache__ -prune -exec rm -rf {} +
 
 (cd "$root/backend" && rm -rf dist && python -m build)

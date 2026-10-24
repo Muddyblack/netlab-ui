@@ -105,7 +105,7 @@ jobs:
             echo "backend=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if match '^(monitoring/|\.github/workflows/ci\.yml)'; then
+          if match '^(plugins/monitoring/|\.github/workflows/ci\.yml)'; then
             echo "monitoring=true" >> "$GITHUB_OUTPUT"
           else
             echo "monitoring=false" >> "$GITHUB_OUTPUT"
@@ -119,7 +119,7 @@ jobs:
 
           # The release image is only ever built on a tag push, so without this
           # a broken Dockerfile stays invisible until release day.
-          if match '^(Dockerfile|\.dockerignore|\.github/workflows/(ci|container-release)\.yml)'; then
+          if match '^(packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_container)\.yml)'; then
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
             echo "docker=false" >> "$GITHUB_OUTPUT"
@@ -159,7 +159,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: monitoring
+        working-directory: plugins/monitoring
     steps:
       - uses: actions/checkout@v7
 
@@ -206,7 +206,7 @@ jobs:
         env:
           NODE_OPTIONS: --max_old_space_size=4096
 
-  # Builds the release image exactly as container-release.yml would, minus the
+  # Builds the release image exactly as _container.yml would, minus the
   # push — so Dockerfile regressions surface on the PR instead of on a tag.
   docker:
     needs: changes
@@ -224,6 +224,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          file: packaging/docker/Dockerfile
           target: ${{ matrix.target }}
           push: false
           # Single arch on PRs: this is a "does it build" gate, and emulating

@@ -1,6 +1,6 @@
 name: Publish Container Image
 
-# Builds the UI image from the root Dockerfile and pushes it to GHCR. Called by
+# Builds the UI image from the packaging/docker/Dockerfile and pushes it to GHCR. Called by
 # release.yml when a version bump lands on the default branch. `desktop-v*` tags
 # are handled by desktop-release.yml.
 on:
@@ -50,6 +50,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          file: packaging/docker/Dockerfile
           target: ui
           # arm64 matters for Apple Silicon and arm-based lab hosts. Only the
           # Python stage is emulated — the frontend stage builds natively.

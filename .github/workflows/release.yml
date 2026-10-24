@@ -89,7 +89,6 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           files: |
             docker-compose.yml
-            Dockerfile
           body: |
             ## Install
 
@@ -127,7 +126,7 @@ jobs:
   pypi:
     needs: prepare
     if: needs.prepare.outputs.new == 'true'
-    uses: ./.github/workflows/pypi-release.yml
+    uses: ./.github/workflows/_pypi.yml
     permissions:
       contents: read
       id-token: write # trusted publishing
@@ -135,7 +134,7 @@ jobs:
   container:
     needs: prepare
     if: needs.prepare.outputs.new == 'true'
-    uses: ./.github/workflows/container-release.yml
+    uses: ./.github/workflows/_container.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
     permissions:
