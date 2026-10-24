@@ -21,7 +21,7 @@
     "build:win": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^43.7.6",
+    "electron": "^45.0.0",
     "electron-builder": "^26.15.3",
     "oxlint": "^1.74.0"
   },
