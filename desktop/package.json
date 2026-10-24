@@ -23,7 +23,7 @@
   "devDependencies": {
     "electron": "^43.7.6",
     "electron-builder": "^26.15.3",
-    "oxlint": "^1.74.0"
+    "oxlint": "^1.89.0"
   },
   "build": {
     "appId": "app.netlab.desktop",
