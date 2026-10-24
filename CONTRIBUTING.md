@@ -52,8 +52,7 @@ The first run executes `npm install` for the frontend.
 | `plugins/monitoring/` | The optional netlab `monitoring` plugin, self-contained (own ruff config and tests) so it can be split out |
 | `packaging/` | Distribution: `docker/` (Dockerfile, dev compose), `nix/` (NixOS module), `install.sh`. `flake.nix` and `docker-compose.yml` stay at the root where Nix and `docker compose up` expect them |
 | `scripts/` | Dev and release helpers (`tag.sh`, `build-wheel.sh`) |
-| `docs/` | All long-form docs, screenshots (`images/`, `monitoring/`) and the showcase generator |
-| `examples/` | Sample labs. `labs/` is the git-ignored default workspace |
+| `docs/` | All long-form docs, screenshots (`images/`, `monitoring/`), sample labs (`examples/`) and the showcase generator. `labs/` is the git-ignored default workspace |
 
 ## Local commit checks
 
