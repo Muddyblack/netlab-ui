@@ -22,7 +22,7 @@
   },
   "devDependencies": {
     "electron": "^43.7.6",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "oxlint": "^1.74.0"
   },
   "build": {
