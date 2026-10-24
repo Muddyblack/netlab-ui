@@ -1,5 +1,6 @@
 import { SpotlightOverlay } from "../search/SpotlightOverlay";
 import { ProposalGhostOverlay } from "../agents/ProposalGhostOverlay";
+import { SketchOverlay } from "../sketch/SketchOverlay";
 import { LeaseBadge } from "./LeaseBadge";
 
 /** Small canvas overlays tied to the open lab: search spotlight, lease timer, proposed changes. */
@@ -13,6 +14,7 @@ export function CanvasLabOverlays({ container, sessionId, onToast, onRefresh }: 
     <>
       <SpotlightOverlay container={container} sessionId={sessionId} />
       <ProposalGhostOverlay container={container} sessionId={sessionId} onApplied={onRefresh} />
+      <SketchOverlay container={container} sessionId={sessionId} />
       <LeaseBadge sessionId={sessionId} onToast={onToast} />
     </>
   );

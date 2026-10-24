@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { getApiBase, getApiWsBase } from "../api/endpoint";
+import { registerAgentInput } from "../host/agentInput";
 
 const FONT_SIZE_KEY = "netlab.terminal.fontSize";
 const MIN_FONT_SIZE = 11;
@@ -119,6 +120,10 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
     ws.onopen = () => ws.send(JSON.stringify({ resize: { cols: term.cols, rows: term.rows } }));
 
     term.onData((d) => ws.readyState === ws.OPEN && ws.send(new TextEncoder().encode(d)));
+    // The sketch's Generate button types its request into the agent that is running for this lab.
+    const unregisterInput = imageSession && path.startsWith("/api/assistant/harness/")
+      ? registerAgentInput(imageSession, (line) => ws.readyState === ws.OPEN && ws.send(new TextEncoder().encode(`${line}\r`)))
+      : undefined;
 
     const handleResize = () => {
       fit.fit();
@@ -135,6 +140,7 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
 
     return () => {
       resizeObserver.disconnect();
+      unregisterInput?.();
       host.removeEventListener("paste", handlePaste, true);
       host.removeEventListener("drop", handleDrop);
       host.removeEventListener("dragover", handleDragOver);

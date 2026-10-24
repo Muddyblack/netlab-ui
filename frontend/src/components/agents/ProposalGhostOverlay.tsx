@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Alert, Box, Button, Chip, GlobalStyles, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Badge, Box, Button, Chip, GlobalStyles, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import VisibilityIcon from "@mui/icons-material/VisibilityOutlined";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOffOutlined";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import { useEdges, useNodes } from "@containerlab/clab-ui";
@@ -216,6 +219,7 @@ function ProposalGhosts({ container, pending, onApplied }: { container: HTMLElem
   const viewport = useViewport(container);
   const host = useHost(viewport);
   const changes = useMemo(() => pending.map((proposal) => proposal.changes as ProposalChanges), [pending]);
+  const [showGhosts, setShowGhosts] = useState(true);
 
   return (
     <>
@@ -224,11 +228,48 @@ function ProposalGhosts({ container, pending, onApplied }: { container: HTMLElem
         [`.react-flow__node.${CHANGED}`]: { filter: `drop-shadow(0 0 6px ${CHANGE})`, outline: `2px dashed ${CHANGE}`, outlineOffset: 4, borderRadius: 8 },
         [`.react-flow__edge.${REMOVED} path`]: { stroke: `${REMOVE} !important`, strokeDasharray: "6 5", opacity: 0.9 },
       }} />
-      <MarkExisting container={container} changes={changes} />
-      {host && <GhostLayer changes={changes} nodes={nodes} host={host} />}
-      <Stack spacing={0.75} sx={{ position: "absolute", top: 56, left: 16, zIndex: 8, pointerEvents: "none" }}>
-        {pending.map((proposal) => <ProposalChip key={proposal.id} proposal={proposal} onApplied={onApplied} />)}
-      </Stack>
+      {showGhosts && <MarkExisting container={container} changes={changes} />}
+      {showGhosts && host && <GhostLayer changes={changes} nodes={nodes} host={host} />}
+      <ProposalDock container={container} pending={pending} onApplied={onApplied} showGhosts={showGhosts} onToggleGhosts={() => setShowGhosts((shown) => !shown)} />
     </>
+  );
+}
+
+/** One button in the canvas corner, with a count: the proposals open from it instead of sitting over the lab. */
+function ProposalDock({ container, pending, onApplied, showGhosts, onToggleGhosts }: {
+  container: HTMLElement;
+  pending: AssistantProposal[];
+  onApplied: () => void;
+  showGhosts: boolean;
+  onToggleGhosts: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return createPortal(
+    <Box sx={{ position: "absolute", bottom: 64, left: 16, zIndex: 8, display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.75, pointerEvents: "none" }}>
+      {open && (
+        <Stack spacing={0.75}>
+          {pending.map((proposal) => <ProposalChip key={proposal.id} proposal={proposal} onApplied={onApplied} />)}
+        </Stack>
+      )}
+      <Stack direction="row" spacing={0.5} sx={{ pointerEvents: "auto" }}>
+        <Tooltip title={open ? "Hide the AI's proposed changes" : "Show the AI's proposed changes"}>
+          <Paper elevation={3} sx={{ borderRadius: "50%" }}>
+            <IconButton size="small" aria-label="AI proposed changes" color={open ? "primary" : "default"} onClick={() => setOpen((value) => !value)}>
+              <Badge badgeContent={pending.length} color="success"><AutoFixHighIcon fontSize="small" /></Badge>
+            </IconButton>
+          </Paper>
+        </Tooltip>
+        {open && (
+          <Tooltip title={showGhosts ? "Hide the changes on the canvas" : "Show the changes on the canvas"}>
+            <Paper elevation={3} sx={{ borderRadius: "50%" }}>
+              <IconButton size="small" aria-label="Toggle changes on the canvas" onClick={onToggleGhosts}>
+                {showGhosts ? <VisibilityIcon fontSize="small" /> : <VisibilityOffIcon fontSize="small" />}
+              </IconButton>
+            </Paper>
+          </Tooltip>
+        )}
+      </Stack>
+    </Box>,
+    container,
   );
 }

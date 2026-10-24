@@ -44,6 +44,16 @@ from services.netlab import validation as validation_store
 from services.netlab.logfmt import LineFilter
 
 router = APIRouter()
+
+# Deploying needs root, and the app has no terminal to type a sudo password into. Passwordless sudo is not the answer:
+# containerlab's own model is a root-owned setuid binary that only members of the clab_admins group may run.
+SUDO_HINT = (
+    "Deploying needs root, and this app cannot type a sudo password. Give containerlab the setup its installer uses: "
+    "a root-owned setuid binary that only the clab_admins group can run, with you in that group. "
+    "Ubuntu/Debian: install containerlab from its package or install script, then `sudo usermod -aG clab_admins $USER` "
+    "and log in again. NixOS: add a security.wrappers.containerlab entry (owner root, group clab_admins, "
+    "setuid = true, permissions u+rx,g+x,o=) and put your user in the clab_admins group, then rebuild."
+)
 logger = logging.getLogger(__name__)
 
 
@@ -510,6 +520,11 @@ async def lab_lifecycle_stream(body: LifecycleStreamAction, request: Request):
                             plan = multilab.plan(path, await runner.status_cached(max_age=0))
                             if plan["suggestedMultilabId"] is not None:
                                 done_payload["suggestedMultilabId"] = plan["suggestedMultilabId"]
+                    if int(line) != 0 and (
+                        "a password is required" in transcript
+                        or "a terminal is required to read the password" in transcript
+                    ):
+                        done_payload["hint"] = SUDO_HINT
                     if tracker:
                         tracker.finish(int(line))
                         done_payload["progress"] = tracker.payload(delta=True)

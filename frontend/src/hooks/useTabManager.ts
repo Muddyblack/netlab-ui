@@ -86,7 +86,7 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
       try { await host.disposeSession(sid); } catch (err) { console.warn("Failed to dispose session:", err); }
     }
     if (rt) { resetContext(); await refreshTopologySnapshot({ externalChange: true }, rt.session); }
-  }, [host, runtimeRef, setCurrentSession]);
+  }, [addToast, host, runtimeRef, setCurrentSession]);
 
   const activateLabTab = useCallback((tab: OpenLabTab, opts?: { skipDisposeCurrent?: boolean; fitView?: boolean }): Promise<void> => {
     // Collapse repeated activations of the same tab into the one in flight.
@@ -130,14 +130,22 @@ export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Option
           // the nodes, so firing right after the snapshot refresh is safe.
           if (opts?.fitView) host.emitTopoViewerEvent?.({ type: "fitViewport" });
         }
-      } catch (err) { console.error("Failed to activate lab tab:", err); }
+      } catch (err) {
+        console.error("Failed to activate lab tab:", err);
+        // The lab was deleted, moved, or is outside the workspace now: a restored tab for it can never open, so drop it.
+        if (/createSession failed: (400|403|404)\b/.test(err instanceof Error ? err.message : "")) {
+          setOpenTabs((cur) => cur.filter((t) => t.id !== tab.id));
+          setActiveTabId((cur) => (cur === tab.id ? null : cur));
+          addToast(`"${tab.title}" is no longer available, so its tab was closed`, "info");
+        }
+      }
     };
     const promise = run().finally(() => {
       if (inflight.current?.promise === promise) inflight.current = null;
     });
     inflight.current = { tabId: tab.id, promise };
     return promise;
-  }, [host, runtimeRef, setCurrentSession]);
+  }, [addToast, host, runtimeRef, setCurrentSession]);
 
   const handleOpenLab = useCallback(async (topoRef: TopologyRef, opts?: { fitView?: boolean }) => {
     const tab = resolveOpenLabTab(topoRef);
