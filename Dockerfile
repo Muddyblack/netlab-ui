@@ -110,3 +110,25 @@ LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" 
 # Settings → Environment; nothing else is affected.
 FROM runtime AS ui
 LABEL org.opencontainers.image.description="Web UI for netlab — topology editor, lab lifecycle and device consoles in one container."
+
+# ---- full image: the UI plus netlab, Ansible and containerlab ----
+# For hosts that only have Docker: nothing else to install, nothing to mount but the
+# workspace and the Docker socket (see docker-compose.full.yml). The versions are pinned
+# here, so they only change when this file does; override them with --build-arg.
+#   docker build --target full -t netlab-ui:full .
+FROM runtime AS full
+LABEL org.opencontainers.image.description="Web UI for netlab with netlab, Ansible and containerlab included."
+ARG NETLAB_VERSION=26.10
+ARG CONTAINERLAB_VERSION=0.82.0
+ARG TARGETARCH
+# openssh-client: Ansible reaches lab devices over SSH. iproute2/iputils-ping/procps: tools
+# netlab and containerlab call. The containerlab release is a static Go binary.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates openssh-client iproute2 iputils-ping procps \
+    && curl -fsSL "https://github.com/srl-labs/containerlab/releases/download/v${CONTAINERLAB_VERSION}/containerlab_${CONTAINERLAB_VERSION}_linux_${TARGETARCH}.tar.gz" \
+        | tar -xz -C /usr/local/bin containerlab \
+    && apt-get purge -y curl && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+# The same set as the `netlab` extra in backend/pyproject.toml (netlab, Ansible, ansible-pylibssh);
+# NETLAB_VERSION pins netlab itself. Keep the two lists in step.
+RUN pip install --no-cache-dir "networklab==${NETLAB_VERSION}" "ansible>=9" "ansible-pylibssh>=1.2"

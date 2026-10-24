@@ -2,9 +2,16 @@
 
 The dev setup (see [CONTRIBUTING](../CONTRIBUTING.md)) runs the backend and frontend as two separate processes. The root [`Dockerfile`](../Dockerfile) instead builds the frontend and bakes the static output straight into the FastAPI backend, so the whole app is one image on one port — same shape as [containerlab-app](https://github.com/srl-labs/containerlab-app)'s web app / desktop split, minus the split: our backend already _is_ the thing their `clab-api-server` is, so there's no separate API service to stand up first.
 
-The image is the UI only. netlab, Ansible and containerlab stay on the host (install them with your package manager, pip or Nix) and the container uses that install, so the UI never drifts from the netlab you actually run.
+There are two images, built from the same Dockerfile:
 
-## Quick start
+| Image | Contains | Use it when |
+| --- | --- | --- |
+| `netlab-ui:<version>` (target `ui`) | the UI only | netlab, Ansible and containerlab are already installed on the host (package manager, pip or Nix). The container uses that install, so the UI never drifts from the netlab you actually run. |
+| `netlab-ui:<version>-full` (target `full`) | the UI plus netlab, Ansible and containerlab | the host has only Docker. Use [`docker-compose.full.yml`](../docker-compose.full.yml); nothing to mount except the labs folder and the Docker socket. |
+
+The `full` image pins its tool versions in the Dockerfile (`NETLAB_VERSION`, `CONTAINERLAB_VERSION`; override with `--build-arg`), so they change when you update the image. If your host netlab is installed in an unusual place, set its path under Settings → Environment instead of mounting it.
+
+## Quick start (UI only)
 
 ```bash
 NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
@@ -59,3 +66,13 @@ docker compose build            # the compose file's image
 ```
 
 libvirt-based providers aren't included in the image.
+
+## Full image (UI plus netlab, Ansible and containerlab)
+
+For a host that has only Docker:
+
+```bash
+docker compose -f docker-compose.full.yml up -d     # http://localhost:8000
+```
+
+Same flags and reasons as above, minus the host tools mount.
