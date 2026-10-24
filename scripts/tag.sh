@@ -14,7 +14,12 @@ VERSION_FILE="backend/pyproject.toml"
 
 # Rewrite the version in the file that carries it: bump_files OLD NEW
 bump_files() {
-    sed -i -E "0,/^version = \"$1\"/s//version = \"$2\"/" "$VERSION_FILE"
+    # awk, not GNU `sed -i 0,/re/`, so this also runs on macOS. Only the first match changes.
+    awk -v old="$1" -v new="$2" '
+        !done && index($0, "version = \"" old "\"") == 1 {
+            print "version = \"" new "\"" substr($0, length(old) + 13); done = 1; next
+        }
+        { print }' "$VERSION_FILE" > "$VERSION_FILE.tmp" && mv "$VERSION_FILE.tmp" "$VERSION_FILE"
 }
 
 # Version in a pyproject.toml read from stdin.

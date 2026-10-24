@@ -99,7 +99,7 @@ jobs:
 
           match() { echo "$changed" | grep -qE "$1"; }
 
-          if match '^(backend/|pyproject\.toml|\.github/workflows/ci\.yml)'; then
+          if match '^(backend/|plugins/monitoring/|\.github/workflows/ci\.yml)'; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
@@ -118,8 +118,8 @@ jobs:
           fi
 
           # The release image is only ever built on a tag push, so without this
-          # a broken Dockerfile stays invisible until release day.
-          if match '^(packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_container)\.yml)'; then
+          # a broken Dockerfile stays invisible until release day. It also copies backend, frontend and the plugin.
+          if match '^(backend/|frontend/|plugins/monitoring/plugin/|\.dockerignore|packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_container)\.yml)'; then
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
             echo "docker=false" >> "$GITHUB_OUTPUT"

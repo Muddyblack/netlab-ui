@@ -2,8 +2,8 @@ name: Release
 
 on:
   # Merging a release PR (scripts/tag.sh) bumps the version in backend/pyproject.toml on the
-  # default branch. That push is the release: the tag does not exist yet, this workflow creates
-  # it together with the GitHub release, then publishes the PyPI package and the container image.
+  # default branch. That push is the release: the tag does not exist yet. This workflow publishes
+  # the PyPI package and the container image, then creates the tag with the GitHub release.
   # The desktop app releases separately (desktop-release.yml, desktop-v* tags).
   push:
     branches: [main]
@@ -53,8 +53,11 @@ jobs:
             case "$VERSION" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac
           } >> "$GITHUB_OUTPUT"
 
+  # Last on purpose: the tag is what marks a version as released, so it is only created once PyPI and
+  # the container image are published. If either fails, nothing is tagged and a re-run publishes again
+  # (the PyPI upload skips files it already has; the image push is idempotent).
   github-release:
-    needs: prepare
+    needs: [prepare, pypi, container]
     if: needs.prepare.outputs.new == 'true'
     runs-on: ubuntu-latest
     permissions:
