@@ -74,7 +74,8 @@ cat <<EOF
 
 netlab-ui is installed.
   start it now      netlab-ui            (then open http://127.0.0.1:8000)
-  run as a service  netlab-ui install-service
+  run as a service  netlab-ui install-service   (starts at boot, checks it came up)
+  settings          netlab-ui config
   update later      netlab-ui upgrade
 The first time you open the UI it checks this machine (netlab, containerlab, Docker access) and says what is missing.
 EOF

@@ -21,6 +21,32 @@ Or by hand: `pipx install 'netlab-ui[netlab]'`.
 
 Start it with `netlab-ui` and open <http://127.0.0.1:8000>. On first use the UI checks the machine (netlab version, containerlab, Docker access, the sudo-less containerlab setup) and shows what to fix under Settings → Environment → Host Setup.
 
+## Running it as a service
+
+```bash
+netlab-ui install-service            # a systemd user service that starts at boot
+sudo netlab-ui install-service --system   # or a system service that runs as you
+netlab-ui install-service --uninstall
+```
+
+It checks that the service really started and answers on its port, and prints the commands for `status`, `logs` and `restart`; if it did not start, it shows the last log lines and exits with an error.
+
+- **Finding your tools.** A service does not see your terminal's environment, so the installer records where it found `netlab`, `ansible-playbook` and `containerlab` (for example `~/.local/bin`) in the unit's `PATH` and in the config file. It warns if one of them is missing.
+- **Boot without a login.** A user service only runs at boot (and after you log out) if lingering is on. The installer turns it on and verifies it; if your system needs a password for that, it tells you to run `sudo loginctl enable-linger $USER`.
+- **Settings.** `~/.config/netlab-ui/config.toml` (or `$NETLAB_UI_CONFIG_FILE`) holds the address, the port and the tool locations, so they do not depend on a terminal. `netlab-ui config` shows what the server will use.
+
+  ```toml
+  [server]
+  host = "127.0.0.1"      # "0.0.0.0" only together with a token (netlab-ui token)
+  port = 8000
+
+  [tools]
+  path = ["~/.local/bin"]                  # searched for netlab, ansible-playbook, containerlab
+  netlab = "~/venvs/netlab/bin/netlab"     # optional: the netlab executable itself
+  ```
+
+  A flag (`--port`) wins over an environment variable (`UVICORN_PORT`), which wins over the file. Restart the service after editing it.
+
 ## Updating
 
 ```bash
