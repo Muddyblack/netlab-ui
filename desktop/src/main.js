@@ -1,9 +1,10 @@
 "use strict";
 
 const path = require("node:path");
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, session, shell } = require("electron");
 const { readConfig, writeConfig } = require("./config");
 const { canNavigateInApp, isSafeExternalUrl } = require("./navigation");
+const { serverUrlPatterns, withBearer } = require("./serverAuth");
 
 // This shell doesn't bundle the netlab backend (it needs `netlab`/containerlab
 // on the host, same as the web app) — it points at one, same as the web app
@@ -111,8 +112,38 @@ function createWindow() {
   void connect();
 }
 
+/**
+ * Send the API token with every request the page makes to the server (fetch, EventSource and WebSocket alike).
+ * Only one listener can be registered per session, so calling this again replaces the previous server's. An empty
+ * token removes it, leaving a server behind Basic auth to the browser's own login prompt.
+ */
+function applyServerAuth(serverUrl, token) {
+  const webRequest = session.defaultSession.webRequest;
+  if (!token) {
+    webRequest.onBeforeSendHeaders(null);
+    return;
+  }
+  webRequest.onBeforeSendHeaders({ urls: serverUrlPatterns(serverUrl) }, (details, callback) => {
+    callback({ requestHeaders: withBearer(details.requestHeaders, token) });
+  });
+}
+
+/** "ok", "unreachable" or "unauthorized". /api/health is open, so the token is checked on a protected route. */
+async function probeServer(serverUrl, token) {
+  if (!(await checkHealth(serverUrl))) return "unreachable";
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  try {
+    const res = await fetch(new URL("/api/environment/netlab", serverUrl), { headers });
+    // Without a token a 401 just means Basic auth, which the page's own login prompt handles.
+    return res.status === 401 && token ? "unauthorized" : "ok";
+  } catch {
+    return "unreachable";
+  }
+}
+
 async function connect() {
-  const { serverUrl } = readConfig();
+  const { serverUrl, token } = readConfig();
+  applyServerAuth(serverUrl, token);
   setSplashStatus("Checking server…");
   const reachable = await checkHealth(serverUrl);
   if (reachable) {
@@ -128,12 +159,15 @@ ipcMain.handle("netlab-desktop:get-server-url", () => readConfig().serverUrl);
 
 ipcMain.handle("netlab-desktop:check-health", (_event, serverUrl) => checkHealth(serverUrl));
 
-ipcMain.handle("netlab-desktop:connect", async (_event, serverUrl) => {
-  const reachable = await checkHealth(serverUrl);
-  if (!reachable) return false;
-  writeConfig({ serverUrl });
+ipcMain.handle("netlab-desktop:get-token", () => readConfig().token);
+
+ipcMain.handle("netlab-desktop:connect", async (_event, serverUrl, token = "") => {
+  const result = await probeServer(serverUrl, token);
+  if (result !== "ok") return result;
+  writeConfig({ serverUrl, token });
+  applyServerAuth(serverUrl, token);
   await mainWindow.loadURL(serverUrl);
-  return true;
+  return result;
 });
 
 function buildMenu() {

@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { installApiAuth } from "./api/endpoint";
 import { applyResolvedThemeVars, readPersistedThemeMode, resolveThemeMode } from "./theme";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
@@ -25,6 +26,8 @@ if (!monacoGlobal.MonacoEnvironment) {
 function syncThemeVars(): void {
   applyResolvedThemeVars(resolveThemeMode());
 }
+
+installApiAuth();
 
 // Initialize theme variables before mounting React and keep them synced.
 syncThemeVars();

@@ -93,3 +93,63 @@ def test_credentials_parsing(monkeypatch, tmp_path):
         raise AssertionError("expected a configuration error")
     except RuntimeError:
         pass
+
+
+def _token_client(users: dict[str, str] | None = None) -> TestClient:
+    app = FastAPI()
+
+    @app.get("/api/lab/files")
+    def files(request: Request):
+        return {"user": auth.request_user(request)}
+
+    @app.websocket("/api/node/r1/shell")
+    async def shell(ws: WebSocket):
+        await ws.accept()
+        await ws.send_text("hi")
+        await ws.close()
+
+    app.add_middleware(auth.BasicAuthMiddleware, users=users, token="tok-123")
+    return TestClient(app)
+
+
+def test_bearer_token_is_accepted_and_acts_as_the_token_user():
+    client = _token_client()
+    res = client.get("/api/lab/files", headers={"Authorization": "Bearer tok-123"})
+    assert res.json() == {"user": "token"}
+
+
+def test_query_token_covers_streams_and_websockets():
+    client = _token_client()
+    assert client.get("/api/lab/files?token=tok-123").status_code == 200
+    with client.websocket_connect("/api/node/r1/shell?token=tok-123") as ws:
+        assert ws.receive_text() == "hi"
+
+
+def test_wrong_or_missing_token_is_rejected():
+    client = _token_client()
+    assert client.get("/api/lab/files").status_code == 401
+    assert client.get("/api/lab/files?token=nope").status_code == 401
+    assert client.get("/api/lab/files", headers={"Authorization": "Bearer nope"}).status_code == 401
+
+
+def test_token_only_mode_does_not_prompt_a_browser_login():
+    assert "www-authenticate" not in _token_client().get("/api/lab/files").headers
+
+
+def test_basic_login_still_works_beside_a_token():
+    client = _token_client({"admin": "s3cret"})
+    res = client.get("/api/lab/files", headers=_basic("admin", "s3cret"))
+    assert res.json() == {"user": "admin"}
+    assert client.get("/api/lab/files").headers["www-authenticate"].startswith("Basic ")
+
+
+def test_configured_token_sources(monkeypatch, tmp_path):
+    monkeypatch.delenv("NETLAB_GUI_TOKEN", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.delenv("NETLAB_GUI_TOKEN_FILE", raising=False)
+    assert auth.configured_token() is None
+    (tmp_path / "netlab-gui").mkdir()
+    (tmp_path / "netlab-gui" / "token").write_text("from-default-file\n")
+    assert auth.configured_token() == "from-default-file"
+    monkeypatch.setenv("NETLAB_GUI_TOKEN", "from-env")
+    assert auth.configured_token() == "from-env"

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import shlex
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from netlab_gui.app import auth
 
 UNIT_NAME = "netlab-gui.service"
 
@@ -82,6 +85,24 @@ def _install_service(args: argparse.Namespace) -> int:
     return 0
 
 
+def _token(args: argparse.Namespace) -> int:
+    """Print the API token remote clients use, creating one on first use (``--rotate`` replaces it)."""
+    path = auth.default_token_file()
+    current = auth.configured_token()
+    if current and not args.rotate:
+        print(current)
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Create with 0600 from the start so the secret is never world-readable.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(secrets.token_urlsafe(32) + "\n")
+    path.chmod(0o600)
+    print(path.read_text().strip())
+    print(f"saved to {path}; restart netlab-gui to enforce it", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="netlab-gui", description=__doc__)
     sub = parser.add_subparsers(dest="command")
@@ -100,6 +121,10 @@ def main(argv: list[str] | None = None) -> int:
     # `netlab-gui` and `netlab-gui --port 9000` both mean `serve`.
     if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
         argv = ["serve", *argv]
+    token = sub.add_parser("token", help="print the API token for remote clients, creating it if needed")
+    token.add_argument("--rotate", action="store_true", help="replace the stored token with a new one")
+    token.set_defaults(func=_token)
+
     args = parser.parse_args(argv)
     return args.func(args)
 

@@ -21,3 +21,17 @@ def test_bare_flags_mean_serve(monkeypatch):
     assert seen["port"] == 9123
     assert seen["host"] == "0.0.0.0"
     assert seen["target"] == "netlab_gui.app.main:app"
+
+
+def test_token_command_creates_a_private_token_once(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("NETLAB_GUI_TOKEN", raising=False)
+    monkeypatch.delenv("NETLAB_GUI_TOKEN_FILE", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    assert cli.main(["token"]) == 0
+    first = capsys.readouterr().out.strip()
+    assert len(first) >= 32
+    assert (tmp_path / "netlab-gui" / "token").stat().st_mode & 0o077 == 0
+    assert cli.main(["token"]) == 0
+    assert capsys.readouterr().out.strip() == first
+    assert cli.main(["token", "--rotate"]) == 0
+    assert capsys.readouterr().out.strip() != first

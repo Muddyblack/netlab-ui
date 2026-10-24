@@ -19,7 +19,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from netlab_gui.app.auth import BasicAuthMiddleware, configured_users
+from netlab_gui.app.auth import BasicAuthMiddleware, configured_token, configured_users
 from netlab_gui.app.contract.responses import HealthStatus
 from netlab_gui.app.contract.router import router as contract_router
 from netlab_gui.app.docs.router import router as docs_router
@@ -135,7 +135,12 @@ _cors_origins = [o.strip() for o in os.environ.get("NETLAB_GUI_CORS_ORIGINS", ""
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_origin_regex=None if _cors_origins else r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=None
+    if _cors_origins
+    # VS Code webviews have a vscode-webview:// origin; they can only get in with the API token.
+    else r"(https?://(localhost|127\.0\.0\.1)(:\d+)?|vscode-webview://[a-z0-9-]+)"
+    if configured_token()
+    else r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -143,8 +148,9 @@ app.add_middleware(
 # Optional login (NETLAB_UI_AUTH=user:password) — see app/auth.py. Added after
 # CORS so it wraps it: every request, SSE stream and WebSocket is checked.
 _users = configured_users()
-if _users:
-    app.add_middleware(BasicAuthMiddleware, users=_users)
+_token = configured_token()
+if _users or _token:
+    app.add_middleware(BasicAuthMiddleware, users=_users, token=_token)
 
 
 # Filesystem errors (e.g. a sidecar file owned by another user) must become a

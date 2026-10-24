@@ -10,6 +10,7 @@ if (location.protocol === "file:") {
   contextBridge.exposeInMainWorld("netlabDesktop", {
     getServerUrl: () => ipcRenderer.invoke("netlab-desktop:get-server-url"),
     checkHealth: (serverUrl) => ipcRenderer.invoke("netlab-desktop:check-health", serverUrl),
-    connect: (serverUrl) => ipcRenderer.invoke("netlab-desktop:connect", serverUrl),
+    getToken: () => ipcRenderer.invoke("netlab-desktop:get-token"),
+    connect: (serverUrl, token) => ipcRenderer.invoke("netlab-desktop:connect", serverUrl, token),
   });
 }
