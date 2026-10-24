@@ -184,8 +184,8 @@
         # store copy, which is only a fallback for status and authoring.
         containerlab = unstablePkgs.containerlab;
 
-        # No git tag is visible to a flake build, so the version is the revision.
-        guiVersion = "0.0.0+${self.shortRev or self.dirtyShortRev or "unknown"}";
+        # The release version, from backend/pyproject.toml (bumped by scripts/tag.sh).
+        guiVersion = backendPyproject.project.version;
 
         # The built UI (frontend/dist). After a dependency change in frontend/package-lock.json,
         # set npmDepsHash to pkgs.lib.fakeHash, build `.#frontend` once and paste the hash it reports.
@@ -209,9 +209,8 @@
           version = guiVersion;
           pyproject = true;
           src = ./backend;
-          build-system = with pkgs.python312Packages; [ setuptools setuptools-scm ];
+          build-system = with pkgs.python312Packages; [ setuptools ];
           dependencies = backendRuntimeDeps ++ (with pkgs.python312Packages; [ uvloop httptools websockets ]);
-          env.SETUPTOOLS_SCM_PRETEND_VERSION = guiVersion;
           preBuild = ''
             cp -r ${frontend} netlab_ui/_frontend
             cp -r ${./monitoring/plugin/monitoring} netlab_ui/_monitoring_plugin

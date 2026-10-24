@@ -44,9 +44,8 @@ ENV NETLAB_APP_MONITORING_PLUGIN=/app/monitoring_plugin
 # (Claude Code, Codex, Copilot, Cursor, Kiro, …) connects to; it is served on the
 # same port under /mcp, token-protected. NETLAB_APP_ASSISTANT=off disables it.
 #
-# setuptools-scm has no .git here; the version comes from the build arg below.
+# Release builds pass the tag as NETLAB_UI_VERSION; it is shown in the About dialog (see below).
 ARG NETLAB_UI_VERSION=0.0+container
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=${NETLAB_UI_VERSION}
 RUN pip install --no-cache-dir .
 
 COPY --from=frontend-build /app/dist ./frontend_dist

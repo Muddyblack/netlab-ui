@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  # Merging a release PR (scripts/tag.sh) bumps the version in backend/pyproject.toml on the
+  # default branch. That push is the release: the tag does not exist yet, this workflow creates
+  # it together with the GitHub release, then publishes the PyPI package and the container image.
+  # The desktop app releases separately (desktop-release.yml, desktop-v* tags).
+  push:
+    branches: [main]
+    paths: [backend/pyproject.toml]
+  workflow_dispatch:
+
+# One release at a time, and never cancel a half-published one.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Reads the version and works out whether it still needs a release. Pushes that touch the file
+  # without bumping the version (or re-run an already released one) stop here.
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      new: ${{ steps.v.outputs.new }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Work out the version and whether it is released
+        id: v
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          VERSION="$(grep -m1 -E '^version = "' backend/pyproject.toml | sed -E 's/^version = "([^"]+)".*/\1/')"
+          [ -n "$VERSION" ] || { echo "::error::no version in backend/pyproject.toml"; exit 1; }
+          TAG="v${VERSION}"
+          NEW=true
+          if [ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]; then
+            echo "::notice::Releases are only cut from $DEFAULT_BRANCH."
+            NEW=false
+          elif git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::notice::${TAG} is already released."
+            NEW=false
+          fi
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "new=$NEW"
+            case "$VERSION" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac
+          } >> "$GITHUB_OUTPUT"
+
+  github-release:
+    needs: prepare
+    if: needs.prepare.outputs.new == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The GitHub Release is the landing page people reach from the tag, so it leads with how to
+      # install rather than only a source zip. Notes list the commits since the previous release.
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG="$(git tag --sort=-creatordate | grep -E '^v[0-9]' | sed -n '1p')"
+          if [ -n "$PREV_TAG" ]; then
+            NOTES="$(git log "${PREV_TAG}..HEAD" --pretty=format:'- %s' --no-merges)"
+          else
+            NOTES="$(git log --pretty=format:'- %s' --no-merges)"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ needs.prepare.outputs.version }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          files: |
+            docker-compose.yml
+            Dockerfile
+          body: |
+            ## Install
+
+            ```bash
+            pipx install netlab-ui        # then: netlab-ui
+            ```
+
+            or the install script (see `docs/install.md`), a NixOS module, or the container below.
+            Update later with `netlab-ui upgrade`.
+
+            ## Run it as a container
+
+            This is the UI. netlab and containerlab stay on your host (install
+            them with your package manager, pip or Nix), and the container
+            talks to that install. Download `docker-compose.yml` from this
+            release, then:
+
+            ```bash
+            NETLAB_BIN=$(command -v netlab) \
+            CLAB_DIR=$(dirname "$(command -v containerlab)") \
+              docker compose up -d        # → http://localhost:8000
+            ```
+
+            The labs directory must be mounted at the **same path** as on the
+            host (containerlab bind-mounts node files through the host Docker
+            daemon), and `~/.netlab` keeps netlab's running-lab registry shared
+            with the host. The UI checks all of this itself: see
+            **Settings → Environment → Container Setup**.
+
+            Images: `linux/amd64`, `linux/arm64`.
+
+            ## Changes
+            ${{ steps.notes.outputs.notes }}
+
+  pypi:
+    needs: prepare
+    if: needs.prepare.outputs.new == 'true'
+    uses: ./.github/workflows/pypi-release.yml
+    permissions:
+      contents: read
+      id-token: write # trusted publishing
+
+  container:
+    needs: prepare
+    if: needs.prepare.outputs.new == 'true'
+    uses: ./.github/workflows/container-release.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: read
+      packages: write

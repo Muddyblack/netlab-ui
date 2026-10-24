@@ -103,5 +103,8 @@ The gallery in the README and [docs/showcase/GALLERY.md](docs/showcase/GALLERY.m
 
 ## Releases
 
-- **Container images:** `.github/workflows/container-release.yml` publishes `ghcr.io/muddyblack/netlab-ui:<ver>` (UI only) on a release.
-- **Desktop app:** push a `desktop-v*` tag; see [docs/desktop.md](docs/desktop.md).
+**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. Merging that PR into `main` is the release: `.github/workflows/release.yml` creates the tag and the GitHub release, publishes the package to PyPI (`pypi-release.yml`) and pushes `ghcr.io/muddyblack/netlab-ui:<ver>` and `:latest` (`container-release.yml`, UI only). A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`), so it is hard to merge one by accident. `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
+
+PyPI needs a trusted publisher for this repo and `release.yml` (environment `pypi`) set up once on pypi.org.
+
+**Desktop app:** versioned separately in `desktop/package.json`; push a `desktop-v*` tag, see [docs/desktop.md](docs/desktop.md).
