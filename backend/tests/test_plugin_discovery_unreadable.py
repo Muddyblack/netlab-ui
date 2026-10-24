@@ -3,7 +3,7 @@ import stat
 
 import pytest
 
-from services.netlab.plugins import iter_plugin_dirs
+from netlab_gui.services.netlab.plugins import iter_plugin_dirs
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")

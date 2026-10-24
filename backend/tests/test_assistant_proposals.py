@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.sessions.store import store
-from services.assistant import proposals
+from netlab_gui.app.main import app
+from netlab_gui.app.sessions.store import store
+from netlab_gui.services.assistant import proposals
 
 TOPOLOGY = """# demo lab
 name: demo
@@ -41,7 +41,7 @@ def session(tmp_path):
 @pytest.fixture
 def client():
     try:
-        from app.assistant.router import router as assistant_router
+        from netlab_gui.app.assistant.router import router as assistant_router
 
         app.include_router(assistant_router)
     except ImportError:
@@ -199,7 +199,7 @@ def test_topology_changes_covers_multi_access_links():
 
 
 def test_apply_places_new_nodes_where_the_ghosts_were_shown(session, client):
-    from services.annotations import store as ann_store
+    from netlab_gui.services.annotations import store as ann_store
 
     proposal = proposals.create_edit(
         session_id=session.id,

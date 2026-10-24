@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app import auth
-from app.main import app
-from app.sessions.store import store
-from app.shell import ws
-from services import host
+from netlab_gui.app import auth
+from netlab_gui.app.main import app
+from netlab_gui.app.sessions.store import store
+from netlab_gui.app.shell import ws
+from netlab_gui.services import host
 
 
 @pytest.fixture

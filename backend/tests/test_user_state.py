@@ -1,6 +1,6 @@
 import pytest
 
-from services import user_state
+from netlab_gui.services import user_state
 
 
 @pytest.fixture(autouse=True)

@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from services import monitoring
-from services import monitoring_scenarios as sc
-from services.netlab import runner
+from netlab_gui.services import monitoring
+from netlab_gui.services import monitoring_scenarios as sc
+from netlab_gui.services.netlab import runner
 
 EXPECTED = """\
 # TYPE netlab_expected_bgp_session gauge

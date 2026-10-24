@@ -10,6 +10,7 @@ See root `AGENTS.md` for agent spawn policy and model roles.
 ## Structure
 ```
 backend/
+  netlab_gui/   # the installable package; app/ and services/ below live inside it
   app/
     contract/   # API contracts / request+response schemas
     lab/        # Lab management logic

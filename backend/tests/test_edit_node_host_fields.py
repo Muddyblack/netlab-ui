@@ -1,5 +1,5 @@
-from app.contract import commands
-from services.model import serialize
+from netlab_gui.app.contract import commands
+from netlab_gui.services.model import serialize
 
 
 def _lab(tmp_path, body: str):

@@ -114,5 +114,5 @@ the clab-ui patch above.
 
 ## Token tips
 - For component questions, check `src/components/` and `src/panels/` first.
-- For API shape questions, look in `src/api/` (generated types) and `backend/app/contract/`.
+- For API shape questions, look in `src/api/` (generated types) and `backend/netlab_gui/app/contract/`.
 - `App.tsx` is the wiring point — check it to understand how clab-ui is extended.

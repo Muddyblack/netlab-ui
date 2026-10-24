@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from services.assistant import guide, insight
-from services.assistant.tools import ToolError
-from services.lenses import validation_results
-from services.netlab import config_snapshots, runner
+from netlab_gui.services.assistant import guide, insight
+from netlab_gui.services.assistant.tools import ToolError
+from netlab_gui.services.lenses import validation_results
+from netlab_gui.services.netlab import config_snapshots, runner
 from tests.test_assistant_guide import _events, session  # noqa: F401  (fixture)
 
 MODEL = {
@@ -167,7 +167,7 @@ def test_ui_open_and_highlight_pick_the_right_target(session, netlab, tmp_path):
 
 
 def test_the_new_tools_are_on_the_mcp_server():
-    from services.assistant import mcp_server
+    from netlab_gui.services.assistant import mcp_server
 
     assert {
         "ui_open", "ui_highlight", "get_reports", "compare_configs",

@@ -5,8 +5,8 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from app.lab import capture
-from services.netlab import _tools_bridge, runner, tools
+from netlab_gui.app.lab import capture
+from netlab_gui.services.netlab import _tools_bridge, runner, tools
 
 
 def _script(monkeypatch, states, pull=(0, "", ""), tool=(0, "started", "")):

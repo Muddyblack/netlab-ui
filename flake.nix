@@ -200,7 +200,7 @@
               export PATH="${containerlab}/bin:$PATH"
             fi
             echo "netlab APP dev shell"
-            echo "  backend : uvicorn app.main:app --reload --app-dir backend  (run from repo root -> :8000)"
+            echo "  backend : uvicorn netlab_gui.app.main:app --reload --app-dir backend  (run from repo root -> :8000)"
             echo "            cd backend && pytest"
             echo "  frontend: cd frontend && npm install && npm run dev     (-> :5173)"
             echo "  python  : $(python --version)   node: $(node --version)"
@@ -219,7 +219,7 @@
                   export PATH="${containerlab}/bin:$PATH"
                 fi
                 cd "$(git rev-parse --show-toplevel)"
-                exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
+                exec ${python}/bin/uvicorn netlab_gui.app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
               ''
             );
           };
@@ -267,7 +267,7 @@
                 set -m
 
                 pids=()
-                ( cd "$root" && exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
+                ( cd "$root" && exec ${python}/bin/uvicorn netlab_gui.app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
                 pids+=($!)
                 ( cd "$root/frontend" && npm install && exec npm run dev ) &
                 pids+=($!)

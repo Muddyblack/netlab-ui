@@ -6,7 +6,7 @@
  * Response types are imported from ./generated.ts, which is generated from the
  * backend's FastAPI OpenAPI schema (`npm run gen:api`). Do not hand-roll
  * response shapes here — add/adjust the Pydantic models in
- * backend/app/contract/responses.py and regenerate so the two never drift.
+ * backend/netlab_gui/app/contract/responses.py and regenerate so the two never drift.
  */
 
 import type { components } from "./generated";
@@ -107,7 +107,7 @@ export interface NetlabEnvironment {
  *
  * Hand-written rather than generated: the snapshot is typed as a bare dict on
  * the backend (see SnapshotResponse), so it never reaches the OpenAPI schema.
- * Mirrors `ProjectionSource` in backend/app/contract/snapshot.py.
+ * Mirrors `ProjectionSource` in backend/netlab_gui/app/contract/snapshot.py.
  */
 export interface NetlabProjection {
   /**

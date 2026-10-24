@@ -35,8 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git docker-cli 
 
 WORKDIR /app
 COPY backend/pyproject.toml ./
-COPY backend/app ./app
-COPY backend/services ./services
+COPY backend/netlab_gui ./netlab_gui
 # The netlab monitoring plugin (Settings / lab "Monitoring"): the UI links it into
 # ~/.netlab when a lab turns monitoring on.
 COPY monitoring/plugin/monitoring ./monitoring_plugin
@@ -85,7 +84,7 @@ EXPOSE 8000
 # default 0.0.0.0 bind and the compose file's 127.0.0.1.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/api/health' % os.environ.get('UVICORN_PORT', '8000'), timeout=4)"
-CMD ["uvicorn", "app.main:app"]
+CMD ["uvicorn", "netlab_gui.app.main:app"]
 
 # Populates the GHCR package page (README, repo link, license) instead of the
 # "no description" placeholder a pulled-from-nowhere image would show.

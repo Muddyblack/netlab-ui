@@ -1,4 +1,4 @@
-from services.lenses import search
+from netlab_gui.services.lenses import search
 
 TRANSFORMED = {
     "nodes": {
@@ -65,7 +65,7 @@ def test_kind_prefix_restricts_and_lists():
 
 
 def test_labs_are_found_in_a_workspace_under_a_hidden_directory(tmp_path):
-    from app.lab import common
+    from netlab_gui.app.lab import common
 
     workspace = tmp_path / ".work" / "dist" / "labs"
     (workspace / "fabric").mkdir(parents=True)

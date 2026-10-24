@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.assistant import sketch
-from services.assistant.tools import ToolError
+from netlab_gui.services.assistant import sketch
+from netlab_gui.services.assistant.tools import ToolError
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
 

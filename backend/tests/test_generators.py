@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from app.contract import commands
-from app.sessions.store import store
-from services.assistant import proposals, tools
-from services.model import serialize
-from services.netlab import generators, patterns, plugins, runner
+from netlab_gui.app.contract import commands
+from netlab_gui.app.sessions.store import store
+from netlab_gui.services.assistant import proposals, tools
+from netlab_gui.services.model import serialize
+from netlab_gui.services.netlab import generators, patterns, plugins, runner
 
 FABRIC_DEFAULTS = """\
 attributes:

@@ -1,4 +1,4 @@
-from services.netlab import runner
+from netlab_gui.services.netlab import runner
 
 
 def test_parse_version_components():

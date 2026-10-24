@@ -1,7 +1,7 @@
 import pytest
 from fastapi import HTTPException
 
-from app.lab import common, lifecycle
+from netlab_gui.app.lab import common, lifecycle
 
 
 @pytest.fixture

@@ -35,7 +35,7 @@ export function sourceHash(root = REPO, { excludeFeatures = false } = {}) {
     "frontend/src", "frontend/public", "frontend/patches", "frontend/index.html",
     "frontend/package.json", "frontend/package-lock.json", "frontend/vite.config.ts",
     "frontend/tsconfig.json", "frontend/tsconfig.app.json", "frontend/tsconfig.node.json",
-    "backend/app", "backend/services", "backend/pyproject.toml", "monitoring/plugin", "flake.nix", "flake.lock",
+    "backend/netlab_gui", "backend/pyproject.toml", "monitoring/plugin", "flake.nix", "flake.lock",
     "docs/showcase/features", "docs/showcase/labs", "docs/showcase/lib",
     "docs/showcase/showcase.mjs", "docs/showcase/run.sh", "docs/showcase/package.json",
   ];

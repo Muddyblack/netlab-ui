@@ -6,11 +6,11 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.lab import broadcast
-from app.main import app
-from app.sessions.store import store
-from services import nodeset
-from services.netlab import runner
+from netlab_gui.app.lab import broadcast
+from netlab_gui.app.main import app
+from netlab_gui.app.sessions.store import store
+from netlab_gui.services import nodeset
+from netlab_gui.services.netlab import runner
 
 LAB = ["r1", "r2", "r3", "r10", "r11", "leaf01", "leaf02", "leaf10", "spine-a", "spine-b", "h1", "Host2"]
 

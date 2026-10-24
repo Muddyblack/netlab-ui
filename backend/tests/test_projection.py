@@ -1,5 +1,5 @@
-from app.contract import snapshot
-from services.netlab import projection
+from netlab_gui.app.contract import snapshot
+from netlab_gui.services.netlab import projection
 
 TRANSFORMED = {
     "name": "vmlab",

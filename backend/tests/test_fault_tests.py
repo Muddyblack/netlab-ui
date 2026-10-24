@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from services import fault_tests, monitoring
-from services import monitoring_scenarios as sc
-from services.netlab import runner
+from netlab_gui.services import fault_tests, monitoring
+from netlab_gui.services import monitoring_scenarios as sc
+from netlab_gui.services.netlab import runner
 
 VALIDATE_OUTPUT = """\
  [INFO] Reading validation tests from topology.yml

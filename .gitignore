@@ -50,3 +50,8 @@ labs/*
 
 # pasted into agent terminals (netlab-ui saves them in the lab folder)
 .pasted-images/
+
+# Bundled into the wheel by scripts/build-wheel.sh
+backend/netlab_gui/_frontend/
+backend/netlab_gui/_monitoring_plugin/
+backend/dist/

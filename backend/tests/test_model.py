@@ -1,4 +1,4 @@
-from services.model import serialize
+from netlab_gui.services.model import serialize
 
 
 def test_dotted_defaults_are_visible_through_topology_default():

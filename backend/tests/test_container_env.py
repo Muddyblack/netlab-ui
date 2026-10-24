@@ -1,4 +1,4 @@
-from services import container_env
+from netlab_gui.services import container_env
 
 
 def _fake(monkeypatch, info, workspaces):

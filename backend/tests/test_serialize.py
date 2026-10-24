@@ -5,8 +5,8 @@ The key invariants:
   * coordinates never appear in the emitted YAML (layout lives in the sidecar)
 """
 
-from services.model import serialize
-from services.model.topology import Link, Node, Topology
+from netlab_gui.services.model import serialize
+from netlab_gui.services.model.topology import Link, Node, Topology
 
 SAMPLE = """
 name: campus

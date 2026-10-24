@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from services.model import serialize
+from netlab_gui.app.main import app
+from netlab_gui.services.model import serialize
 
 
 @pytest.fixture
@@ -91,7 +91,7 @@ def test_file_endpoints_reject_outside_workspace(client, workspace):
 
 
 def test_clone_rejects_parent_directory_destination(client, workspace, monkeypatch):
-    monkeypatch.setattr("app.lab.files.shutil.which", lambda _name: "/usr/bin/git")
+    monkeypatch.setattr("netlab_gui.app.lab.files.shutil.which", lambda _name: "/usr/bin/git")
 
     res = client.post("/api/lab/clone", json={"repoUrl": "https://example.test/.."})
 

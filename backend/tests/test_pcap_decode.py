@@ -8,10 +8,10 @@ import struct
 
 import pytest
 
-from app.sessions.store import store
-from services.assistant import packets as packet_tools
-from services.assistant.tools import ToolError
-from services.netlab import pcap_decode as pd
+from netlab_gui.app.sessions.store import store
+from netlab_gui.services.assistant import packets as packet_tools
+from netlab_gui.services.assistant.tools import ToolError
+from netlab_gui.services.netlab import pcap_decode as pd
 
 A, B = "02:00:00:00:00:01", "02:00:00:00:00:02"
 
@@ -180,7 +180,7 @@ class _Proc:
 
 
 def test_capture_packets_saves_and_decodes(session, tmp_path, monkeypatch):
-    from app.lab import pcap as pcap_routes
+    from netlab_gui.app.lab import pcap as pcap_routes
 
     stream = pcap(eth(ipv4(struct.pack("!BBHHH", 8, 0, 0, 1, 1), 1), 0x0800))
 

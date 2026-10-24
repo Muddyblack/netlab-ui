@@ -1,6 +1,6 @@
 """Test that commands with nested payload structure are handled correctly."""
 
-from app.contract import commands
+from netlab_gui.app.contract import commands
 
 
 def test_delete_node_with_nested_payload(tmp_path):
@@ -74,7 +74,7 @@ def test_save_positions_and_annotations_payload(tmp_path):
 
     assert structural is False
 
-    from services import annotations as ann_store
+    from netlab_gui.services import annotations as ann_store
 
     ann = ann_store.load(topo_file)
     assert ann_store.get_node_annotation(ann, "r1")["position"] == {"x": 120, "y": 240}

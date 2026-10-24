@@ -8,10 +8,10 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.sessions.store import store
-from services import monitoring
-from services.netlab import runner
+from netlab_gui.app.main import app
+from netlab_gui.app.sessions.store import store
+from netlab_gui.services import monitoring
+from netlab_gui.services.netlab import runner
 
 FIXTURE = Path(__file__).resolve().parents[2] / "monitoring" / "tests" / "fixtures" / "lab3-transformed.yml"
 

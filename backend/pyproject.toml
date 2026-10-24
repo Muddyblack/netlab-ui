@@ -32,6 +32,9 @@ dev = [
     "ruff>=0.10.0",
 ]
 
+[project.scripts]
+netlab-gui = "netlab_gui.cli:main"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
@@ -41,7 +44,12 @@ requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = { find = {} }
+packages = { find = { include = ["netlab_gui*"] } }
+include-package-data = true
+
+[tool.setuptools.package-data]
+# _frontend and _monitoring_plugin are copied in by scripts/build-wheel.sh.
+netlab_gui = ["_frontend/**", "_monitoring_plugin/**", "app/schema/*.json"]
 
 [tool.setuptools_scm]
 fallback_version = "0.0+unknown"

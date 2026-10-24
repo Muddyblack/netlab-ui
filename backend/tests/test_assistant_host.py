@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from services import host
-from services.assistant import harness
-from services.assistant.config import mcp_token
+from netlab_gui.services import host
+from netlab_gui.services.assistant import harness
+from netlab_gui.services.assistant.config import mcp_token
 
 PASSWD = "alice:x:1000:100:Alice:/home/alice:/bin/zsh\n"
 

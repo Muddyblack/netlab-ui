@@ -6,7 +6,7 @@
 
 ```bash
 # Run (from repo root)
-uvicorn app.main:app --reload --app-dir backend   # :8000
+uvicorn netlab_gui.app.main:app --reload --app-dir backend   # :8000
 
 # Tests
 cd backend && pytest
@@ -53,6 +53,8 @@ nix develop          # dev shell
 ```
 netlab_gui/
   backend/           FastAPI backend — implements clab-ui's ClabUiHost contract
+    netlab_gui/      the installable package (`netlab-gui` command); `app/` and `services/` below live inside it
+    netlab_gui/      the installable package (`netlab-gui` command); `app/` and `services/` live inside it
     app/
       contract/      API routes, commands.py, snapshot.py, responses.py
       lab/           /api/lab surface, split by concern:

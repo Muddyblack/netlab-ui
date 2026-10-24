@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from services.assistant import notes
-from services.assistant.tools import ToolError
+from netlab_gui.services.assistant import notes
+from netlab_gui.services.assistant.tools import ToolError
 
 
 def test_notes_are_added_replaced_and_survive_reading_back(tmp_path):

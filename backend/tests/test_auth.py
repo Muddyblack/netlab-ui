@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import auth
+from netlab_gui.app import auth
 
 
 def _client() -> TestClient:

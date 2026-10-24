@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from services.netlab import runner
+from netlab_gui.services.netlab import runner
 
 FAKE_NETLAB = """#!/bin/sh
 echo "unbuffered=$PYTHONUNBUFFERED"
@@ -95,7 +95,7 @@ def test_closing_stream_terminates_command_process_group(tmp_path, monkeypatch):
 def test_lifecycle_stream_endpoint_rejects_unknown_action():
     from fastapi.testclient import TestClient
 
-    from app.main import app
+    from netlab_gui.app.main import app
 
     client = TestClient(app)
     res = client.post(
@@ -130,8 +130,8 @@ def test_manage_instance_cleanup_confirms_and_targets_one_instance(monkeypatch):
 def test_instances_endpoint_exposes_stale_directory(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
 
-    from app.lab import lifecycle
-    from app.main import app
+    from netlab_gui.app.lab import lifecycle
+    from netlab_gui.app.main import app
 
     async def fake_status():
         return {
@@ -297,7 +297,7 @@ def test_force_cleanup_stream_reports_unknown_instance(monkeypatch):
 def test_status_reuses_cli_output_and_refreshes_container_states(monkeypatch, tmp_path):
     import asyncio
 
-    from services.netlab import runner
+    from netlab_gui.services.netlab import runner
 
     calls = {"full": 0}
     lab = tmp_path / "lab"

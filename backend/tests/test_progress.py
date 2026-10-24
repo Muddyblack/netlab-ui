@@ -1,4 +1,4 @@
-from services.netlab.progress import DeploymentProgressTracker
+from netlab_gui.services.netlab.progress import DeploymentProgressTracker
 
 
 def test_ansible_events_and_recap_update_nodes():
