@@ -1,0 +1,178 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-BBTDNLBI.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-BBTDNLBI.js
+index cd54777..1b775e7 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-BBTDNLBI.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-BBTDNLBI.js
+@@ -1075,6 +1075,8 @@ function freeShapeToNode(annotation) {
+       borderStyle: annotation.borderStyle,
+       rotation: annotation.rotation,
+       cornerRadius: annotation.cornerRadius,
++      // freehand strokes: points normalised to the box (0..1)
++      points: annotation.points,
+       // Store groupId for membership tracking
+       groupId: annotation.groupId,
+       geoCoordinates: annotation.geoCoordinates,
+@@ -1228,6 +1230,7 @@ function nodeToFreeShape(node) {
+     cornerRadius: data.cornerRadius,
+     zIndex
+   };
++  if (Array.isArray(data.points)) annotation.points = data.points;
+   const groupId = toOptionalString(data.groupId);
+   if (groupId !== void 0) annotation.groupId = groupId;
+   const geoCoordinates = toLatLng(data.geoCoordinates);
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index 38ac079..534753c 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -11391,7 +11391,7 @@ function getShapeBorder(borderWidth, borderStyle, borderColor) {
+ }
+ var FALLBACK_SHAPE_DATA = { shapeType: "rectangle" };
+ function isShapeType(value) {
+-  return value === "rectangle" || value === "circle" || value === "line";
++  return value === "rectangle" || value === "circle" || value === "line" || value === "freehand";
+ }
+ function isFreeShapeNodeData(value) {
+   if (typeof value !== "object" || value === null) return false;
+@@ -11426,6 +11426,36 @@ function CircleShape(props) {
+   };
+   return /* @__PURE__ */ jsx15("div", { style, className: "free-shape-circle" });
+ }
++function FreehandShape(props) {
++  const { borderWidth, borderColor, selected, points } = props;
++  const list = Array.isArray(points) ? points : [];
++  let d = "";
++  for (let i = 0; i < list.length; i++) {
++    const p = list[i];
++    if (!Array.isArray(p) || p.length < 2) continue;
++    if (d === "") {
++      d = `M${p[0]},${p[1]}`;
++      continue;
++    }
++    const prev = list[i - 1];
++    d += `Q${prev[0]},${prev[1]} ${(prev[0] + p[0]) / 2},${(prev[1] + p[1]) / 2}`;
++  }
++  return /* @__PURE__ */ jsxs10(
++    "svg",
++    {
++      width: "100%",
++      height: "100%",
++      viewBox: "0 0 1 1",
++      preserveAspectRatio: "none",
++      style: { overflow: "visible", outline: selected ? `2px solid ${SELECTION_COLOR}` : "none", outlineOffset: 1 },
++      className: "free-shape-freehand",
++      children: [
++        /* @__PURE__ */ jsx15("rect", { width: 1, height: 1, fill: "transparent" }),
++        /* @__PURE__ */ jsx15("path", { d, fill: "none", stroke: borderColor, strokeWidth: borderWidth, strokeLinecap: "round", strokeLinejoin: "round", vectorEffect: "non-scaling-stroke" })
++      ]
++    }
++  );
++}
+ function ArrowMarker({ id, size, reversed, color }) {
+   const points = reversed ? `${size},0 ${size},${size} 0,${size / 2}` : `0,0 ${size},${size / 2} 0,${size}`;
+   return /* @__PURE__ */ jsx15(
+@@ -11646,7 +11676,7 @@ function BoxNode({
+         onRotationEnd
+       }
+     ),
+-    data.shapeType === "rectangle" ? /* @__PURE__ */ jsx15(RectangleShape, { ...shapeProps, cornerRadius: data.cornerRadius ?? 0 }) : /* @__PURE__ */ jsx15(CircleShape, { ...shapeProps })
++    data.shapeType === "rectangle" ? /* @__PURE__ */ jsx15(RectangleShape, { ...shapeProps, cornerRadius: data.cornerRadius ?? 0 }) : data.shapeType === "freehand" ? /* @__PURE__ */ jsx15(FreehandShape, { ...shapeProps, points: data.points }) : /* @__PURE__ */ jsx15(CircleShape, { ...shapeProps })
+   ] });
+ }
+ var FreeShapeNodeComponent = ({ id, data, selected }) => {
+@@ -17917,7 +17947,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+ import Box13 from "@mui/material/Box";
+ import { Fragment as Fragment13, jsx as jsx34, jsxs as jsxs28 } from "react/jsx-runtime";
+ function toShapeType(value) {
+-  if (value === "rectangle" || value === "circle" || value === "line") {
++  if (value === "rectangle" || value === "circle" || value === "line" || value === "freehand") {
+     return value;
+   }
+   return "rectangle";
+diff --git a/node_modules/@containerlab/clab-ui/dist/core/types/graph.d.ts b/node_modules/@containerlab/clab-ui/dist/core/types/graph.d.ts
+index a9ee1f1..79de253 100644
+--- a/node_modules/@containerlab/clab-ui/dist/core/types/graph.d.ts
++++ b/node_modules/@containerlab/clab-ui/dist/core/types/graph.d.ts
+@@ -64,7 +64,9 @@ export interface FreeTextNodeData extends TextStyle {
+  * Node data for free shape annotations
+  */
+ export interface FreeShapeNodeData {
+-    shapeType: "rectangle" | "circle" | "line";
++    shapeType: "rectangle" | "circle" | "line" | "freehand";
++    /** Freehand strokes: points as fractions (0..1) of the box, so resizing scales the stroke. */
++    points?: Array<[number, number]>;
+     width?: number;
+     height?: number;
+     /** Absolute end position for lines (for updating annotation state) */
+diff --git a/node_modules/@containerlab/clab-ui/dist/core/types/topology.d.ts b/node_modules/@containerlab/clab-ui/dist/core/types/topology.d.ts
+index 2bc7de6..a6c2182 100644
+--- a/node_modules/@containerlab/clab-ui/dist/core/types/topology.d.ts
++++ b/node_modules/@containerlab/clab-ui/dist/core/types/topology.d.ts
+@@ -95,7 +95,9 @@ export interface FreeTextAnnotation extends TextStyle {
+  */
+ export interface FreeShapeAnnotation {
+     id: string;
+-    shapeType: "rectangle" | "circle" | "line";
++    shapeType: "rectangle" | "circle" | "line" | "freehand";
++    /** Freehand strokes: points as fractions (0..1) of the box, so resizing scales the stroke. */
++    points?: Array<[number, number]>;
+     position: {
+         x: number;
+         y: number;
+diff --git a/node_modules/@containerlab/clab-ui/dist/index.d.ts b/node_modules/@containerlab/clab-ui/dist/index.d.ts
+index 99d6ead..4435abe 100644
+--- a/node_modules/@containerlab/clab-ui/dist/index.d.ts
++++ b/node_modules/@containerlab/clab-ui/dist/index.d.ts
+@@ -5,6 +5,12 @@ export { log } from "./utils/logger";
+ export { useIsLocked, useTopoViewerActions, useTopoViewerStore } from "./stores/topoViewerStore";
+ export { useEdges } from "./stores/graphStore";
+ export declare const useNodes: () => import("@xyflow/react").Node[];
++/** Freehand strokes are free-shape annotations (shapeType "freehand"). */
++export declare const freehand: {
++    add: (annotation: import("./core/types/topology").FreeShapeAnnotation) => void;
++    remove: (id: string) => void;
++    persist: (client: unknown) => Promise<void>;
++};
+ export type { TabConfig } from "./components/ui/editor/EditorPanel";
+ export type { TabProps as NodeEditorTabProps, NodeEditorData } from "./components/panels/node-editor/types";
+ export { IconSelectorModal } from "./components/ui/IconSelectorModal";
+diff --git a/node_modules/@containerlab/clab-ui/dist/index.js b/node_modules/@containerlab/clab-ui/dist/index.js
+index 3408502..9f498f4 100644
+--- a/node_modules/@containerlab/clab-ui/dist/index.js
++++ b/node_modules/@containerlab/clab-ui/dist/index.js
+@@ -7,7 +7,7 @@ import "./chunks/chunk-TEX73Q7H.js";
+ import "./chunks/chunk-6VHPVQZV.js";
+ import "./chunks/chunk-KJJC3NVL.js";
+ import "./chunks/chunk-K7CDGLZV.js";
+-import "./chunks/chunk-5C4NPJRF.js";
++import { saveAnnotationNodesFromGraph } from "./chunks/chunk-5C4NPJRF.js";
+ import "./chunks/chunk-V7IX5M2A.js";
+ import "./chunks/chunk-RDOQXPYH.js";
+ import "./chunks/chunk-6GFODFMI.js";
+@@ -15,6 +15,7 @@ import "./chunks/chunk-5ODV6KJE.js";
+ import "./chunks/chunk-5WUTGIEL.js";
+ import "./chunks/chunk-KS5ITECV.js";
+ import {
++  freeShapeToNode,
+   useIsLocked,
+   useTopoViewerActions,
+   useTopoViewerStore
+@@ -55,6 +56,12 @@ import "./chunks/chunk-L4UBGSCA.js";
+ import "./chunks/chunk-CPW4U4ZI.js";
+ import "./chunks/chunk-LBHJ2GVG.js";
+ const useNodes = () => useGraphStore((state) => state.nodes);
++// Freehand strokes are free-shape annotations (shapeType "freehand"); this is how the host app creates them.
++const freehand = {
++  add: (annotation) => useGraphStore.getState().addNode(freeShapeToNode(annotation)),
++  remove: (id) => useGraphStore.getState().removeNode(id),
++  persist: (client) => saveAnnotationNodesFromGraph(client, void 0, { applySnapshot: false })
++};
+ export {
+   App,
+   ColorField,
+@@ -69,6 +76,7 @@ export {
+   PanelSection,
+   PanelSectionHeader,
+   SelectField,
++  freehand,
+   generateEncodedSVG,
+   log,
+   subscribeToWebviewMessages,

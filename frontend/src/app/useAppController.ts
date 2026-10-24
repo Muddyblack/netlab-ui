@@ -1,3 +1,4 @@
+import { setSketchClient } from "../host/sketchStore";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsLocked, useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import {
@@ -59,6 +60,7 @@ import {
   openMonitoringDialog,
   openToolsDialog,
   registerFileOpener,
+  registerAgentsPanelOpener,
   registerWebTabOpener,
   openPanelTab,
   requestCopyLab,
@@ -1014,6 +1016,12 @@ export function useAppController() {
     registerFileOpener((path) => void handleOpenFileTabRef.current({ endpointId: "local", path }));
     return () => registerFileOpener(null);
   }, []);
+  useEffect(() => {
+    registerAgentsPanelOpener(() => { setAssistantOpen(true); setAiNudge((n) => n + 1); });
+    return () => registerAgentsPanelOpener(null);
+  }, []);
+  // The pen saves its strokes as annotations through clab-ui's own session client.
+  useEffect(() => { setSketchClient(runtime.session); }, [runtime.session]);
   const getOrCreateSessionRef = useRef(getOrCreateSession); getOrCreateSessionRef.current = getOrCreateSession;
   const handleDeployLabRef = useRef(handleDeployLab); handleDeployLabRef.current = handleDeployLab;
   const handleDestroyLabRef = useRef(handleDestroyLab); handleDestroyLabRef.current = handleDestroyLab;

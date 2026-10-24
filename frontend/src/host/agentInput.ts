@@ -20,3 +20,14 @@ export function sendToAgent(sessionId: string, line: string): boolean {
   send(line);
   return true;
 }
+
+let openPanel: (() => void) | null = null;
+
+/** The app registers how to show the AI agents panel, so a canvas tool can send the user there to pick an agent. */
+export function registerAgentsPanelOpener(open: (() => void) | null): void {
+  openPanel = open;
+}
+
+export function openAgentsPanel(): void {
+  openPanel?.();
+}
