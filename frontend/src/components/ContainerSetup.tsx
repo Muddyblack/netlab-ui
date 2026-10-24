@@ -9,7 +9,7 @@ import { api, type ContainerCheck, type ContainerDiagnostics } from "../api/clie
 
 const DISMISS_KEY = "netlab-gui:container-setup-dismissed";
 
-function CheckIcon({ check }: { check: ContainerCheck }) {
+export function CheckIcon({ check }: { check: ContainerCheck }) {
   if (check.ok) return <CheckCircleOutlineIcon color="success" sx={{ fontSize: 18, mt: "2px" }} />;
   if (check.severity === "error") return <ErrorOutlineIcon color="error" sx={{ fontSize: 18, mt: "2px" }} />;
   return <WarningAmberIcon color="warning" sx={{ fontSize: 18, mt: "2px" }} />;

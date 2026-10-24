@@ -8,6 +8,8 @@ Settings UI (set the path) and the Info tab (show the resolved environment).
 * ``PUT  /api/environment/netlab`` — set/clear the configured path (validated)
 * ``GET  /api/environment/container`` — self-checks of the containerized UI's
   ``docker run`` setup (empty outside a container)
+* ``GET  /api/environment/host`` — preflight checks for deploying from this host
+  (netlab, containerlab sudo-less setup, Docker access, workspace)
 * ``GET  /api/environment/setup`` (+ ``/setup/stream``, ``/setup/box-recipe``) —
   netlab's own setup helpers: ``netlab test``, ``install``, ``clab build``,
   ``libvirt config``
@@ -25,9 +27,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from netlab_gui.app.contract.responses import ContainerDiagnostics, NetlabEnvironment, SetNetlabPathRequest
+from netlab_gui.app.contract.responses import (
+    ContainerDiagnostics,
+    HostDiagnostics,
+    NetlabEnvironment,
+    SetNetlabPathRequest,
+)
 from netlab_gui.app.lab.common import SSE_HEADERS
-from netlab_gui.services import container_env
+from netlab_gui.services import container_env, host_env
 from netlab_gui.services.netlab import location, runner, setup
 from netlab_gui.services.netlab.logfmt import LineFilter
 
@@ -119,6 +126,11 @@ def get_container_diagnostics(refresh: bool = False) -> dict:
     # Plain `def`: the self-inspection shells out to `docker inspect`, so it
     # runs in FastAPI's threadpool instead of blocking the event loop.
     return container_env.diagnose(refresh=refresh)
+
+
+@router.get("/host", response_model=HostDiagnostics)
+def get_host_diagnostics(refresh: bool = False) -> dict:
+    return host_env.diagnose(refresh=refresh)
 
 
 class SetupItem(BaseModel):

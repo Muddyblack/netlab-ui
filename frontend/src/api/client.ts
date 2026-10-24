@@ -21,6 +21,7 @@ const eventHandlers = new Set<(event: BackendEvent) => void>();
 
 export type HealthStatus = Schemas["HealthStatus"];
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
+export type HostDiagnostics = Schemas["HostDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
 export type LabFileEntry = Schemas["LabFileEntry"];
 export type LabInstance = Schemas["LabInstance"];
@@ -258,6 +259,9 @@ export const api = {
   // cannot leave the gate apparently frozen behind the generic 3-attempt
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
+
+  getHostDiagnostics: (refresh = false) =>
+    http<HostDiagnostics>(`/api/environment/host${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
 
   getContainerDiagnostics: (refresh = false) =>
     http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),

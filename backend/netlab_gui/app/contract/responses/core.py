@@ -93,6 +93,14 @@ class ContainerDiagnostics(BaseModel):
     checks: list[ContainerCheck] = []
 
 
+class HostDiagnostics(BaseModel):
+    """Preflight checks for deploying labs from this host (empty inside a container)."""
+
+    inContainer: bool
+    ready: bool
+    checks: list[ContainerCheck] = []
+
+
 class SetNetlabPathRequest(BaseModel):
     path: str | None = None
 
