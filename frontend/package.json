@@ -15,7 +15,7 @@
     "gen:api": "openapi-typescript ${OPENAPI_URL:-http://localhost:8000/openapi.json} -o src/api/generated.ts"
   },
   "dependencies": {
-    "@assistant-ui/react": "^0.15.30",
+    "@assistant-ui/react": "^0.15.31",
     "@containerlab/clab-ui": "0.3.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
