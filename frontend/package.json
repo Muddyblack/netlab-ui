@@ -45,7 +45,7 @@
     "openapi-typescript": "^7.13.0",
     "oxlint": "^1.89.0",
     "patch-package": "^8.0.1",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vite": "^8.3.5"
   },
   "overrides": {
@@ -53,6 +53,9 @@
     "js-yaml": "4.3.2",
     "maplibre-gl": "6.10.0",
     "markdown-it": "14.3.3",
-    "minimatch": "10.2.6"
+    "minimatch": "10.2.6",
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }

@@ -193,7 +193,7 @@
           pname = "netlab-ui-frontend";
           version = guiVersion;
           src = ./frontend;
-          npmDepsHash = "sha256-TmLRFOpAhJwtwRHBvteqZvdzq3MGcG6mzf9LPvvnT20=";
+          npmDepsHash = "sha256-YvsiU2aF/A7SdFWdxo8R63ln0YqIYAaPzgEk2ltzS9k=";
           installPhase = ''
             runHook preInstall
             cp -r dist $out
