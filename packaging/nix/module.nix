@@ -90,8 +90,6 @@ in
         {
           UVICORN_HOST = cfg.host;
           UVICORN_PORT = toString cfg.port;
-          NETLAB_PROVIDERS_CLAB_START = "containerlab deploy --reconfigure -t clab.yml";
-          NETLAB_PROVIDERS_CLAB_STOP = "containerlab destroy --cleanup -t clab.yml";
         }
         // lib.optionalAttrs (cfg.tokenFile != null) { NETLAB_UI_TOKEN_FILE = toString cfg.tokenFile; };
       serviceConfig = {

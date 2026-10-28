@@ -11,7 +11,6 @@ from netlab_ui.services import host_env
 def _fresh(monkeypatch):
     monkeypatch.setattr(host_env, "_cache", None)
     monkeypatch.setattr(host_env.container_env, "in_container", lambda: False)
-    monkeypatch.setattr(host_env, "_passwordless_sudo", lambda: False)
 
 
 def _fake_clab(monkeypatch, tmp_path, *, mode, uid=0, gid=1234):
@@ -88,10 +87,10 @@ def test_ready_ignores_warnings(monkeypatch, tmp_path):
     assert host_env.diagnose(refresh=True)["ready"] is True
 
 
-def test_passwordless_sudo_is_accepted_for_a_plain_binary(monkeypatch, tmp_path):
+def test_passwordless_sudo_is_not_enough(monkeypatch, tmp_path):
+    # netlab never calls sudo, so a plain binary needs the setuid + clab_admins setup.
     path = _fake_clab(monkeypatch, tmp_path, mode=0o755)
-    monkeypatch.setattr(host_env, "_passwordless_sudo", lambda: True)
-    assert host_env._privilege_check(path)["ok"]
+    assert not host_env._privilege_check(path)["ok"]
 
 
 def test_deploy_warning_only_when_privileges_are_missing(monkeypatch):

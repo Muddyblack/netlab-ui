@@ -13,7 +13,6 @@ import grp
 import os
 import shutil
 import stat
-import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -83,17 +82,6 @@ def _containerlab_check() -> list[dict[str, Any]]:
     return checks
 
 
-def _passwordless_sudo() -> bool:
-    """Would `sudo` run without asking for a password (so netlab's `sudo containerlab` works)?"""
-    sudo = shutil.which("sudo")
-    if not sudo:
-        return False
-    try:
-        return subprocess.run([sudo, "-n", "true"], capture_output=True, timeout=5, check=False).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
-
-
 def deploy_warning() -> str | None:
     """A line to show before a deploy when containerlab is not set up to run without a password, else None.
 
@@ -114,20 +102,12 @@ def _privilege_check(path: str) -> dict[str, Any]:
     except OSError:
         info = None
     if info is None or not (info.st_uid == 0 and info.st_mode & stat.S_ISUID):
-        if _passwordless_sudo():
-            return _check(
-                "clab-privileges",
-                True,
-                "error",
-                "containerlab runs through passwordless sudo",
-                "Works, but containerlab's setuid + clab_admins setup avoids granting sudo for everything.",
-            )
         return _check(
             "clab-privileges",
             False,
             "error",
             "containerlab is not set up for sudo-less use",
-            "netlab would call `sudo containerlab`, which asks for a password the app cannot enter.",
+            "netlab runs containerlab without sudo, which needs the setuid binary and clab_admins group.",
             SUDO_HINT,
         )
     # Setuid root. Group-restricted installs (mode u+rx,g+x,o=) only run for members of the file's group.

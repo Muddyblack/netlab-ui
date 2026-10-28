@@ -105,29 +105,3 @@ def test_netlab_children_get_the_lab_directory_as_pwd(tmp_path):
 
     # netlab's Ansible playbooks find the lab through $PWD, not the process cwd.
     assert runner._child_env(tmp_path)["PWD"] == str(tmp_path.resolve())
-
-
-def test_netlab_uses_containerlab_directly_with_privileged_binary(monkeypatch):
-    from netlab_ui.services.netlab import runner
-
-    monkeypatch.setattr(runner.shutil, "which", lambda _name, path=None: "/run/wrappers/bin/containerlab")  # noqa: ARG005
-    monkeypatch.setattr(runner, "_can_use_containerlab_directly", lambda _path: True)
-    monkeypatch.delenv("NETLAB_PROVIDERS_CLAB_START", raising=False)
-    monkeypatch.delenv("NETLAB_PROVIDERS_CLAB_STOP", raising=False)
-    env = runner._child_env()
-    assert env["NETLAB_PROVIDERS_CLAB_START"] == "containerlab deploy --reconfigure -t clab.yml"
-    assert env["NETLAB_PROVIDERS_CLAB_STOP"] == "containerlab destroy --cleanup -t clab.yml"
-
-    monkeypatch.setenv("NETLAB_PROVIDERS_CLAB_START", "my-deploy-command")
-    assert runner._child_env()["NETLAB_PROVIDERS_CLAB_START"] == "my-deploy-command"
-
-
-def test_netlab_keeps_sudo_default_without_privileged_containerlab(monkeypatch):
-    from netlab_ui.services.netlab import runner
-
-    monkeypatch.setattr(runner.shutil, "which", lambda _name, path=None: "/usr/bin/containerlab")  # noqa: ARG005
-    monkeypatch.setattr(runner, "_can_use_containerlab_directly", lambda _path: False)
-    monkeypatch.delenv("NETLAB_PROVIDERS_CLAB_START", raising=False)
-    monkeypatch.delenv("NETLAB_PROVIDERS_CLAB_STOP", raising=False)
-    assert "NETLAB_PROVIDERS_CLAB_START" not in runner._child_env()
-    assert "NETLAB_PROVIDERS_CLAB_STOP" not in runner._child_env()

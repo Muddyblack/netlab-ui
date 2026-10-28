@@ -126,10 +126,10 @@
 
         netlab = pkgs.python312Packages.buildPythonPackage rec {
           pname = "networklab";
-          version = "26.5";
+          version = "26.10";
           src = pkgs.python312Packages.fetchPypi {
             inherit pname version;
-            hash = "sha256-BXp+3A5jIlZwLXWYyMpeM3NlvvbmGbuQoUlMI50beZI=";
+            hash = "sha256-IrVDawZi8/UUhpDBUDdk9hbbfhOB8JLHNGSJsbVJZOg=";
           };
           pyproject = true;
           build-system = with pkgs.python312Packages; [ setuptools wheel ];
@@ -236,8 +236,6 @@
           shellHook = ''
             if [ -x /run/wrappers/bin/containerlab ]; then
               export PATH="/run/wrappers/bin:$PATH"
-              export NETLAB_PROVIDERS_CLAB_START="containerlab deploy --reconfigure -t clab.yml"
-              export NETLAB_PROVIDERS_CLAB_STOP="containerlab destroy --cleanup -t clab.yml"
             else
               export PATH="${containerlab}/bin:$PATH"
             fi

@@ -55,12 +55,6 @@ ENV NETLAB_UI_VERSION=${NETLAB_UI_VERSION}
 # Enables the container self-checks (Settings → Environment → Container
 # Setup) even where /.dockerenv is missing (podman, some runtimes).
 ENV NETLAB_UI_IN_CONTAINER=1
-# The image runs as root with the privileges described below. netlab's default
-# clab commands prepend sudo, which this image neither needs nor installs.
-# These defaults also cover `docker exec ... netlab up`, outside the UI.
-ENV NETLAB_PROVIDERS_CLAB_START="containerlab deploy --reconfigure -t clab.yml" \
-    NETLAB_PROVIDERS_CLAB_STOP="containerlab destroy --cleanup -t clab.yml"
-
 # The backend drives the *host's* Docker daemon through the mounted socket, so
 # how the container is started decides whether labs can deploy at all. The
 # backend inspects its own container at startup and explains anything missing

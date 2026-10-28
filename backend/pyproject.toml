@@ -21,7 +21,7 @@ dependencies = [
 # forced onto a pip-managed copy. PyPI name `networklab`, imports as `netsim`;
 # version floor tracked in services/netlab/runner.py MIN_NETLAB_VERSION.
 netlab = [
-    "networklab>=26.07",
+    "networklab>=26.10",
     # Required by the `netlab` CLI for Ansible-based config deployment, not
     # imported directly by the adapter.
     "ansible>=9",

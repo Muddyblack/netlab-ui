@@ -22,7 +22,6 @@ import os
 import re
 import shutil
 import signal
-import stat
 import subprocess
 import tempfile
 import time
@@ -86,15 +85,6 @@ def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     # Prepend the resolved netlab's bin/ so a netlab living in its own venv finds
     # that venv's ansible-playbook / containerlab rather than a host copy.
     env["PATH"] = location.child_path()
-    # netlab's packaged clab provider invokes `sudo -E containerlab`. The app
-    # has no terminal in which to enter a sudo password. In a privileged image
-    # (root) or with a root-owned setuid wrapper, run the provider directly.
-    # netlab maps NETLAB_* variables onto defaults.* before creating its
-    # snapshot, so both `up` and the later `down` use the same commands.
-    clab = shutil.which("containerlab", path=env["PATH"])
-    if clab and _can_use_containerlab_directly(clab):
-        env.setdefault("NETLAB_PROVIDERS_CLAB_START", "containerlab deploy --reconfigure -t clab.yml")
-        env.setdefault("NETLAB_PROVIDERS_CLAB_STOP", "containerlab destroy --cleanup -t clab.yml")
     # netlab's Ansible playbooks locate the lab through $PWD
     # (lookup('env','PWD'): collected configs, node_files). A shell sets PWD
     # on cd; a subprocess cwd doesn't, so it would still name the backend's
@@ -102,16 +92,6 @@ def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     if cwd is not None:
         env["PWD"] = str(Path(cwd).resolve())
     return env
-
-
-def _can_use_containerlab_directly(path: str) -> bool:
-    if os.geteuid() == 0:
-        return True
-    try:
-        info = os.stat(path)
-    except OSError:
-        return False
-    return info.st_uid == 0 and bool(info.st_mode & stat.S_ISUID) and os.access(path, os.X_OK)
 
 
 async def _spawn(
@@ -1392,7 +1372,7 @@ def libvirt_version() -> str | None:
 # Bump this when the backend starts depending on a netlab CLI/library feature
 # that only exists in a newer release, so users on an older netlab get a clear
 # "upgrade netlab" message instead of a cryptic mid-command failure.
-MIN_NETLAB_VERSION = "26.07"
+MIN_NETLAB_VERSION = "26.10"
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 
