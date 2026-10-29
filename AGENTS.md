@@ -52,32 +52,40 @@ nix develop          # dev shell
 
 ```
 netlab_ui/
-  backend/           FastAPI backend — implements clab-ui's ClabUiHost contract
-    netlab_ui/      the installable package (`netlab-ui` command); `app/` and `services/` below live inside it
-    netlab_ui/      the installable package (`netlab-ui` command); `app/` and `services/` live inside it
-    app/
-      contract/      API routes, commands.py, snapshot.py, responses.py
-      lab/           /api/lab surface, split by concern:
-                       common.py (shared helpers), files.py (workspaces/files/
-                       icons/fs/push events), images.py (Docker image manager),
-                       lifecycle.py (up/down/status + SSE), router.py (aggregator)
-      plugins/       Plugin discovery (reads from installed `netsim` package)
-    services/
-      annotations/   Sidecar *.netlab-ui.json read/write
-      events.py      Pub/sub hub + watchfiles workspace watcher (push events)
-      model/         Topology YAML parsing (ruamel round-trip)
-      multiserver.py Multiserver plugin placement discovery + panel payload
-      netlab/        netlab CLI wrappers (create, up, down, status…)
-      topology_host.py  Per-session undo/redo history + revision
-      units.py       Workspace unit (template) library
-  frontend/          React 19 + Vite app
+  backend/             FastAPI backend — implements clab-ui's ClabUiHost contract
+    netlab_ui/         the installable package (`netlab-ui` command): cli.py, config.py, service.py
+      app/             API layer (routes only; logic lives in services/)
+        main.py        FastAPI entrypoint; auth.py optional Basic/token auth
+        contract/      /api/topology routes, commands.py, snapshot.py, responses/
+        lab/           /api/lab surface, split by concern:
+                         common.py (shared helpers), files.py (workspaces/files/
+                         icons/fs/push events), images.py (Docker image manager),
+                         lifecycle.py (up/down/status + SSE), router.py (aggregator)
+        plugins/       Plugin discovery (reads from installed `netsim` package)
+        assistant/ environment/ lenses/ docs/ schema/ sessions/ shell/
+      services/        business logic
+        annotations/   Sidecar *.netlab-ui.json read/write
+        events.py      Pub/sub hub + watchfiles workspace watcher (push events)
+        model/         Topology YAML parsing (ruamel round-trip)
+        multiserver.py Multiserver plugin placement discovery + panel payload
+        netlab/        netlab CLI wrappers (create, up, down, status…)
+        assistant/     MCP server + change proposals for the user's own AI agent
+        topology_host.py  Per-session undo/redo history + revision
+        units.py       Workspace unit (template) library
+    tests/
+  frontend/            React 19 + Vite app
     src/
-      api/           Generated OpenAPI types (generated.ts) + fetch client (client.ts)
-      components/    Netlab-specific components (FileEditorTabPanel, dialogs…)
-      hooks/         useAppData, useTabManager, useExplorerController, …
-      host/          createHost.ts — wires FastAPI backend to clab-ui's host interface
-      panels/        Side panels (Plugins, UnitsDock, Groups, Workers)
-      App.tsx        Root — wiring point (~550 lines; logic lives in hooks/)
+      api/             Generated OpenAPI types (generated.ts) + fetch client (client.ts)
+      app/             useAppController.ts (top-level wiring), node editor tabs, toolbar
+      components/      Netlab-specific components (FileEditorTabPanel, dialogs…)
+      hooks/           useAppData, useTabManager, useExplorerController, …
+      host/            createHost.ts — wires FastAPI backend to clab-ui's host interface
+      panels/          Side panels (Plugins, UnitsDock, Groups, Workers, …)
+      App.tsx          Root — composes the controller and renders clab-ui (~200 lines)
+  plugins/monitoring/  netlab monitoring plugin (see gotchas)
+  desktop/             Electron shell
+  packaging/           install.sh, docker/, nix/
+  scripts/             build-wheel, release, smoke-test; install.sh is a stub for the old curl URL
 ```
 
 `@containerlab/clab-ui` itself is an npm dependency (published on the public npm registry, pinned in `frontend/package.json`), not source in this repo. It provides the ReactFlow canvas, graph/canvas stores, `topologyHostSync`, `createApiClabUiHost`/`createExplorerController`, and the explorer tree/action registry — consumed via imports from `@containerlab/clab-ui` (and its declared sub-entries like `@containerlab/clab-ui/host`).
@@ -175,10 +183,11 @@ grep -r "YourConcept" frontend/node_modules/@containerlab/clab-ui --include="*.d
 
 ## App.tsx anatomy
 
-`App.tsx` is the wiring point (~550 lines); most logic has been extracted into
-hooks and panels. Where things live now:
+`App.tsx` is a thin root (~200 lines); wiring lives in `app/useAppController.ts`
+(already ~1,200 lines — extract into `hooks/` rather than growing it) and the hooks
+and panels. Where things live now:
 
-- **`App.tsx`** — composes the hooks below, renders clab-ui's `<App>` with all
+- **`App.tsx`** / **`app/useAppController.ts`** — compose the hooks below, renders clab-ui's `<App>` with all
   extension props, and portals netlab panels (tabs bar, file editor, UnitsDock,
   Shell dialog) into clab-ui's containers. Monaco (`FileEditorTabPanel`) and
   xterm (`Shell`) are `React.lazy` — keep them out of eager import graphs.

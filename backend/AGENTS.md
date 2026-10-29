@@ -1,31 +1,26 @@
 # Backend Agent Guidelines
 
-See root `AGENTS.md` for agent spawn policy and model roles.
+See root `AGENTS.md` for repo-wide rules.
 
 ## Stack
-- **Python** with FastAPI (`app/main.py`)
+- **Python** with FastAPI (`netlab_ui/app/main.py`)
 - **Ruff** for linting (`ruff.toml`) — run `ruff check` before considering backend work done
 - **pyproject.toml** manages deps
 
 ## Structure
 ```
 backend/
-  netlab_ui/   # the installable package; app/ and services/ below live inside it
-  app/
-    contract/   # API contracts / request+response schemas
-    lab/        # Lab management logic
-    plugins/    # Plugin system
-    schema/     # Pydantic models
-    sessions/   # Session handling
-    shell/      # Shell execution
-    main.py     # FastAPI app entrypoint
-  services/
-    annotations/
-    assistant/  # MCP server for the user's own AI agent + change proposals — self-contained
-    docs/
-    model/
-    netlab/     # Netlab-specific service logic
-    topology_host.py
+  netlab_ui/            # the installable package
+    cli.py config.py service.py   # `netlab-ui` command, settings, systemd user service
+    app/                # API layer
+      contract/         # clab-ui host contract: routes, commands, snapshot, response models
+      lab/              # /api/lab: files, lifecycle, images, capture, monitoring, tools…
+      plugins/          # plugin discovery
+      assistant/ environment/ lenses/ docs/ schema/ sessions/ shell/
+      auth.py main.py
+    services/           # business logic
+      annotations/ assistant/ docs/ lenses/ model/ netlab/
+      topology_host.py events.py units.py workspaces.py …
   tests/
 ```
 
@@ -35,7 +30,7 @@ backend/
 - Do not add business logic directly in route handlers; keep it in `services/`.
 - Tests live in `tests/` — add/update tests when changing service logic.
 
-## Plugin discovery (`app/plugins/router.py`)
+## Plugin discovery (`netlab_ui/app/plugins/router.py`)
 - Plugins are read **primarily from the installed netlab package**: pip package
   `networklab`, importable as `netsim`, plugins live in `netsim/extra/<id>/`.
   Discovery uses `find_spec("netsim")` — so whatever Python runs uvicorn must
@@ -51,5 +46,5 @@ backend/
   placeholder body + a `netlab.tools/plugins/<id>/` link — by design.
 
 ## Token tips
-- When asked about an endpoint, `grep` for the route path in `app/` before reading whole files.
-- Service logic is in `services/netlab/` — check there first for domain behavior.
+- When asked about an endpoint, `grep` for the route path in `netlab_ui/app/` before reading whole files.
+- Service logic is in `netlab_ui/services/netlab/` — check there first for domain behavior.

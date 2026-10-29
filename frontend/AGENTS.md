@@ -1,6 +1,6 @@
 # Frontend Agent Guidelines
 
-See root `AGENTS.md` for agent spawn policy and model roles.
+See root `AGENTS.md` for repo-wide rules.
 
 ## Stack
 - **React + TypeScript** with Vite
@@ -10,6 +10,7 @@ See root `AGENTS.md` for agent spawn policy and model roles.
 ## Structure
 ```
 frontend/src/
+  app/          # useAppController (top-level wiring), node editor tabs, toolbar
   api/          # Generated OpenAPI client types + fetch wrappers
   components/   # Netlab-specific React components
   host/         # Host/environment integration

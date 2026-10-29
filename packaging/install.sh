@@ -12,6 +12,18 @@
 # Update later with:  netlab-ui upgrade
 set -euo pipefail
 
+# Piped through `curl | bash` there is no script file, so print the help from here, not from $0.
+usage() {
+  cat <<'USAGE'
+Usage: install.sh [options]   (when piping: curl -fsSL <url> | bash -s -- [options])
+  --with-netlab          also install netlab and Ansible next to the GUI (skip if you already have netlab)
+  --with-containerlab    also run containerlab's installer (Docker, containerlab, the clab_admins group); needs sudo
+  --service              install and start a systemd user service
+  --version X.Y.Z        install a specific release instead of the latest
+Update later with:  netlab-ui upgrade
+USAGE
+}
+
 PACKAGE="netlab-ui"
 with_netlab=0
 with_clab=0
@@ -24,7 +36,7 @@ while [[ $# -gt 0 ]]; do
     --with-containerlab) with_clab=1 ;;
     --service) service=1 ;;
     --version) version="${2:?--version needs a value}"; shift ;;
-    -h | --help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h | --help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
