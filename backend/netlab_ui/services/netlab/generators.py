@@ -37,7 +37,6 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -46,6 +45,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from netlab_ui.services.model.topology import Topology
+from netlab_ui.services.netlab import location
 from netlab_ui.services.netlab import plugins as plugin_svc
 
 Scope = Literal["topology", "node"]
@@ -329,7 +329,7 @@ async def expand(topology_path: str | Path, yaml_text: str) -> dict[str, Any]:
     from netlab_ui.services.netlab import runner
 
     source = Path(topology_path)
-    with tempfile.TemporaryDirectory(prefix="netlab_generator_") as tmp:
+    with location.temporary_directory(prefix="netlab_generator_") as tmp:
         work_dir = Path(tmp)
         with contextlib.suppress(OSError):
             for entry in source.parent.iterdir():

@@ -21,8 +21,11 @@ runs is exactly what ``netlab up`` would run.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
 import re
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -129,12 +132,14 @@ async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, 
     python = location.target_python()
     if not python:
         return 127, {"ok": False, "output": "netlab is not installed"}
+    # Passed as -c, not by path: when netlab runs on the host, this file is not there. -c puts the
+    # working directory (the lab) first on sys.path; drop it so a lab's own json.py cannot shadow imports.
+    script = "import sys\nif sys.path and sys.path[0] == '': del sys.path[0]\n" + BRIDGE.read_text()
+    argv, env = location.spawn_args([python, "-c", script, *args], runner._child_env(lab_dir), lab_dir)
     proc = await asyncio.create_subprocess_exec(
-        python,
-        str(BRIDGE),
-        *args,
+        *argv,
         cwd=str(lab_dir),
-        env=runner._child_env(lab_dir),
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         start_new_session=True,
@@ -142,7 +147,9 @@ async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, 
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout)
     except TimeoutError:
-        proc.kill()
+        # The whole process group: on the host, proc is nsenter and netlab one of its children.
+        with contextlib.suppress(OSError):
+            os.killpg(proc.pid, signal.SIGKILL)
         await proc.wait()
         return 124, {"ok": False, "output": f"netlab took longer than {timeout:.0f} s"}
     try:

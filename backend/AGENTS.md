@@ -33,14 +33,14 @@ backend/
 ## Plugin discovery (`netlab_ui/app/plugins/router.py`)
 - Plugins are read **primarily from the installed netlab package**: pip package
   `networklab`, importable as `netsim`, plugins live in `netsim/extra/<id>/`.
-  Discovery uses `find_spec("netsim")` — so whatever Python runs uvicorn must
-  have netlab installed.
-- Make sure netlab is reachable in each runtime:
-  - **Docker** (`packaging/docker/Dockerfile`): the `full` target installs `.[netlab]`;
-    the default `ui` target uses a mounted host install (`NETLAB_BIN`).
+  The package directory comes from `location.netsim_package_dir()`, which asks
+  the resolved netlab's own Python, so netlab may live in another venv.
+- Where netlab comes from in each runtime:
+  - **Docker** (`packaging/docker/Dockerfile`): the host's netlab, run on the host
+    (`location.on_host`); its files are read through `/proc/1/root`.
   - **Nix** (`flake.nix`): the `python` env bundles the `netlab` package, so
     `nix run` / `nix run .#backend` resolve `netsim` automatically.
-  - **Bare host**: `pip install networklab` in the same env as uvicorn.
+  - **Bare host**: whatever `netlab` is on PATH, `NETLAB_BIN`, or Settings → Environment.
 - The pip/nix package ships plugin *code* but **not** the docs markdown (those
   live in the netlab repo / netlab.tools). Installed-only plugins get a
   placeholder body + a `netlab.tools/plugins/<id>/` link — by design.

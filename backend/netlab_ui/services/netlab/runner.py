@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from netlab_ui.services import host
 from netlab_ui.services.netlab import location, multilab
 
 
@@ -50,7 +51,12 @@ def is_installed() -> bool:
 
 
 def is_containerlab_installed() -> bool:
-    return shutil.which("containerlab") is not None
+    return containerlab_path() is not None
+
+
+def containerlab_path() -> str | None:
+    """containerlab where netlab runs (on the host, when netlab runs there)."""
+    return host.which_on_host("containerlab") if location.on_host() else shutil.which("containerlab")
 
 
 def is_libvirt_installed() -> bool:
@@ -119,11 +125,11 @@ async def _spawn(
         # The run script keeps that login fresh, so nothing prompts.
         keep_session = os.environ.get("NETLAB_APP_KEEP_SESSION") == "1"
         detach: dict[str, Any] = {"preexec_fn": os.setpgrp} if keep_session else {"start_new_session": True}
+        argv, env = location.spawn_args([netlab_bin, *args], _child_env(cwd) | (env_extra or {}), cwd)
         return await asyncio.create_subprocess_exec(
-            netlab_bin,
-            *args,
+            *argv,
             cwd=str(cwd) if cwd else None,
-            env=_child_env(cwd) | (env_extra or {}),
+            env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             stdin=asyncio.subprocess.PIPE if pipe_stdin else asyncio.subprocess.DEVNULL,
@@ -307,7 +313,7 @@ async def create(topology_path: str | Path, *, isolated: bool = False) -> dict[s
                 if isolated:
                     # Scratch cwd: keeps every generated artifact out of the lab
                     # directory and sidesteps the locked-directory refusal.
-                    cwd = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="netlab_isolated_")))
+                    cwd = Path(stack.enter_context(location.temporary_directory(prefix="netlab_isolated_")))
                     topology_arg = str(path.resolve())
                     # Importing a lab-local plugin would otherwise drop a
                     # __pycache__ into the lab directory — the one write that
@@ -317,8 +323,7 @@ async def create(topology_path: str | Path, *, isolated: bool = False) -> dict[s
                     cwd = lab_dir
                     topology_arg = path.name
                     env_extra = None
-                fd, json_path = tempfile.mkstemp(prefix="netlab_create_", suffix=".json")
-                os.close(fd)
+                json_path = location.mkstemp(prefix="netlab_create_", suffix=".json")
                 try:
                     result = await _run(
                         [
@@ -549,12 +554,14 @@ def _clear_status_cache() -> None:
 
 
 async def _run_external(program: str, args: list[str]) -> CommandResult:
-    binary = shutil.which(program)
+    # containerlab runs next to netlab (on the host, when netlab does); docker reaches the same daemon either way.
+    binary = containerlab_path() if program == "containerlab" else shutil.which(program)
     if not binary:
         return CommandResult(127, "", f"Required command {program!r} was not found on PATH")
+    argv, env = location.spawn_args([binary, *args]) if program == "containerlab" else ([binary, *args], None)
     proc = await asyncio.create_subprocess_exec(
-        binary,
-        *args,
+        *argv,
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -1096,8 +1103,7 @@ async def validate(topology_path: str | Path) -> CommandResult:
 async def graph(topology_path: str | Path, output_format: str = "d2") -> CommandResult:
     path = Path(topology_path)
     engine = "graphviz" if output_format in {"horizontal", "vertical"} else "d2"
-    fd, output_path = tempfile.mkstemp(prefix="netlab_graph_", suffix=".svg")
-    os.close(fd)
+    output_path = location.mkstemp(prefix="netlab_graph_", suffix=".svg")
     try:
         # `netlab graph`'s `--format` only accepts module-specific keywords
         # ("vlan" for topology graphs, "rr"/"vrf"/... for bgp graphs) -
@@ -1254,16 +1260,25 @@ def _tool_output(binary: str, args: list[str], timeout: float = 3) -> tuple[str,
     # "netlab" honors the configured location (env/Settings UI), not just PATH,
     # so version probes report the same install the CLI actually runs.
     resolved = location.netlab_command() if binary == "netlab" else shutil.which(binary)
+    if binary == "containerlab":
+        resolved = containerlab_path()
     if not resolved or not (os.path.isabs(resolved) or shutil.which(resolved)):
         return None
+    argv, env = (
+        location.spawn_args([resolved, *args], _child_env())
+        if binary in {"netlab", "containerlab"}
+        else ([resolved, *args], _child_env())
+    )
+    if argv[0] != resolved:
+        timeout += 5  # run on the host: nsenter and a login shell come first
     with tempfile.TemporaryFile(mode="w+") as stdout_file, tempfile.TemporaryFile(mode="w+") as stderr_file:
         process: subprocess.Popen[str] | None = None
         try:
             process = subprocess.Popen(
-                [resolved, *args],
+                argv,
                 stdout=stdout_file,
                 stderr=stderr_file,
-                env=_child_env(),
+                env=env,
                 text=True,
                 start_new_session=True,
             )
@@ -1292,11 +1307,12 @@ def tool_version(binary: str, args: list[str]) -> str | None:
 
     Cached per resolved binary and its mtime: ``containerlab version`` alone
     takes about a second, and /api/health asks on every call."""
-    resolved = shutil.which(binary)
+    resolved = containerlab_path() if binary == "containerlab" else shutil.which(binary)
     if resolved is None:
         return None
     try:
-        mtime = os.stat(resolved).st_mtime
+        on_host = binary == "containerlab" and location.on_host()
+        mtime = os.stat(host.host_file(resolved) if on_host else resolved).st_mtime
     except OSError:
         mtime = 0.0
     key = (resolved, tuple(args))

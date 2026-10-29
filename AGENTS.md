@@ -29,7 +29,7 @@ cd frontend && npm run gen:api      # regenerate src/api/generated.ts (backend m
 ### Container
 
 ```bash
-docker compose up -d                          # the UI image (uses the host's netlab: set NETLAB_BIN)
+docker compose up -d                          # the UI image (runs the host's netlab on the host)
 docker build -f packaging/docker/Dockerfile -t netlab-ui .                   # build it yourself
 ```
 
@@ -143,6 +143,7 @@ The netlab YAML stays coordinate-free. Positions live in `<topology>.netlab-ui.j
 - **Lab monitoring is a netlab plugin in `plugins/monitoring/plugin/monitoring`, not netlab or backend code.** It must keep working from the plain netlab CLI (`plugin: [ monitoring ]`); the backend only links it into `~/.netlab`, edits `plugin:` and reads `<lab>/monitoring/stack.json` + `plan.json`. The collector (`collector/nlmon`) is stdlib-only Python run on the stock `python:alpine` image — don't add dependencies. Metrics use netlab names (`node`, `ifname`, `link`, `peer_node`) and `netlab_*` metric names only; a new vendor is a profile in `defaults.yml` (plus a gNMI/SNMP mapping), never a vendor branch in code. Test with `python -m pytest monitoring/tests` (netlab's Python).
 - **`<lab>/monitoring/data` is written continuously while a lab is monitored.** The workspace watcher (`services/events.py::_workspace_filter`) skips it; keep it that way or the UI drowns in `files` events.
 - **Calls to lab-host services (metrics store, Grafana) bypass HTTP proxies** (`services/monitoring._DIRECT`): urllib doesn't understand CIDR `NO_PROXY` entries, and lab addresses are never behind a proxy.
+- **In a container, netlab runs on the host** (`location.on_host`): netlab, its Python and containerlab are spawned through `location.spawn_args` (nsenter, as the host user; `services/host.py`), netlab's files are read through `host.host_file` (`/proc/1/root`), and scratch paths handed to netlab come from `location.mkdtemp`/`mkstemp`/`temporary_directory` (a host /tmp folder bind-mounted at the same path). A new spawn of netlab or its Python, or a temp path netlab must see, has to go through these, or it works natively and breaks in the container. Root-owned files in workspaces are handed to the user by the watcher (`events.py`, `host.claim`), except containerlab's `clab-*/`.
 - **Edgeshark is installed with netlab's own `edgeshark` tool** through `_tools_bridge.py host up edgeshark --bind <UI address>`; the bridge only scopes netlab's unaddressed `--publish` ports to the UI's bind address. Don't reintroduce a separately downloaded compose file.
 
 ## Key rules

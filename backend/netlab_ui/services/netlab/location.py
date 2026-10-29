@@ -29,14 +29,21 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import shutil
 import stat
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from netlab_ui.services import host
+
+logger = logging.getLogger(__name__)
 
 CONFIG_ENV = "NETLAB_UI_CONFIG"
 DEFAULT_CONFIG = "~/.netlab_ui.json"
@@ -103,18 +110,33 @@ class Resolution:
     """``bin/`` directory of the resolved binary, prepended to child PATH."""
 
 
+def on_host() -> bool:
+    """Does netlab run on the host this container sits on, rather than here?
+
+    In a container that may enter the host (``services.host``), the host's own netlab is used: it runs
+    there, as the host user, with the host's Python, Ansible and containerlab, on any distribution. Its
+    files are read through ``host.host_file``. ``NETLAB_UI_NETLAB=container`` uses a netlab inside the
+    container instead."""
+    return os.environ.get("NETLAB_UI_NETLAB", "auto") != "container" and host.reachable()
+
+
+def _exists(path: str) -> bool:
+    return (host.host_file(path) if on_host() else Path(path)).exists()
+
+
 def resolve() -> Resolution:
     configured = get_configured_bin()
     env_bin = os.environ.get(BIN_ENV, "").strip() or None
+    which = host.which_on_host if on_host() else shutil.which
 
     if configured:
         command, source = configured, "config"
     elif env_bin:
         command, source = env_bin, "env"
     else:
-        which = shutil.which("netlab")
-        if which:
-            command, source = which, "path"
+        found = which("netlab")
+        if found:
+            command, source = found, "path"
         else:
             command, source = "netlab", "default"
 
@@ -122,10 +144,10 @@ def resolve() -> Resolution:
     # Normalise to an absolute binary path when we can actually find it.
     bin_path: str | None
     if os.path.sep in command or (os.altsep and os.altsep in command):
-        candidate = Path(command).expanduser()
-        bin_path = str(candidate) if candidate.exists() else None
+        candidate = Path(host.expand_user(command) if on_host() else command).expanduser()
+        bin_path = str(candidate) if _exists(str(candidate)) else None
     else:
-        bin_path = shutil.which(command)
+        bin_path = which(command)
 
     bin_dir = str(Path(bin_path).parent) if bin_path else None
     return Resolution(
@@ -171,16 +193,94 @@ def target_python() -> str | None:
     """
     r = resolve()
     if not r.bin_path:
-        return sys.executable
+        return None if on_host() else sys.executable
     shebang = _read_shebang(Path(r.bin_path))
     if shebang and Path(shebang).name.startswith("python"):
         return shebang
     if r.bin_dir:
         for name in ("python3", "python"):
             sibling = Path(r.bin_dir) / name
-            if sibling.exists():
+            if _exists(str(sibling)):
                 return str(sibling)
-    return sys.executable
+    # The backend's own interpreter only helps when netlab runs next to it.
+    return None if on_host() else sys.executable
+
+
+_scratch_root: str | None = None
+
+
+def scratch_root() -> str | None:
+    """A temp folder that netlab on the host sees at the same path, or None for the default one.
+
+    netlab gets scratch directories and output files from us (``netlab create -o json=...``, ``netlab test``'s
+    working directory, generator previews). When it runs on the host, a path in the container's /tmp means nothing
+    there, so a per-user folder in the host's /tmp is bind-mounted at the same path here (the container is
+    privileged; containerlab needs that anyway). Paths stay identical on both sides, even after ``resolve()``."""
+    global _scratch_root
+    if not on_host():
+        return None
+    if _scratch_root and os.path.ismount(_scratch_root):
+        return _scratch_root
+    owner = host.user()
+    path = f"/tmp/netlab-ui-{owner.uid}"
+    try:
+        source = host.host_file(path)
+        source.mkdir(mode=0o700, exist_ok=True)
+        os.chown(source, owner.uid, owner.gid)
+        Path(path).mkdir(exist_ok=True)
+        if not os.path.ismount(path):
+            subprocess.run(["mount", "--bind", str(source), path], check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = getattr(exc, "stderr", "") or exc
+        logger.warning("could not share %s with the host, netlab cannot use scratch files: %s", path, detail)
+        return None
+    _scratch_root = path
+    return path
+
+
+def mkdtemp(prefix: str) -> str:
+    """``tempfile.mkdtemp`` for a directory netlab works in (see :func:`scratch_root`)."""
+    path = tempfile.mkdtemp(prefix=prefix, dir=scratch_root())
+    host.claim([path])
+    return path
+
+
+def mkstemp(prefix: str, suffix: str = "") -> str:
+    """The path of a new empty file netlab writes to (see :func:`scratch_root`). The caller removes it."""
+    fd, path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=scratch_root())
+    os.close(fd)
+    host.claim([path])
+    return path
+
+
+@contextlib.contextmanager
+def temporary_directory(prefix: str) -> Iterator[str]:
+    """``tempfile.TemporaryDirectory`` for a directory netlab works in (see :func:`scratch_root`)."""
+    with tempfile.TemporaryDirectory(prefix=prefix, dir=scratch_root()) as path:
+        host.claim([path])
+        yield path
+
+
+def spawn_args(
+    argv: list[str], env: dict[str, str] | None = None, cwd: Path | str | None = None
+) -> tuple[list[str], dict[str, str]]:
+    """``(argv, env)`` that run a netlab-side program (netlab, its Python, containerlab) where netlab lives.
+
+    Here: unchanged (``env`` defaults to ours). On the host (:func:`on_host`): as the host user, in ``cwd``,
+    with the netlab's ``bin/`` first on the host's PATH, and only what ``env`` changes from our environment."""
+    env = dict(os.environ) if env is None else env
+    if not on_host():
+        return argv, env
+    extra = {
+        key: value
+        for key, value in env.items()
+        if key in _ALWAYS_FORWARD or (key != "PATH" and os.environ.get(key) != value)
+    }
+    return host.command(argv, extra, cwd, path_prefix=resolve().bin_dir)
+
+
+# Set for netlab whether or not the backend's own environment happens to have them too.
+_ALWAYS_FORWARD = {"PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"}
 
 
 def probe_netsim() -> dict[str, str] | None:
@@ -199,15 +299,12 @@ def _probe_netsim(python: str, _netlab_command: str) -> dict[str, str] | None:
         "print(json.dumps({'packageDir':str(pathlib.Path(netsim.__file__).parent),"
         "'version':str(getattr(netsim,'__version__',''))}))"
     )
+    argv, env = spawn_args([python, "-c", script], {**os.environ, "PATH": child_path()})
     try:
-        result = subprocess.run(
-            [python, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            env={**os.environ, "PATH": child_path()},
-        )
-        data = json.loads(result.stdout) if result.returncode == 0 else None
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env)
+        # The last line: a login shell on the host may print a greeting first.
+        lines = result.stdout.strip().splitlines()
+        data = json.loads(lines[-1]) if result.returncode == 0 and lines else None
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
@@ -216,7 +313,7 @@ def _probe_netsim(python: str, _netlab_command: str) -> dict[str, str] | None:
 def netsim_package_dir() -> Path | None:
     probe = probe_netsim()
     value = probe.get("packageDir") if probe else None
-    path = Path(value) if value else None
+    path = (host.host_file(value) if on_host() else Path(value)) if value else None
     return path if path and path.is_dir() else None
 
 
@@ -238,21 +335,17 @@ def forget_status_instance(instance_id: str) -> None:
         "status.change_status(defaults,lambda states,topology:"
         "(states.pop(key,None),states.pop(int(key),None) if key.isdigit() else None))"
     )
-    result = subprocess.run(
-        [python, "-c", script, instance_id],
-        capture_output=True,
-        text=True,
-        timeout=10,
-        env={**os.environ, "PATH": child_path()},
-    )
+    argv, env = spawn_args([python, "-c", script, instance_id], {**os.environ, "PATH": child_path()})
+    result = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env)
     if result.returncode:
         detail = result.stderr.strip() or result.stdout.strip() or "unknown error"
         raise RuntimeError(detail)
 
 
 def _read_shebang(path: Path) -> str | None:
+    """The interpreter in ``path``'s ``#!`` line (``path`` on the host when netlab runs there)."""
     try:
-        with path.open("rb") as fh:
+        with (host.host_file(path) if on_host() else path).open("rb") as fh:
             first = fh.readline(256)
     except OSError:
         return None
@@ -264,7 +357,7 @@ def _read_shebang(path: Path) -> str | None:
     # Handle `#!/usr/bin/env python3` as well as a direct interpreter path.
     parts = line.split()
     if parts[0].endswith("env") and len(parts) > 1:
-        return shutil.which(parts[1]) or parts[1]
+        return (host.which_on_host if on_host() else shutil.which)(parts[1]) or parts[1]
     return parts[0]
 
 
@@ -292,7 +385,7 @@ def in_backend_venv() -> bool:
     is unnecessary. Compares the target interpreter to our own.
     """
     tp = target_python()
-    if not tp:
+    if not tp or on_host():
         return False
     try:
         return os.path.samefile(tp, sys.executable)

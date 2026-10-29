@@ -122,6 +122,16 @@ def reset() -> None:
     _which_cache.clear()
 
 
+def reachable() -> bool:
+    """In a container that can run programs on the host as the host user (whatever NETLAB_UI_AGENTS says)."""
+    return in_container() and _probe().user is not None
+
+
+def unreachable_reason() -> str:
+    """Why the host cannot be entered from this container (empty when it can)."""
+    return _probe().reason if in_container() else ""
+
+
 def mode() -> Mode:
     if not in_container():
         return "native"
@@ -135,6 +145,11 @@ def note() -> str:
     if not in_container() or os.environ.get("NETLAB_UI_AGENTS", "auto") == "container":
         return ""
     return _probe().reason
+
+
+def user() -> HostUser:
+    """The host user programs run as; raises when the host is out of reach."""
+    return _user()
 
 
 def _user() -> HostUser:
@@ -200,6 +215,20 @@ def wrap(argv: list[str], env: dict[str, str], cwd: Path) -> tuple[list[str], di
     return _login_command(command, env), {"PATH": HOST_PATH}
 
 
+def command(
+    argv: list[str], env: dict[str, str], cwd: Path | str | None = None, path_prefix: str | None = None
+) -> tuple[list[str], dict[str, str]]:
+    """The ``(argv, env)`` that run ``argv`` on the host as the host user, without a terminal.
+
+    For the host's own tools (netlab, its Python, containerlab): they run with the host's file system,
+    interpreter and login ``PATH`` (``path_prefix`` first), and what they write belongs to the user.
+    ``env`` holds only what to set on top of the user's environment."""
+    script = f'PATH={shlex.quote(path_prefix)}:"$PATH"; export PATH; ' if path_prefix else ""
+    script += f"cd {shlex.quote(str(cwd))} && " if cwd else 'cd "$HOME" && '
+    script += "exec " + " ".join(shlex.quote(part) for part in argv)
+    return _login_command(script, env), {"PATH": HOST_PATH}
+
+
 def login_shell() -> str:
     """The shell a plain terminal starts: the host user's own when running in a container that
     reaches the host, otherwise this machine's ($SHELL, bash or sh)."""
@@ -212,10 +241,15 @@ def login_shell() -> str:
 
 
 def which_all(binaries: list[str]) -> dict[str, str | None]:
-    """Where each CLI is, as the user's own terminal would find it (cached for a minute)."""
-    now = time.monotonic()
+    """Where each agent CLI is, as the user's own terminal would find it (cached for a minute)."""
     if mode() != "host":
         return {name: shutil.which(name) for name in binaries}
+    return which_all_on_host(binaries)
+
+
+def which_all_on_host(binaries: list[str]) -> dict[str, str | None]:
+    """Where each program is in the host user's login ``PATH`` (cached for a minute)."""
+    now = time.monotonic()
     stale = [name for name in binaries if name not in _which_cache or now - _which_cache[name][0] > _TTL]
     if stale:
         script = (
@@ -247,6 +281,10 @@ def which(binary: str) -> str | None:
     return which_all([binary])[binary]
 
 
+def which_on_host(binary: str) -> str | None:
+    return which_all_on_host([binary])[binary]
+
+
 # ---------------------------------------------------------------------- files both sides can see
 
 
@@ -274,3 +312,38 @@ def share(path: Path) -> None:
         return
     user = _user()
     os.chown(path, user.uid, user.gid)
+
+
+# The host's root directory: with ``pid: host``, process 1 is the host's init, and its root is the host's /.
+HOST_ROOT = Path("/proc/1/root")
+
+
+def host_file(path: str | Path) -> Path:
+    """Where this container sees the host's ``path`` (an absolute path on the host)."""
+    return HOST_ROOT / str(path).lstrip("/")
+
+
+def expand_user(path: str) -> str:
+    """``~`` in a path the user typed means their home on the host, not the container's."""
+    if path == "~" or path.startswith("~/"):
+        return _user().home + path[1:]
+    return path
+
+
+def claim(paths: list[str]) -> None:
+    """Give files the backend created (root in the container) in a lab folder to the host user.
+
+    Labs live in folders the user also edits and runs netlab in from their own shell, so a root-owned
+    file there is one they cannot change or delete. Only root-owned entries are touched, and never
+    containerlab's ``clab-<lab>/`` folders: containerlab writes those as root for the lab's containers."""
+    if not reachable():
+        return
+    user = _user()
+    for path in paths:
+        if any(part.startswith("clab-") for part in Path(path).parts):
+            continue
+        try:
+            if os.lstat(path).st_uid == 0:
+                os.lchown(path, user.uid, user.gid)
+        except OSError:
+            pass  # gone already (a lock or temp file), or not ours to change

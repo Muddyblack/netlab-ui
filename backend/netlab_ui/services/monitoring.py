@@ -17,6 +17,7 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 import sys
 import time
 import urllib.error
@@ -26,7 +27,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from netlab_ui.services.netlab import runner
+from netlab_ui.services import host
+from netlab_ui.services.netlab import location, runner
 
 PLUGIN = "monitoring"
 _REPO_PLUGIN = Path(__file__).resolve().parents[3] / "plugins" / "monitoring" / "plugin" / PLUGIN
@@ -48,9 +50,18 @@ def plugin_link() -> Path:
     return Path.home() / ".netlab" / PLUGIN
 
 
+def _shared_copy(source: Path) -> Path:
+    """Where the link points when netlab runs on the host (``location.on_host``): a copy in ``~/.netlab``.
+
+    The shipped plugin is a path inside the container image, which the host's netlab cannot see. ``~/.netlab``
+    is the same folder on both sides (the compose file mounts it), and a relative link into it works on both."""
+    return source if not location.on_host() else Path.home() / ".netlab" / ".netlab-ui" / PLUGIN
+
+
 def plugin_state() -> dict[str, Any]:
     """Is the plugin where netlab looks for it, and is it ours?"""
     source = plugin_source()
+    source = _shared_copy(source) if source is not None else None
     link = plugin_link()
     installed = (link / "__init__.py").is_file()
     ours = installed and source is not None and link.resolve() == source.resolve()
@@ -67,7 +78,10 @@ def repair_plugin_link() -> bool:
     that works, and a plugin directory the user put there, are left alone; nothing is created
     for someone who never turned monitoring on."""
     link = plugin_link()
-    if not link.is_symlink() or link.exists() or plugin_source() is None:
+    if not link.is_symlink() or plugin_source() is None:
+        return False
+    # On the host, a link that works here may still point into this image, and the copy may be older.
+    if link.exists() and not location.on_host():
         return False
     install_plugin()
     return True
@@ -81,10 +95,18 @@ def install_plugin() -> dict[str, Any]:
         raise RuntimeError("This installation does not include the monitoring plugin")
     link = plugin_link()
     link.parent.mkdir(parents=True, exist_ok=True)
-    if link.is_symlink() and not link.exists():
-        link.unlink()  # dangling link from an older checkout
+    target = _shared_copy(source)
+    if target != source:
+        # Refreshed every time, so the copy matches this image's plugin.
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(source, target, ignore=shutil.ignore_patterns("__pycache__"))
+        host.claim([str(path) for path in (target.parent, target, *target.rglob("*"))])
+    points_to = target if target == source else Path(os.path.relpath(target, link.parent))
+    if link.is_symlink() and (not link.exists() or (target != source and Path(os.readlink(link)) != points_to)):
+        link.unlink()  # dangling link from an older checkout, or one into a container image the host cannot see
     if not link.exists():
-        link.symlink_to(source, target_is_directory=True)
+        link.symlink_to(points_to, target_is_directory=True)
+        host.claim([str(link)])
     return plugin_state()
 
 

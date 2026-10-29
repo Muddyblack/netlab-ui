@@ -19,7 +19,6 @@ import asyncio
 import contextlib
 import json
 import shutil
-import tempfile
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Literal
@@ -70,11 +69,10 @@ async def catalog() -> dict[str, Any]:
     python = location.target_python()
     if not python or not runner.is_installed():
         return empty
+    argv, env = location.spawn_args([python, "-c", _CATALOG_SCRIPT], runner._child_env())
     proc = await asyncio.create_subprocess_exec(
-        python,
-        "-c",
-        _CATALOG_SCRIPT,
-        env=runner._child_env(),
+        *argv,
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -114,7 +112,7 @@ async def stream(action: SetupAction, target: str) -> AsyncIterator[tuple[str, s
     ``netlab test`` works in a directory of its own (it creates, deploys and
     removes a lab there), which is removed afterwards."""
     args = command(action, target, await catalog())
-    workdir = Path(tempfile.mkdtemp(prefix="netlab-ui-selftest-")) if action == "test" else None
+    workdir = Path(location.mkdtemp(prefix="netlab-ui-selftest-")) if action == "test" else None
     # A failed `netlab test` waits for RETURN before its own cleanup
     # (`netlab down --cleanup --force`); answer it up front.
     stdin_text = "\n" * 4 if action == "test" else None
@@ -172,7 +170,7 @@ async def clab_tarball(topology_path: str | Path) -> tuple[Path, runner.CommandR
     # --cleanup only runs when netlab gets that far; remove what a failed run
     # leaves behind, but never a config/ directory the user already had.
     leftovers = [path for path in (lab_dir / "config", lab_dir / "clab.config.yml") if not path.exists()]
-    target = Path(tempfile.mkdtemp(prefix="netlab-ui-tarball-")) / f"{lab_dir.name}.tar.gz"
+    target = Path(location.mkdtemp(prefix="netlab-ui-tarball-")) / f"{lab_dir.name}.tar.gz"
     result = await runner.run_command(["clab", "tarball", "--cleanup", "-q", str(target)], cwd=lab_dir)
     if result.code:
         for path in leftovers:

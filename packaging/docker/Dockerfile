@@ -4,8 +4,9 @@
 #
 # Scope of the default image: the *UI*, not a netlab distribution. netlab, Ansible and
 # containerlab all stay on the host, where whoever runs this already has them.
-# The container talks to that host install through NETLAB_BIN / Settings →
-# Environment and the mounted Docker socket. Keeping the toolchain out means
+# The container runs that host install on the host, as the host user, through
+# nsenter (services/host.py, services/netlab/location.py), and reaches lab
+# containers through the mounted Docker socket. Keeping the toolchain out means
 # no version skew against the netlab the user actually runs, and it is what
 # lets this ship as a netlab *tool* rather than a parallel install of one.
 
@@ -87,19 +88,9 @@ LABEL org.opencontainers.image.source="https://github.com/Muddyblack/netlab-ui" 
 # ---- default image: the UI only ----
 # netlab, Ansible and containerlab stay on the host, where whoever runs this
 # already has them: no version skew against the netlab the user actually runs.
-# Point Settings → Environment (or NETLAB_BIN) at the host's netlab install,
-# mounted into the container at the same path. The backend probes that
-# executable's Python environment for netsim metadata, so it does not need a
-# second netlab installation of its own.
-#
-# A few backend features shell out to `containerlab` directly rather than
-# through netlab — link impairment (`tools netem set`), orphaned-instance
-# cleanup (`destroy --cleanup`) and post-start link reconcile (`apply`). It is
-# a static Go binary, so bind-mounting the host's copy enables them:
-#
-#   -v /usr/bin/containerlab:/usr/bin/containerlab:ro
-#
-# Without it those three features report containerlab as unavailable in
-# Settings → Environment; nothing else is affected.
+# With --privileged --pid host the backend runs them on the host as the owner
+# of the mounted ~/.netlab (see docs/container.md), so nothing is mounted for
+# them and any distribution works. NETLAB_UI_NETLAB=container keeps netlab in
+# the container instead, for an image built with one.
 FROM runtime AS ui
 LABEL org.opencontainers.image.description="Web UI for netlab — topology editor, lab lifecycle and device consoles in one container."

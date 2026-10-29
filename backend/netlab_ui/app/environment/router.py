@@ -34,7 +34,7 @@ from netlab_ui.app.contract.responses import (
     SetNetlabPathRequest,
 )
 from netlab_ui.app.lab.common import SSE_HEADERS
-from netlab_ui.services import container_env, host_env
+from netlab_ui.services import container_env, host, host_env
 from netlab_ui.services.netlab import location, runner, setup
 from netlab_ui.services.netlab.logfmt import LineFilter
 
@@ -56,9 +56,24 @@ def _environment() -> dict:
     return info
 
 
+def _resolve_on_host(path: str) -> str | None:
+    """:func:`_resolve_candidate` for a netlab on the host (``location.on_host``)."""
+    script = 'p=$(command -v -- "$1") && [ -x "$p" ] && readlink -f -- "$p"'
+    argv, env = host.command(["sh", "-c", script, "sh", host.expand_user(path)], {})
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    lines = proc.stdout.strip().splitlines()
+    found = lines[-1] if proc.returncode == 0 and lines else ""
+    return found if found.startswith("/") and Path(found).name.lower() == "netlab" else None
+
+
 def _resolve_candidate(path: str) -> str | None:
     """Absolute path to a netlab binary for a user-supplied value (bare name via
     PATH, or an explicit/relative/absolute path), or ``None`` if it isn't there."""
+    if location.on_host():
+        return _resolve_on_host(path)
     if os.path.sep in path or (os.altsep and os.altsep in path):
         candidate = Path(path).expanduser()
         # lgtm[py/path-injection] -- by design: this is a Settings-UI feature letting an
@@ -80,15 +95,13 @@ def _runs_as_netlab(binary: str) -> bool:
     """True if the selected install's ``netlab version`` command succeeds."""
     binary_dir = str(Path(binary).parent)
     child_path = os.pathsep.join([binary_dir, location.child_path()])
+    argv, env = (
+        host.command([binary, "version"], {}, path_prefix=binary_dir)
+        if location.on_host()
+        else (["netlab", "version"], {**os.environ, "PATH": child_path})
+    )
     try:
-        proc = subprocess.run(
-            ["netlab", "version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env={**os.environ, "PATH": child_path},
-            shell=False,
-        )
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env, shell=False)
     except (OSError, subprocess.SubprocessError):
         return False
     return proc.returncode == 0

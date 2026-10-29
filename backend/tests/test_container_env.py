@@ -28,6 +28,9 @@ def test_well_configured_container_passes(monkeypatch, tmp_path):
         ],
     }
     _fake(monkeypatch, info, ["/home/me/labs/project"])
+    me = container_env.host.HostUser("me", 1000, 1000, "/home/me", "/bin/bash")
+    monkeypatch.setattr(container_env.host, "reachable", lambda: True)
+    monkeypatch.setattr(container_env.host, "_user", lambda: me)
     result = container_env.diagnose(refresh=True)
     assert result["inspected"] is True
     assert all(check["ok"] for check in result["checks"]), result["checks"]

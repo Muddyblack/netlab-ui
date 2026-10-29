@@ -149,11 +149,11 @@ curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/packaging
 netlab-ui                  # then open http://127.0.0.1:8000
 ```
 
-See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it uses the netlab and containerlab on the host:
+See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it runs the netlab and containerlab you have on the host, as you, on any distribution:
 
 ```bash
-NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
-  docker compose up -d        # uses docker-compose.yml; labs live in ./labs
+mkdir -p ~/.netlab labs
+docker compose up -d        # uses docker-compose.yml; labs live in ./labs
 ```
 
 Open `http://localhost:8000`. The flags that matter, multi-user setups and building it yourself are in [docs/container.md](docs/container.md). To run from source instead, see [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from netlab_ui.services import host
 from netlab_ui.services import workspaces as ws_store
 
 logger = logging.getLogger(__name__)
@@ -59,19 +60,29 @@ def poke_watcher() -> None:
         _watch_restart.set()
 
 
+_MONITORING_DATA = f"{os.sep}monitoring{os.sep}data{os.sep}"
+
+
 def _workspace_filter():
     """watchfiles' default filter, plus the labs' monitoring metrics store
     (``<lab>/monitoring/data``): it writes continuously while a lab is monitored
     and would otherwise turn into a steady stream of ``files`` events."""
     from watchfiles import DefaultFilter
 
-    marker = f"{os.sep}monitoring{os.sep}data{os.sep}"
-
     class _Filter(DefaultFilter):
         def __call__(self, change, path: str) -> bool:
-            return marker not in path and super().__call__(change, path)
+            return _MONITORING_DATA not in path and super().__call__(change, path)
 
     return _Filter()
+
+
+def _claim_filter():
+    """Everything but the metrics store: files to hand to the host user include .git and the like."""
+
+    def keep(_change, path: str) -> bool:
+        return _MONITORING_DATA not in path
+
+    return keep
 
 
 async def watch_workspaces() -> None:
@@ -82,7 +93,7 @@ async def watch_workspaces() -> None:
     """
     global _watch_restart
     try:
-        from watchfiles import awatch
+        from watchfiles import Change, awatch
     except ImportError:
         logger.info("watchfiles not installed - file change push disabled, frontend falls back to polling")
         return
@@ -97,9 +108,16 @@ async def watch_workspaces() -> None:
             continue
         try:
             # DefaultFilter skips .git, __pycache__, node_modules etc.; see _workspace_filter.
-            watch_filter = _workspace_filter()
-            async for _changes in awatch(*roots, stop_event=_watch_restart, step=400, watch_filter=watch_filter):
-                hub.publish({"type": "files"})
+            notify = _workspace_filter()
+            # In a container running netlab on the host, whatever the backend writes into a lab folder
+            # (edits, sidecars, git history) is root's until handed to the user; watch those paths too.
+            claiming = host.reachable()
+            watch_filter = _claim_filter() if claiming else notify
+            async for changes in awatch(*roots, stop_event=_watch_restart, step=400, watch_filter=watch_filter):
+                if claiming:
+                    await asyncio.to_thread(host.claim, [path for change, path in changes if change != Change.deleted])
+                if not claiming or any(notify(change, path) for change, path in changes):
+                    hub.publish({"type": "files"})
         except Exception:
             logger.exception("workspace watcher crashed; retrying in 10s")
             await asyncio.sleep(10)

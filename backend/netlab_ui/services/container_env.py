@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from netlab_ui.services import workspaces
+from netlab_ui.services import host, workspaces
 
 _CACHE_TTL = 30.0
 _cache: tuple[float, dict[str, Any]] | None = None
@@ -233,6 +233,34 @@ def _exposure_check() -> dict[str, Any]:
     )
 
 
+def _host_netlab_check() -> dict[str, Any] | None:
+    """Can netlab run on the host, as the user (``location.on_host``)? None when told to stay in here."""
+    if os.environ.get("NETLAB_UI_NETLAB", "auto") == "container":
+        return None
+    if not host.reachable():
+        return _check(
+            "host-netlab",
+            False,
+            "error",
+            "netlab cannot run on the host",
+            "The UI runs the host's own netlab there, as you, by entering the host. "
+            + (host.unreachable_reason() or "The host could not be entered."),
+            "--privileged --pid host, and -v $HOME/.netlab:/root/.netlab",
+        )
+    user = host.user()
+    if user.uid == 0:
+        return _check(
+            "host-netlab",
+            False,
+            "warning",
+            "netlab runs on the host as root",
+            "The mounted ~/.netlab belongs to root (Docker creates a missing folder that way), so labs, their "
+            "files and netlab's registry would be root's, not yours.",
+            "sudo chown -R $USER: ~/.netlab and restart the container (or set NETLAB_UI_HOST_UID)",
+        )
+    return _check("host-netlab", True, "error", f"netlab runs on the host as {user.name}", "Lab files belong to you.")
+
+
 def diagnose(*, refresh: bool = False) -> dict[str, Any]:
     """Container deployment checks (cached for a short while)."""
     global _cache
@@ -263,6 +291,8 @@ def diagnose(*, refresh: bool = False) -> dict[str, Any]:
             checks += _host_config_checks(info)
             checks += _workspace_checks(mounts)
             checks.append(_state_check(mounts))
+        if (netlab_check := _host_netlab_check()) is not None:
+            checks.append(netlab_check)
         checks.append(_exposure_check())
         result = {"inContainer": True, "inspected": info is not None, "checks": checks}
 

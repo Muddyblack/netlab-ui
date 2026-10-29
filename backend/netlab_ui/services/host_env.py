@@ -4,7 +4,8 @@ Deploying fails late and cryptically when the host is not set up: a missing netl
 asking for a sudo password the app cannot type. :func:`diagnose` reports each of these up front, with the fix, so
 the setup wizard (and a deploy attempt) can explain the problem before anything runs.
 
-Inside a container the checks of ``container_env`` apply instead, so :func:`diagnose` returns no checks there.
+Inside a container the checks of ``container_env`` apply instead, so :func:`diagnose` returns no checks there,
+unless netlab runs on the host (``location.on_host``): then the host user's containerlab and Docker access are checked.
 """
 
 from __future__ import annotations
@@ -13,12 +14,13 @@ import grp
 import os
 import shutil
 import stat
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
 
-from netlab_ui.services import container_env, workspaces
-from netlab_ui.services.netlab import runner
+from netlab_ui.services import container_env, host, workspaces
+from netlab_ui.services.netlab import location, runner
 
 # Deploying needs root, and the app has no terminal to type a sudo password into. Passwordless sudo is not the answer:
 # containerlab's own model is a root-owned setuid binary that only members of the clab_admins group may run.
@@ -100,8 +102,17 @@ def _privilege_check(path: str) -> dict[str, Any]:
     try:
         info = Path(path).resolve().stat()
     except OSError:
-        info = None
-    if info is None or not (info.st_uid == 0 and info.st_mode & stat.S_ISUID):
+        return _privilege_verdict(None, set())
+    try:
+        group = grp.getgrgid(info.st_gid).gr_name
+    except KeyError:
+        group = str(info.st_gid)
+    return _privilege_verdict((info.st_uid, info.st_gid, info.st_mode, group), {*os.getgroups(), os.getegid()})
+
+
+def _privilege_verdict(binary: tuple[int, int, int, str] | None, groups: set[int]) -> dict[str, Any]:
+    """The check for containerlab's ``(owner uid, group id, mode, group name)`` and the user's group ids."""
+    if binary is None or not (binary[0] == 0 and binary[2] & stat.S_ISUID):
         return _check(
             "clab-privileges",
             False,
@@ -110,23 +121,72 @@ def _privilege_check(path: str) -> dict[str, Any]:
             "netlab runs containerlab without sudo, which needs the setuid binary and clab_admins group.",
             SUDO_HINT,
         )
+    _uid, gid, mode, group = binary
     # Setuid root. Group-restricted installs (mode u+rx,g+x,o=) only run for members of the file's group.
-    if not info.st_mode & stat.S_IXOTH:
-        try:
-            group = grp.getgrgid(info.st_gid).gr_name
-        except KeyError:
-            group = str(info.st_gid)
-        if info.st_gid not in os.getgroups() and info.st_gid != os.getegid():
-            return _check(
-                "clab-privileges",
-                False,
-                "error",
-                f"You are not in the {group} group",
-                f"containerlab is restricted to members of {group}. Group changes apply after logging in again "
-                "(and restarting the netlab-ui service).",
-                f"sudo usermod -aG {group} $USER",
-            )
+    if not mode & stat.S_IXOTH and gid not in groups:
+        return _check(
+            "clab-privileges",
+            False,
+            "error",
+            f"You are not in the {group} group",
+            f"containerlab is restricted to members of {group}. Group changes apply after logging in again "
+            "(and restarting the netlab-ui service).",
+            f"sudo usermod -aG {group} $USER",
+        )
     return _check("clab-privileges", True, "error", "containerlab runs without sudo", "Setuid binary, group access ok.")
+
+
+# What the containerlab and Docker checks need to know about the host user, asked on the host.
+_HOST_FACTS = """
+s=/var/run/docker.sock; if [ -r "$s" ] && [ -w "$s" ]; then echo docker=ok; else echo docker=no; fi
+echo "groups=$(id -G)"
+p=$(command -v containerlab) || exit 0
+echo "clab=$p"
+echo "stat=$(stat -L -c '%u %g %f' "$p")"
+echo "group=$(getent group "$(stat -L -c %g "$p")" | cut -d: -f1)"
+"""
+
+
+def _host_checks() -> list[dict[str, Any]]:
+    """containerlab and Docker as the host user sees them, for netlab running on the host (``location.on_host``)."""
+    argv, env = host.command(["sh", "-c", _HOST_FACTS], {})
+    try:
+        out = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [_check("host", False, "error", "Could not check the host", str(exc))]
+    facts = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+    user = host.user().name
+    docker = (
+        _check("docker", True, "error", "Docker socket accessible", f"{_DOCKER_SOCKET} on the host, as {user}")
+        if facts.get("docker") == "ok"
+        else _check(
+            "docker",
+            False,
+            "error",
+            "No access to the Docker socket",
+            f"{user} cannot read and write {_DOCKER_SOCKET} on the host; netlab runs there as {user}.",
+            f"sudo usermod -aG docker {user}, then restart the container",
+        )
+    )
+    path = facts.get("clab")
+    if not path:
+        missing = _check(
+            "containerlab",
+            False,
+            "error",
+            "containerlab not found on the host",
+            "netlab deploys the clab provider's labs through containerlab.",
+            "https://containerlab.dev/install/",
+        )
+        return [missing, docker]
+    try:
+        uid, gid, mode_hex = facts.get("stat", "").split()
+        binary = (int(uid), int(gid), int(mode_hex, 16), facts.get("group") or gid)
+    except ValueError:
+        binary = None
+    groups = {int(g) for g in facts.get("groups", "").split() if g.isdigit()}
+    found = _check("containerlab", True, "error", "containerlab found", f"{path} on the host")
+    return [found, _privilege_verdict(binary, groups), docker]
 
 
 def _docker_check() -> dict[str, Any]:
@@ -194,8 +254,16 @@ def diagnose(*, refresh: bool = False) -> dict[str, Any]:
     global _cache
     if not refresh and _cache and time.monotonic() - _cache[0] < _CACHE_TTL:
         return _cache[1]
-    if container_env.in_container():
-        result: dict[str, Any] = {"inContainer": True, "ready": True, "checks": []}
+    if location.on_host():
+        # A container running the host's netlab: these checks are about the host, so they apply after all.
+        checks = [_netlab_check(), *_host_checks(), _netem_check()]
+        result: dict[str, Any] = {
+            "inContainer": False,
+            "ready": all(c["ok"] for c in checks if c["severity"] == "error"),
+            "checks": checks,
+        }
+    elif container_env.in_container():
+        result = {"inContainer": True, "ready": True, "checks": []}
     else:
         checks = [_netlab_check(), *_containerlab_check(), _docker_check(), _netem_check(), *_workspace_checks()]
         result = {

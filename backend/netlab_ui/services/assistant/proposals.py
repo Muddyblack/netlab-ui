@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import difflib
 import shutil
-import tempfile
 import time
 import uuid
 from collections import Counter, OrderedDict
@@ -27,6 +26,7 @@ from typing import Any, Literal
 
 from netlab_ui.services.annotations import store as ann_store
 from netlab_ui.services.assistant.config import MAX_PROPOSALS
+from netlab_ui.services.netlab import location
 
 ProposalStatus = Literal["pending", "applied", "rejected", "stale"]
 ProposalKind = Literal["edit", "action"]
@@ -109,7 +109,7 @@ def preview_edit(topology_path: str, commands_list: list[dict[str, Any]]) -> tup
     source = Path(topology_path)
     before_text = source.read_text() if source.exists() else ""
 
-    with tempfile.TemporaryDirectory(prefix="netlab-assistant-") as tmp:
+    with location.temporary_directory(prefix="netlab-assistant-") as tmp:
         work = Path(tmp) / source.name
         work.write_text(before_text)
         # Commands that touch memberships/positions read the annotation files;
