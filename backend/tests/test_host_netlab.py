@@ -138,3 +138,22 @@ def test_container_setup_says_whether_netlab_runs_on_the_host_and_as_whom(monkey
     assert container_env._host_netlab_check()["title"] == "netlab runs on the host as alice"
     monkeypatch.setenv("NETLAB_UI_NETLAB", "container")
     assert container_env._host_netlab_check() is None
+
+
+def test_a_netlab_path_typed_in_settings_reaches_the_host_as_data_not_code(on_host, monkeypatch):
+    from netlab_ui.app.environment import router
+
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append((argv, kwargs.get("input")))
+        return subprocess.CompletedProcess(argv, 0, "/home/alice/bin/netlab\n", "")
+
+    monkeypatch.setattr(router.subprocess, "run", run)
+    typed = "~/bin/$(rm -rf ~)"
+    router._resolve_on_host(typed)
+    router._runs_as_netlab("/home/alice/bin/netlab")
+    for argv, _stdin in calls:
+        assert not any("rm -rf" in part or "/home/alice/bin" in part for part in argv)
+    assert calls[0][1] == "/home/alice/bin/$(rm -rf ~)\n"  # ~ is the host user's home
+    assert calls[1][1] == "/home/alice/bin\n"

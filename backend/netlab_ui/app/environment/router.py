@@ -56,16 +56,24 @@ def _environment() -> dict:
     return info
 
 
-def _resolve_on_host(path: str) -> str | None:
-    """:func:`_resolve_candidate` for a netlab on the host (``location.on_host``)."""
-    script = 'p=$(command -v -- "$1") && [ -x "$p" ] && readlink -f -- "$p"'
-    argv, env = host.command(["sh", "-c", script, "sh", host.expand_user(path)], {})
+def _run_on_host(script: str, value: str) -> subprocess.CompletedProcess[str] | None:
+    """Run the fixed ``script`` on the host as the user, with ``value`` (what the user typed) on stdin.
+
+    The value never becomes part of a command line: the script reads it with ``read -r`` and only ever
+    uses it quoted, so it is data, not code."""
+    argv, env = host.command(["sh", "-c", script], {})
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env)
+        return subprocess.run(argv, input=value + "\n", capture_output=True, text=True, timeout=15, env=env)
     except (OSError, subprocess.SubprocessError):
         return None
-    lines = proc.stdout.strip().splitlines()
-    found = lines[-1] if proc.returncode == 0 and lines else ""
+
+
+def _resolve_on_host(path: str) -> str | None:
+    """:func:`_resolve_candidate` for a netlab on the host (``location.on_host``)."""
+    script = 'IFS= read -r c && p=$(command -v -- "$c") && [ -x "$p" ] && readlink -f -- "$p"'
+    proc = _run_on_host(script, host.expand_user(path))
+    lines = proc.stdout.strip().splitlines() if proc else []
+    found = lines[-1] if proc and proc.returncode == 0 and lines else ""
     return found if found.startswith("/") and Path(found).name.lower() == "netlab" else None
 
 
@@ -94,14 +102,20 @@ def _resolve_candidate(path: str) -> str | None:
 def _runs_as_netlab(binary: str) -> bool:
     """True if the selected install's ``netlab version`` command succeeds."""
     binary_dir = str(Path(binary).parent)
+    if location.on_host():
+        # Like below: `netlab` by name, with the chosen directory first on PATH.
+        proc = _run_on_host('IFS= read -r d && PATH="$d:$PATH" && export PATH && exec netlab version', binary_dir)
+        return proc is not None and proc.returncode == 0
     child_path = os.pathsep.join([binary_dir, location.child_path()])
-    argv, env = (
-        host.command([binary, "version"], {}, path_prefix=binary_dir)
-        if location.on_host()
-        else (["netlab", "version"], {**os.environ, "PATH": child_path})
-    )
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=15, env=env, shell=False)
+        proc = subprocess.run(
+            ["netlab", "version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={**os.environ, "PATH": child_path},
+            shell=False,
+        )
     except (OSError, subprocess.SubprocessError):
         return False
     return proc.returncode == 0
