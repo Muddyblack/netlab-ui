@@ -10,10 +10,42 @@ def test_bare_flags_mean_serve(monkeypatch):
     assert seen["target"] == "netlab_ui.app.main:app"
 
 
+def test_a_bad_port_variable_is_a_message_not_a_traceback(monkeypatch, capsys):
+    monkeypatch.setattr("uvicorn.run", lambda *_a, **_kw: None)
+    monkeypatch.setenv("UVICORN_PORT", "eighty")
+    assert cli.main([]) == 2
+    assert "UVICORN_PORT must be a port number" in capsys.readouterr().err
+
+
+def test_serving_on_the_network_without_a_login_warns(monkeypatch, capsys):
+    monkeypatch.setattr("uvicorn.run", lambda *_a, **_kw: None)
+    monkeypatch.setattr(cli.auth, "auth_enabled", lambda: False)
+    assert cli.main(["--host", "0.0.0.0"]) == 0
+    assert "without a login" in capsys.readouterr().err
+    assert cli.main(["--host", "127.0.0.1"]) == 0
+    assert capsys.readouterr().err == ""
+    monkeypatch.setattr(cli.auth, "auth_enabled", lambda: True)
+    assert cli.main(["--host", "0.0.0.0"]) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_token_command_prints_a_sign_in_link_and_restarts_the_service(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("NETLAB_UI_TOKEN", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOKEN_FILE", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "restart_user_service", lambda: True)
+    assert cli.main(["token"]) == 0
+    captured = capsys.readouterr()
+    token = captured.out.strip()
+    assert "restarted the netlab-ui service" in captured.err
+    assert f"http://127.0.0.1:8000/?token={token}" in captured.err
+
+
 def test_token_command_creates_a_private_token_once(monkeypatch, tmp_path, capsys):
     monkeypatch.delenv("NETLAB_UI_TOKEN", raising=False)
     monkeypatch.delenv("NETLAB_UI_TOKEN_FILE", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "restart_user_service", lambda: False)
     assert cli.main(["token"]) == 0
     first = capsys.readouterr().out.strip()
     assert len(first) >= 32
@@ -43,7 +75,8 @@ def test_upgrade_runs_the_install_command_then_restarts_the_service(monkeypatch)
     monkeypatch.setattr(cli, "installed_version", lambda: "1.0.0")
     monkeypatch.setattr(cli, "latest_version", lambda: "1.1.0")
     monkeypatch.setattr(cli, "upgrade_command", lambda: ["pipx", "upgrade", cli.PACKAGE])
-    monkeypatch.setattr(cli.subprocess, "run", lambda cmd, **_kw: ran.append(cmd) or type("R", (), {"returncode": 0})())
+    result = type("R", (), {"returncode": 0, "stdout": "active"})()
+    monkeypatch.setattr(cli.subprocess, "run", lambda cmd, **_kw: ran.append(cmd) or result)
     assert cli.main(["upgrade"]) == 0
     assert ran[0] == ["pipx", "upgrade", cli.PACKAGE]
     assert ran[1][:3] == ["systemctl", "--user", "try-restart"]

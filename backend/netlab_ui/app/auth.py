@@ -43,6 +43,10 @@ TOKEN_ENV_VAR = "NETLAB_UI_TOKEN"
 TOKEN_FILE_ENV_VAR = "NETLAB_UI_TOKEN_FILE"
 TOKEN_USER = "token"
 _EXEMPT_PREFIXES = ("/api/health", "/mcp")
+_TOKEN_REQUIRED = (
+    b"This netlab-ui requires its API token.\n"
+    b"On the server, run `netlab-ui token` and open the link it prints (it signs this browser in).\n"
+)
 
 
 def _parse_entry(entry: str) -> tuple[str, str]:
@@ -148,16 +152,30 @@ class BasicAuthMiddleware:
 
     Accepts HTTP Basic credentials (``users``) and/or the API ``token``."""
 
-    def __init__(self, app: ASGIApp, users: dict[str, str] | None = None, token: str | None = None) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        users: dict[str, str] | None = None,
+        token: str | None = None,
+        public: Callable[[str], bool] | None = None,
+    ) -> None:
         self.app = app
         self.users = users or {}
         self.token = token
+        # Paths served without credentials in token-only mode: the UI's own files. A browser loads its scripts
+        # and styles with plain <script>/<link> tags, which carry neither the bearer header nor ?token=.
+        self.public = public
+
+    def _is_public(self, scope: Scope) -> bool:
+        if self.users or self.public is None or scope["type"] != "http":
+            return False
+        return scope.get("method") in {"GET", "HEAD"} and self.public(scope.get("path", ""))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         exempt = scope.get("path", "").startswith(_EXEMPT_PREFIXES)
         # CORS preflights never carry credentials; CORSMiddleware answers them.
         preflight = scope["type"] == "http" and scope.get("method") == "OPTIONS"
-        if scope["type"] not in {"http", "websocket"} or exempt or preflight:
+        if scope["type"] not in {"http", "websocket"} or exempt or preflight or self._is_public(scope):
             await self.app(scope, receive, send)
             return
         header = dict(scope.get("headers") or []).get(b"authorization")
@@ -174,6 +192,7 @@ class BasicAuthMiddleware:
             return
         # Only challenge for Basic when it can succeed: a browser prompt is pointless in token-only mode.
         challenge = [(b"www-authenticate", b'Basic realm="netlab-ui", charset="UTF-8"')] if self.users else []
+        body = b"Authentication required" if self.users else _TOKEN_REQUIRED
         await send(
             {
                 "type": "http.response.start",
@@ -181,4 +200,4 @@ class BasicAuthMiddleware:
                 "headers": [*challenge, (b"content-type", b"text/plain; charset=utf-8")],
             }
         )
-        await send({"type": "http.response.body", "body": b"Authentication required"})
+        await send({"type": "http.response.body", "body": body})

@@ -153,3 +153,41 @@ def test_configured_token_sources(monkeypatch, tmp_path):
     assert auth.configured_token() == "from-default-file"
     monkeypatch.setenv("NETLAB_UI_TOKEN", "from-env")
     assert auth.configured_token() == "from-env"
+
+
+def _token_only_client() -> TestClient:
+    app = FastAPI()
+
+    @app.get("/assets/app.js")
+    def asset():
+        return "js"
+
+    @app.get("/api/lab/files")
+    def files():
+        return []
+
+    public = lambda path: path.startswith("/assets/")  # noqa: E731
+    app.add_middleware(auth.BasicAuthMiddleware, token="tok", public=public)
+    return TestClient(app)
+
+
+def test_token_only_mode_serves_the_ui_files_but_not_the_api():
+    client = _token_only_client()
+    assert client.get("/assets/app.js").status_code == 200
+    res = client.get("/api/lab/files")
+    assert res.status_code == 401
+    assert "www-authenticate" not in res.headers
+    assert "netlab-ui token" in res.text
+    assert client.get("/api/lab/files", headers={"Authorization": "Bearer tok"}).status_code == 200
+    assert client.post("/assets/app.js").status_code == 401
+
+
+def test_public_paths_still_need_a_login_when_basic_users_exist():
+    app = FastAPI()
+
+    @app.get("/assets/app.js")
+    def asset():
+        return "js"
+
+    app.add_middleware(auth.BasicAuthMiddleware, users={"admin": "pw"}, public=lambda _path: True)
+    assert TestClient(app).get("/assets/app.js").status_code == 401

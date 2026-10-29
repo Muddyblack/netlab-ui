@@ -113,9 +113,14 @@ def ensure_linger() -> str | None:
     )
 
 
+def base_url(host: str, port: int) -> str:
+    """``http://host:port``, with an IPv6 address in brackets."""
+    return f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
+
+
 def _health_url(settings: config.Settings) -> str:
-    host = "127.0.0.1" if settings.host in {"", "0.0.0.0", "::"} else settings.host
-    return f"http://{host}:{settings.port}"
+    host = "127.0.0.1" if settings.host in {"", "0.0.0.0"} else "::1" if settings.host == "::" else settings.host
+    return base_url(host, settings.port)
 
 
 def wait_until_running(system: bool, settings: config.Settings, timeout: float = 20.0) -> bool:
@@ -169,7 +174,10 @@ def _write_config(path: Path, tool_dirs: list[str], owner: str) -> bool:
     shown = [d for d in tool_dirs if d not in config.SYSTEM_DIRS]
     path.write_text(config.template(shown))
     if os.geteuid() == 0 and owner != "root":
-        info = pwd.getpwnam(owner)
+        try:
+            info = pwd.getpwnam(owner)
+        except KeyError:
+            return True  # no such account to hand the file to; it stays root's
         os.chown(path, info.pw_uid, info.pw_gid)
         os.chown(path.parent, info.pw_uid, info.pw_gid)
     return True

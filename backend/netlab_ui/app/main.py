@@ -150,7 +150,7 @@ app.add_middleware(
 _users = configured_users()
 _token = configured_token()
 if _users or _token:
-    app.add_middleware(BasicAuthMiddleware, users=_users, token=_token)
+    app.add_middleware(BasicAuthMiddleware, users=_users, token=_token, public=lambda path: _is_frontend_file(path))
 
 
 # Filesystem errors (e.g. a sidecar file owned by another user) must become a
@@ -238,6 +238,17 @@ def _find_frontend_dist() -> Path:
 
 
 _frontend_dist = _find_frontend_dist()
+
+
+def _is_frontend_file(path: str) -> bool:
+    """Is ``path`` the UI page or one of its files? Those carry no secrets and must load before the token is known."""
+    if path in {"", "/", "/index.html"}:
+        return True
+    root = _frontend_dist.resolve()
+    target = (root / path.lstrip("/")).resolve()
+    return target.is_relative_to(root) and target.is_file()
+
+
 if _frontend_dist.is_dir():
     # Compressed: the bundle is ~4.7 MB raw, ~1.3 MB gzipped. Only the static
     # mount is wrapped, so API event streams are never buffered by gzip.

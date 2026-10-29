@@ -1,7 +1,8 @@
 import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-import { installApiAuth } from "./api/endpoint";
+import { apiTokenRequired, installApiAuth } from "./api/endpoint";
+import { TokenRequired } from "./components/app/TokenRequired";
 import { applyResolvedThemeVars, readPersistedThemeMode, resolveThemeMode } from "./theme";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";
 import JsonWorker from "monaco-editor/language/json/json.worker.js?worker";
@@ -83,8 +84,11 @@ if (popout) {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    {rootContent}
-  </StrictMode>,
-);
+// A backend in token-only mode serves this page to anyone, but the API only to the token's holder.
+void apiTokenRequired().then((required) => {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      {required ? <TokenRequired /> : rootContent}
+    </StrictMode>,
+  );
+});

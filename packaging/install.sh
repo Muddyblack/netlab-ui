@@ -27,6 +27,7 @@ USAGE
 PACKAGE="netlab-ui"
 with_netlab=0
 with_clab=0
+new_groups=0
 service=0
 version=""
 
@@ -66,12 +67,15 @@ spec="$PACKAGE"
 [[ -n "$version" ]] && spec="$spec==$version"
 
 say "installing $spec"
-pipx install --force "$spec"
+# --include-deps also puts netlab's and Ansible's commands on PATH; without it only `netlab-ui` is exposed.
+pipx_args=(install --force)
+[[ $with_netlab -eq 1 ]] && pipx_args+=(--include-deps)
+pipx "${pipx_args[@]}" "$spec"
 
 if [[ $with_clab -eq 1 ]]; then
   say "installing containerlab (Docker, containerlab and the clab_admins group; asks for sudo)"
   curl -fsSL https://containerlab.dev/setup | sudo -E bash -s "all"
-  echo "Log out and back in so the new docker/clab_admins group membership applies."
+  new_groups=1
 fi
 
 # pipx puts the command in ~/.local/bin, which may not be on PATH until the next login.
@@ -82,12 +86,33 @@ if [[ $service -eq 1 ]]; then
   netlab-ui install-service
 fi
 
-cat <<EOF
-
-netlab-ui is installed.
+echo
+echo "netlab-ui is installed."
+if [[ $service -eq 1 ]]; then
+  cat <<EOF
+  running as a service   open http://127.0.0.1:8000
+  service status         systemctl --user status netlab-ui
+EOF
+else
+  cat <<EOF
   start it now      netlab-ui            (then open http://127.0.0.1:8000)
   run as a service  netlab-ui install-service   (starts at boot, checks it came up)
+EOF
+fi
+cat <<EOF
   settings          netlab-ui config
   update later      netlab-ui upgrade
 The first time you open the UI it checks this machine (netlab, containerlab, Docker access) and says what is missing.
 EOF
+
+if [[ $new_groups -eq 1 ]]; then
+  echo
+  echo "You were added to the docker and clab_admins groups. That applies to new logins only:"
+  if [[ $service -eq 1 ]]; then
+    # The systemd user manager outlives logouts (lingering), so a re-login does not refresh the service's groups.
+    echo "  the service keeps its old groups until you reboot, or run:  sudo systemctl restart user@$(id -u)"
+    echo "  (that also ends your other sessions on this machine)"
+  else
+    echo "  log out and back in before deploying labs."
+  fi
+fi

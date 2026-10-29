@@ -149,3 +149,19 @@ export function installApiAuth(): void {
     }
   };
 }
+
+/**
+ * Does the backend want an API token this page does not have? True on a 401 without a Basic challenge (token-only
+ * mode); a wrong stored token is dropped so the sign-in screen can take a new one. Network errors count as "no":
+ * the startup check reports those.
+ */
+export async function apiTokenRequired(): Promise<boolean> {
+  try {
+    const res = await fetch(`${getApiBase()}/api/user-state`);
+    if (res.status !== 401 || res.headers.has("WWW-Authenticate")) return false;
+    setApiToken(null);
+    return true;
+  } catch {
+    return false;
+  }
+}

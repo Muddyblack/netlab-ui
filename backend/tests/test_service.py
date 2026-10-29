@@ -166,3 +166,8 @@ def test_wait_needs_the_port_to_answer_too(monkeypatch):
     assert service.wait_until_running(False, config.Settings(host="0.0.0.0", port=9123)) is True
     assert asked == ["http://127.0.0.1:9123/api/health"]
     assert Path  # keep import used
+
+
+def test_base_url_brackets_ipv6():
+    assert service.base_url("::1", 8000) == "http://[::1]:8000"
+    assert service.base_url("127.0.0.1", 8000) == "http://127.0.0.1:8000"

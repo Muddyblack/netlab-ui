@@ -34,9 +34,29 @@ def _serve(args: argparse.Namespace) -> int:
     config.apply_tools(settings)
     # Flag, then environment variable, then the config file, then the default.
     host = args.host or os.environ.get("UVICORN_HOST") or settings.host
-    port = args.port or int(os.environ.get("UVICORN_PORT") or settings.port)
+    raw_port = os.environ.get("UVICORN_PORT", "").strip()
+    if args.port:
+        port = args.port
+    elif raw_port:
+        if not raw_port.isdigit() or not 0 < int(raw_port) < 65536:
+            print(f"UVICORN_PORT must be a port number (1-65535), not {raw_port!r}", file=sys.stderr)
+            return 2
+        port = int(raw_port)
+    else:
+        port = settings.port
+    if not _is_loopback(host) and not auth.auth_enabled():
+        print(
+            f"warning: listening on {host} without a login: anyone who can reach port {port} can deploy labs\n"
+            "and read and change your lab files. Create a token with `netlab-ui token`,\n"
+            "or set NETLAB_UI_AUTH=user:password.",
+            file=sys.stderr,
+        )
     uvicorn.run("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
     return 0
+
+
+def _is_loopback(host: str) -> bool:
+    return host in {"localhost", "::1"} or host.startswith("127.")
 
 
 def _config(_args: argparse.Namespace) -> int:
@@ -68,6 +88,7 @@ def _token(args: argparse.Namespace) -> int:
     current = auth.configured_token()
     if current and not args.rotate:
         print(current)
+        _print_sign_in_link(current)
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
     # Create with 0600 from the start so the secret is never world-readable.
@@ -75,9 +96,41 @@ def _token(args: argparse.Namespace) -> int:
     with os.fdopen(fd, "w") as handle:
         handle.write(secrets.token_urlsafe(32) + "\n")
     path.chmod(0o600)
-    print(path.read_text().strip())
-    print(f"saved to {path}; restart netlab-ui to enforce it", file=sys.stderr)
+    token = path.read_text().strip()
+    print(token)
+    print(f"saved to {path}", file=sys.stderr)
+    if restart_user_service():
+        print("restarted the netlab-ui service so it uses the new token", file=sys.stderr)
+    else:
+        print("restart netlab-ui to enforce it", file=sys.stderr)
+    _print_sign_in_link(token)
     return 0
+
+
+def _print_sign_in_link(token: str) -> None:
+    """A browser opening this link stores the token and is signed in (see installApiAuth in the frontend)."""
+    settings = _load_settings() or config.Settings()
+    host = "<this-host>" if settings.host in {"", "0.0.0.0", "::"} else settings.host
+    print(f"sign in a browser with: {service.base_url(host, settings.port)}/?token={token}", file=sys.stderr)
+
+
+def restart_user_service() -> bool:
+    """Restart the systemd user service if it is running. False when there is none (or no systemd)."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "try-restart", service.UNIT_NAME], capture_output=True, check=False
+        )
+    except OSError:
+        return False
+    if result.returncode != 0:
+        return False
+    try:
+        active = subprocess.run(
+            ["systemctl", "--user", "is-active", service.UNIT_NAME], capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return False
+    return active.stdout.strip() == "active"
 
 
 PACKAGE = "netlab-ui"
@@ -127,7 +180,7 @@ def _upgrade(args: argparse.Namespace) -> int:
         return 1
     subprocess.run(command, check=True)
     # Pick up the new code if the service is running as a user unit (a system unit needs root: say so).
-    restarted = subprocess.run(["systemctl", "--user", "try-restart", service.UNIT_NAME], check=False).returncode == 0
+    restarted = restart_user_service()
     if not restarted and Path("/etc/systemd/system", service.UNIT_NAME).exists():
         print(f"restart the system service to finish: sudo systemctl restart {service.UNIT_NAME}")
     return 0

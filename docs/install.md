@@ -75,4 +75,4 @@ The module also installs containerlab as a setuid wrapper for the `clab_admins` 
 
 ## Remote access
 
-Keep the default `127.0.0.1` unless you mean to expose it. For the desktop app or another machine, run `netlab-ui token`, restart the service, and give clients the token (see [desktop.md](desktop.md)).
+Keep the default `127.0.0.1` unless you mean to expose it. For the desktop app or another machine, run `netlab-ui token` (it restarts the user service and prints a browser sign-in link) and give clients the token (see [desktop.md](desktop.md)).
