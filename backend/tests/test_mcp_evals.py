@@ -17,7 +17,7 @@ import json
 
 import pytest
 
-from services.assistant import mcp_server
+from netlab_ui.services.assistant import mcp_server
 
 # (what the user says, tools a good agent uses to do it)
 TASKS: list[tuple[str, set[str]]] = [

@@ -1,6 +1,6 @@
 # Frontend Agent Guidelines
 
-See root `AGENTS.md` for agent spawn policy and model roles.
+See root `AGENTS.md` for repo-wide rules.
 
 ## Stack
 - **React + TypeScript** with Vite
@@ -10,6 +10,7 @@ See root `AGENTS.md` for agent spawn policy and model roles.
 ## Structure
 ```
 frontend/src/
+  app/          # useAppController (top-level wiring), node editor tabs, toolbar
   api/          # Generated OpenAPI client types + fetch wrappers
   components/   # Netlab-specific React components
   host/         # Host/environment integration
@@ -43,7 +44,7 @@ If `clab-ui` doesn't export something you need, that's an upstream ask (bump the
 `0.3.0`'s "delete dead code" cleanup (upstream commit `2b581cd`) accidentally
 dropped root-level exports (`useNodes`, `useEdges`, `useIsLocked`,
 `useTopoViewerActions`, the form primitives, icon helpers) that an earlier
-commit (`9d77b4a`) had added specifically for netlab-gui-style integrators.
+commit (`9d77b4a`) had added specifically for netlab-ui-style integrators.
 The underlying code is still bundled in `dist/` — only the barrel `export`
 statements were removed. Still true in `0.3.2` (the first release under the
 `@containerlab` npm scope), so the patch was carried over unchanged.
@@ -114,5 +115,5 @@ the clab-ui patch above.
 
 ## Token tips
 - For component questions, check `src/components/` and `src/panels/` first.
-- For API shape questions, look in `src/api/` (generated types) and `backend/app/contract/`.
+- For API shape questions, look in `src/api/` (generated types) and `backend/netlab_ui/app/contract/`.
 - `App.tsx` is the wiring point — check it to understand how clab-ui is extended.

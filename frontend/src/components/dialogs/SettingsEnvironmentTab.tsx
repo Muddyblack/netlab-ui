@@ -5,6 +5,7 @@ import { RuntimeInfo } from "../NetlabAboutModal";
 import { NetlabSetupHelpers } from "../NetlabSetupHelpers";
 import { ProviderSupportTable } from "../ProviderSupportTable";
 import { ContainerSetupPanel } from "../ContainerSetup";
+import { HostSetupPanel } from "../HostSetup";
 
 const TEXT_SECONDARY = "text.secondary";
 
@@ -88,6 +89,7 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
       {envError && <Alert severity="error">{envError}</Alert>}
 
       <ContainerSetupPanel active={active} />
+      <HostSetupPanel active={active} />
 
       <Box>
         <Typography variant="subtitle2" fontWeight={650} gutterBottom>

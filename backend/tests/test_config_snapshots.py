@@ -1,6 +1,6 @@
 import asyncio
 
-from services.netlab import config_snapshots as snapshots
+from netlab_ui.services.netlab import config_snapshots as snapshots
 
 
 def test_normalize_drops_volatile_lines():

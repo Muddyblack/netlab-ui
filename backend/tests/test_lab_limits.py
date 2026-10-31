@@ -4,10 +4,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.sessions.store import store
-from services import lab_limits, owners
-from services.netlab import runner
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services import lab_limits, owners
+from netlab_ui.services.netlab import runner
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +79,7 @@ def test_extend_endpoint_and_limits(tmp_path, monkeypatch):
 def test_deploy_beyond_quota_is_refused_before_netlab_runs(tmp_path, monkeypatch):
     from fastapi import HTTPException
 
-    from app.lab import lifecycle
+    from netlab_ui.app.lab import lifecycle
 
     monkeypatch.setenv("NETLAB_UI_MAX_LABS_PER_USER", "1")
     a, b = _lab(tmp_path, "a"), _lab(tmp_path, "b")

@@ -4,8 +4,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from services.netlab import runner, setup
+from netlab_ui.app.main import app
+from netlab_ui.services.netlab import runner, setup
 
 CATALOG = {
     "install": [{"id": "ansible", "description": "Ansible"}],

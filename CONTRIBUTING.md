@@ -13,7 +13,7 @@ cd backend
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 # pip install -e ".[netlab]"           # if you don't already have netlab + ansible installed locally
-uvicorn app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
+uvicorn netlab_ui.app.main:app --reload --reload-exclude 'tests/*' --timeout-graceful-shutdown 2
 ```
 
 The backend doesn't bundle netlab or Ansible. Use **Settings → Environment** to select an existing `netlab` executable, or set `NETLAB_BIN=/path/to/netlab`. A pipx or separate virtualenv installation works: the backend uses that executable's Python environment for `netsim` metadata and prepends its `bin/` directory when netlab launches child tools.
@@ -39,6 +39,20 @@ nix develop        # the dev shell (or `direnv allow`)
 ```
 
 The first run executes `npm install` for the frontend.
+
+### One command for everything
+
+`make help` lists the root targets (`make dev`, `make test`, `make lint`, `make build`, `make wheel`). They only call each package's own tooling, the same commands CI runs.
+
+## Repo layout
+
+| Path | What |
+| --- | --- |
+| `backend/`, `frontend/`, `desktop/` | The product: FastAPI service, React UI, Electron shell |
+| `plugins/monitoring/` | The optional netlab `monitoring` plugin, self-contained (own ruff config and tests) so it can be split out |
+| `packaging/` | Distribution: `docker/` (Dockerfile, dev compose), `nix/` (NixOS module), `install.sh`. `flake.nix` and `docker-compose.yml` stay at the root where Nix and `docker compose up` expect them |
+| `scripts/` | Dev and release helpers (`tag.sh`, `build-wheel.sh`, `smoke-test.sh`, `release-notes.sh`) |
+| `docs/` | All long-form docs, screenshots (`images/`, `monitoring/`), sample labs (`examples/`) and the showcase generator. `labs/` is the git-ignored default workspace |
 
 ## Local commit checks
 
@@ -74,7 +88,7 @@ cd frontend && npm run lint && npm run build     # build = tsc --noEmit + vite b
 
 Response shapes are defined once in Python, and the frontend's TypeScript types are generated from them.
 
-- **Source of truth:** every API response is a Pydantic model (in `backend/app/contract/responses/`, `backend/app/assistant/responses.py`, …), attached to its endpoint via `response_model=`.
+- **Source of truth:** every API response is a Pydantic model (in `backend/netlab_ui/app/contract/responses/`, `backend/app/assistant/responses.py`, …), attached to its endpoint via `response_model=`.
 - **Generated types:** `frontend/src/api/generated.ts`, produced with [`openapi-typescript`](https://github.com/openapi-ts/openapi-typescript). Don't edit it by hand.
 - **Consumer:** `frontend/src/api/client.ts` uses those generated types (`Schemas["CommandResult"]`, …).
 
@@ -103,5 +117,17 @@ The gallery in the README and [docs/showcase/GALLERY.md](docs/showcase/GALLERY.m
 
 ## Releases
 
-- **Container images:** `.github/workflows/container-release.yml` publishes `ghcr.io/muddyblack/netlab-ui:<ver>` (UI only) on a release.
-- **Desktop app:** push a `desktop-v*` tag; see [docs/desktop.md](docs/desktop.md).
+**Backend, UI, PyPI package and container image:** run `scripts/tag.sh`. It asks for a patch, minor or major bump, changes the `version` in `backend/pyproject.toml` on a `release/vX.Y.Z` branch and opens a PR (needs the GitHub CLI). Nothing is tagged from your machine. A PR that changes the version is labelled `new-release` and gets a comment saying so (`pr-release-flag.yml`). `--beta` makes a pre-release: it publishes to PyPI as a pre-release and skips `:latest`.
+
+Merging that PR into `main` is the release (`.github/workflows/release.yml`):
+
+1. The full CI suite runs on the release commit.
+2. The wheel is built and installed into a clean venv, and the image is built and run (`_wheel.yml`, `_image.yml`, `scripts/smoke-test.sh`). Each must answer on `/api/health` and serve the bundled UI.
+3. Only then is the tested wheel uploaded to PyPI and the tested image tagged `:<ver>` and `:latest` (by digest, no rebuild).
+4. Last, the tag and GitHub release are created, with the wheel, sdist, a `docker-compose.yml` pinned to the version, `SHA256SUMS` and notes grouped by commit type (`scripts/release-notes.sh`). Write commit subjects as `feat:` / `fix:` for them to read well, and mark breaking changes with `feat!:` or a `BREAKING CHANGE:` line in the body: those are listed first as upgrade notes.
+
+If a run fails part way, use **Re-run failed jobs**, not a new run: that reuses the wheel and image already built. A fresh run rebuilds, and the rebuild can differ from a file already on PyPI (the run warns when that happens).
+
+PyPI needs a trusted publisher for this repo and `release.yml` (environment `pypi`) set up once on pypi.org.
+
+**Desktop app:** versioned separately in `desktop/package.json`; push a `desktop-v*` tag, see [docs/desktop.md](docs/desktop.md).

@@ -991,6 +991,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lab/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Lab Endpoint */
+        post: operations["delete_lab_endpoint_api_lab_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lab/monitoring": {
         parameters: {
             query?: never;
@@ -1656,6 +1673,28 @@ export interface paths {
         put?: never;
         /** Lab Collect */
         post: operations["lab_collect_api_lab_collect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lab/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lab Save
+         * @description Persist every node's running config as its startup config
+         *     (`containerlab save`; containerlab provider only). With ``copy`` the saved
+         *     configs are also copied into that lab-relative directory.
+         */
+        post: operations["lab_save_api_lab_save_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2453,6 +2492,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment/host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Host Diagnostics */
+        get: operations["get_host_diagnostics_api_environment_host_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environment/setup": {
         parameters: {
             query?: never;
@@ -2696,6 +2752,50 @@ export interface paths {
         post?: never;
         /** Delete Note */
         delete: operations["delete_note_api_assistant_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assistant/sketch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Sketch
+         * @description Store the user's drawing in the lab's folder for ``get_sketch``.
+         */
+        post: operations["save_sketch_api_assistant_sketch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assistant/sketch/strokes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Sketch Strokes
+         * @description The pen strokes saved for this lab, so a reload brings the drawing back.
+         */
+        get: operations["get_sketch_strokes_api_assistant_sketch_strokes_get"];
+        /**
+         * Put Sketch Strokes
+         * @description Autosave the pen strokes (no picture; Generate renders that).
+         */
+        put: operations["put_sketch_strokes_api_assistant_sketch_strokes_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3423,6 +3523,26 @@ export interface components {
         DefaultNodeRequest: {
             /** Defaultnode */
             defaultNode: string;
+        };
+        /** DeleteLabRequest */
+        DeleteLabRequest: {
+            /** Topologypath */
+            topologyPath: string;
+            /**
+             * Dryrun
+             * @default false
+             */
+            dryRun: boolean;
+        };
+        /** DeleteLabResult */
+        DeleteLabResult: {
+            /** Deleted */
+            deleted: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "folder" | "file";
         };
         /** DeployDiffResult */
         DeployDiffResult: {
@@ -4190,6 +4310,21 @@ export interface components {
              */
             netlabComponents: components["schemas"]["NetlabComponentStatus"][];
         };
+        /**
+         * HostDiagnostics
+         * @description Preflight checks for deploying labs from this host (empty inside a container).
+         */
+        HostDiagnostics: {
+            /** Incontainer */
+            inContainer: boolean;
+            /** Ready */
+            ready: boolean;
+            /**
+             * Checks
+             * @default []
+             */
+            checks: components["schemas"]["ContainerCheck"][];
+        };
         /** IconInfo */
         IconInfo: {
             /** Name */
@@ -4368,6 +4503,13 @@ export interface components {
              * @default false
              */
             admin: boolean;
+        };
+        /** LabSave */
+        LabSave: {
+            /** Sessionid */
+            sessionId: string;
+            /** Copy */
+            copy?: string | null;
         };
         /** LabSearchHit */
         LabSearchHit: {
@@ -6538,6 +6680,48 @@ export interface components {
             action: "test" | "install" | "build";
             /** Target */
             target: string;
+        };
+        /** SketchSaved */
+        SketchSaved: {
+            /** Path */
+            path: string;
+        };
+        /** SketchStrokes */
+        SketchStrokes: {
+            /**
+             * Strokes
+             * @default []
+             */
+            strokes: unknown[];
+        };
+        /** SketchStrokesUpload */
+        SketchStrokesUpload: {
+            /**
+             * Strokes
+             * @default []
+             */
+            strokes: unknown[];
+            /** Sessionid */
+            sessionId: string;
+        };
+        /** SketchUpload */
+        SketchUpload: {
+            /** Sessionid */
+            sessionId: string;
+            /** Imagebase64 */
+            imageBase64: string;
+            /**
+             * Strokes
+             * @default []
+             */
+            strokes: unknown[];
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: {
+                [key: string]: unknown;
+            }[];
         };
         /** SnapshotRequest */
         SnapshotRequest: {
@@ -9080,6 +9264,39 @@ export interface operations {
             };
         };
     };
+    delete_lab_endpoint_api_lab_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteLabRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteLabResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_monitoring_api_lab_monitoring_get: {
         parameters: {
             query: {
@@ -10214,6 +10431,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LabAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lab_save_api_lab_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabSave"];
             };
         };
         responses: {
@@ -11640,6 +11890,37 @@ export interface operations {
             };
         };
     };
+    get_host_diagnostics_api_environment_host_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostDiagnostics"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_setup_catalog_api_environment_setup_get: {
         parameters: {
             query?: never;
@@ -12011,6 +12292,103 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistantAck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_sketch_api_assistant_sketch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SketchUpload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SketchSaved"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sketch_strokes_api_assistant_sketch_strokes_get: {
+        parameters: {
+            query: {
+                sessionId: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SketchStrokes"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_sketch_strokes_api_assistant_sketch_strokes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SketchStrokesUpload"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

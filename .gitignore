@@ -42,11 +42,15 @@ Vagrantfile
 # UI layout sidecars are per-user view state, not source
 *.netlab-ui.json
 
-# labs/ holds user-specific lab data; only the sample lab is tracked
-labs/*
-!labs/sample.yml
+# labs/ holds user-specific lab data (the sample lab lives in docs/examples/)
+labs/
 
 .ruff_cache/
 
 # pasted into agent terminals (netlab-ui saves them in the lab folder)
 .pasted-images/
+
+# Bundled into the wheel by scripts/build-wheel.sh
+backend/netlab_ui/_frontend/
+backend/netlab_ui/_monitoring_plugin/
+backend/dist/

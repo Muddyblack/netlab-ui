@@ -30,3 +30,9 @@ git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
 ```
 
 That prefix (`desktop-v*`, not `v*`) is deliberate — it keeps desktop releases on their own tag namespace, separate from whatever the repo's other `v*` tags are used for.
+
+## Connecting to a remote server with a token
+
+On the server, run `netlab-ui token` (it creates `~/.config/netlab-ui/token` on first use and prints it, with a browser sign-in link). If netlab-ui runs as a user service it is restarted for you; otherwise restart it. The backend now requires that token on every API request except `/api/health`; the UI's own page and files stay public so a browser can load the sign-in screen. Paste it into the connect screen (Server → Change Server…); the app stores it encrypted with the OS keychain when one is available and sends it as `Authorization: Bearer …` with each request, including live streams and terminals.
+
+The token can also be set with `NETLAB_UI_TOKEN` or `NETLAB_UI_TOKEN_FILE`. It works beside `NETLAB_UI_AUTH`: either credential is accepted. In a browser, open the link `netlab-ui token` prints (`http://server:8000/?token=…`) once, or paste the token into the sign-in screen. Keep the server on loopback or behind TLS: the token travels in clear text over plain HTTP.

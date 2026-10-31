@@ -1,9 +1,9 @@
 import asyncio
 from pathlib import Path
 
-from app.lab import lifecycle
-from services.netlab import validation
-from services.netlab.runner import NetlabError
+from netlab_ui.app.lab import lifecycle
+from netlab_ui.services.netlab import validation
+from netlab_ui.services.netlab.runner import NetlabError
 
 
 def test_parse_maps_node_link_and_global_issues():

@@ -1,7 +1,8 @@
 [project]
-name = "netlab-gui-backend"
-dynamic = ["version"]
+name = "netlab-ui"
+version = "0.0.1"
 description = "Backend adapter/BFF for a netlab APP — drives the netlab CLI and speaks the clab-ui ClabUiHost contract"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.110",
@@ -20,7 +21,7 @@ dependencies = [
 # forced onto a pip-managed copy. PyPI name `networklab`, imports as `netsim`;
 # version floor tracked in services/netlab/runner.py MIN_NETLAB_VERSION.
 netlab = [
-    "networklab>=26.07",
+    "networklab>=26.10",
     # Required by the `netlab` CLI for Ansible-based config deployment, not
     # imported directly by the adapter.
     "ansible>=9",
@@ -32,16 +33,22 @@ dev = [
     "ruff>=0.10.0",
 ]
 
+[project.scripts]
+netlab-ui = "netlab_ui.cli:main"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
 
 [build-system]
-requires = ["setuptools>=68", "setuptools-scm>=8"]
+requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = { find = {} }
+packages = { find = { include = ["netlab_ui*"] } }
+include-package-data = true
 
-[tool.setuptools_scm]
-fallback_version = "0.0+unknown"
+[tool.setuptools.package-data]
+# _frontend and _monitoring_plugin are copied in by scripts/build-wheel.sh.
+netlab_ui = ["_frontend/**", "_monitoring_plugin/**", "app/schema/*.json"]
+

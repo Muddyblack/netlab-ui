@@ -1,0 +1,90 @@
+name: Build and test image
+
+# Builds the UI image from packaging/docker/Dockerfile for amd64 and arm64 and pushes it to GHCR
+# under a commit tag only, runs it and checks the API and the bundled frontend. Called by
+# release.yml, which gives the same image (by digest) its version tags once everything has
+# passed, so what users pull is the image that was tested. `desktop-v*` tags are handled by
+# desktop-release.yml.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the leading v (e.g. 1.2.3)
+        required: true
+        type: string
+    outputs:
+      image:
+        description: Lowercase image name without a tag
+        value: ${{ jobs.build.outputs.image }}
+      digest:
+        description: Digest of the tested multi-arch image
+        value: ${{ jobs.build.outputs.digest }}
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # metadata-action lowercases the image name (GHCR requires it). The only tag is the commit's;
+      # version tags are added in release.yml.
+      - id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: latest=false
+          tags: type=raw,value=sha-${{ github.sha }}
+          labels: org.opencontainers.image.version=${{ inputs.version }}
+
+      - id: ref
+        run: |
+          tag="$(jq -r '.tags[0]' <<<"$DOCKER_METADATA_OUTPUT_JSON")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "image=${tag%:*}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          target: ui
+          # arm64 matters for Apple Silicon and arm-based lab hosts. Only the
+          # Python stage is emulated — the frontend stage builds natively.
+          platforms: linux/amd64,linux/arm64
+          build-args: |
+            NETLAB_UI_VERSION=v${{ inputs.version }}
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+
+      # Run the pushed image by digest, so this is the exact artifact that gets promoted.
+      - name: Start the image and check it
+        env:
+          REF: ${{ steps.ref.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: |
+          docker run -d --name ui -p 8000:8000 "$REF"
+          scripts/smoke-test.sh url http://127.0.0.1:8000 || { docker logs ui; exit 1; }

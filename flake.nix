@@ -8,7 +8,7 @@
   };
 
   outputs =
-    { nixpkgs, nixpkgs-unstable, flake-utils, ... }:
+    { self, nixpkgs, nixpkgs-unstable, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -126,10 +126,10 @@
 
         netlab = pkgs.python312Packages.buildPythonPackage rec {
           pname = "networklab";
-          version = "26.5";
+          version = "26.10";
           src = pkgs.python312Packages.fetchPypi {
             inherit pname version;
-            hash = "sha256-BXp+3A5jIlZwLXWYyMpeM3NlvvbmGbuQoUlMI50beZI=";
+            hash = "sha256-IrVDawZi8/UUhpDBUDdk9hbbfhOB8JLHNGSJsbVJZOg=";
           };
           pyproject = true;
           build-system = with pkgs.python312Packages; [ setuptools wheel ];
@@ -183,8 +183,50 @@
         # so a system-installed containerlab must win over this unprivileged
         # store copy, which is only a fallback for status and authoring.
         containerlab = unstablePkgs.containerlab;
+
+        # The release version, from backend/pyproject.toml (bumped by scripts/tag.sh).
+        guiVersion = backendPyproject.project.version;
+
+        # The built UI (frontend/dist). After a dependency change in frontend/package-lock.json,
+        # set npmDepsHash to pkgs.lib.fakeHash, build `.#frontend` once and paste the hash it reports.
+        frontend = pkgs.buildNpmPackage {
+          pname = "netlab-ui-frontend";
+          version = guiVersion;
+          src = ./frontend;
+          npmDepsHash = "sha256-kcreBlkD9OUiUQBD2CLaFnBLEfYz+bku18EdXq3kiBs=";
+          installPhase = ''
+            runHook preInstall
+            cp -r dist $out
+            runHook postInstall
+          '';
+        };
+
+        # The `netlab-ui` command with the UI and monitoring plugin bundled in, as the PyPI wheel has them.
+        # netlab, Ansible and containerlab are NOT included: it uses the ones on PATH, so the NixOS module
+        # (or the user) decides their versions.
+        netlabUi = pkgs.python312Packages.buildPythonApplication {
+          pname = "netlab-ui";
+          version = guiVersion;
+          pyproject = true;
+          src = ./backend;
+          build-system = with pkgs.python312Packages; [ setuptools ];
+          dependencies = backendRuntimeDeps ++ (with pkgs.python312Packages; [ uvloop httptools websockets ]);
+          preBuild = ''
+            cp -r ${frontend} netlab_ui/_frontend
+            cp -r ${./plugins/monitoring/plugin/monitoring} netlab_ui/_monitoring_plugin
+            chmod -R u+w netlab_ui/_frontend netlab_ui/_monitoring_plugin
+          '';
+          doCheck = false;
+          meta.mainProgram = "netlab-ui";
+        };
       in
       {
+        packages = {
+          inherit frontend;
+          netlab-ui = netlabUi;
+          default = netlabUi;
+        };
+
         devShells.default = pkgs.mkShell {
           packages = [
             python
@@ -194,13 +236,11 @@
           shellHook = ''
             if [ -x /run/wrappers/bin/containerlab ]; then
               export PATH="/run/wrappers/bin:$PATH"
-              export NETLAB_PROVIDERS_CLAB_START="containerlab deploy --reconfigure -t clab.yml"
-              export NETLAB_PROVIDERS_CLAB_STOP="containerlab destroy --cleanup -t clab.yml"
             else
               export PATH="${containerlab}/bin:$PATH"
             fi
             echo "netlab APP dev shell"
-            echo "  backend : uvicorn app.main:app --reload --app-dir backend  (run from repo root -> :8000)"
+            echo "  backend : uvicorn netlab_ui.app.main:app --reload --app-dir backend  (run from repo root -> :8000)"
             echo "            cd backend && pytest"
             echo "  frontend: cd frontend && npm install && npm run dev     (-> :5173)"
             echo "  python  : $(python --version)   node: $(node --version)"
@@ -212,21 +252,21 @@
           backend = {
             type = "app";
             program = toString (
-              pkgs.writeShellScript "netlab-gui-backend" ''
+              pkgs.writeShellScript "netlab-ui" ''
                 if [ -x /run/wrappers/bin/containerlab ]; then
                   export PATH="/run/wrappers/bin:$PATH"
                 else
                   export PATH="${containerlab}/bin:$PATH"
                 fi
                 cd "$(git rev-parse --show-toplevel)"
-                exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
+                exec ${python}/bin/uvicorn netlab_ui.app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend "$@"
               ''
             );
           };
           frontend = {
             type = "app";
             program = toString (
-              pkgs.writeShellScript "netlab-gui-frontend" ''
+              pkgs.writeShellScript "netlab-ui-frontend" ''
                 export PATH="${node}/bin:$PATH"   # vite's `#!/usr/bin/env node` needs node on PATH
                 cd "$(git rev-parse --show-toplevel)/frontend"
                 npm install
@@ -237,7 +277,7 @@
           test = {
             type = "app";
             program = toString (
-              pkgs.writeShellScript "netlab-gui-test" ''
+              pkgs.writeShellScript "netlab-ui-test" ''
                 cd "$(git rev-parse --show-toplevel)/backend"
                 exec ${python}/bin/pytest "$@"
               ''
@@ -249,7 +289,7 @@
           default = {
             type = "app";
             program = toString (
-              pkgs.writeShellScript "netlab-gui-dev" ''
+              pkgs.writeShellScript "netlab-ui-dev" ''
                 set -euo pipefail
                 root="$(git rev-parse --show-toplevel)"
                 # node for vite's `#!/usr/bin/env node`; containerlab as a fallback
@@ -267,7 +307,7 @@
                 set -m
 
                 pids=()
-                ( cd "$root" && exec ${python}/bin/uvicorn app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
+                ( cd "$root" && exec ${python}/bin/uvicorn netlab_ui.app.main:app --reload --reload-dir backend --reload-exclude 'backend/tests/*' --timeout-graceful-shutdown 2 --app-dir backend ) &
                 pids+=($!)
                 ( cd "$root/frontend" && npm install && exec npm run dev ) &
                 pids+=($!)
@@ -288,5 +328,9 @@
           };
         };
       }
-    );
+    )
+    // {
+      # services.netlab-ui.enable = true; services.netlab-ui.user = "alice";
+      nixosModules.default = import ./packaging/nix/module.nix self;
+    };
 }

@@ -1,0 +1,184 @@
+"""Shared helpers for the lab routers (files / images / lifecycle)."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from fastapi import HTTPException
+
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services import workspaces as ws_store
+from netlab_ui.services.netlab import runner
+
+# SSE headers: disable proxy/browser buffering so lines render as they happen.
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+def workspace() -> Path:
+    """Primary workspace directory (first in the workspace list)."""
+    workspaces = ws_store.load()
+    path = Path(workspaces[0])
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+# Both functions below deliberately inline their normalize-then-`startswith`
+# check instead of sharing a helper. The containment test is what makes a
+# client-supplied path safe, and static analysis (CodeQL's `py/path-injection`)
+# only recognizes that guard when the normalization and the `startswith` apply
+# to the same local variable inside one function — hidden behind a helper
+# returning `bool`, the check is invisible and every downstream write is
+# reported as path injection. Keep the pattern literal here.
+
+
+def resolve_workspace_path(path: str) -> Path:
+    """Resolve ``path`` and require it to live inside a configured workspace.
+
+    Normalizing through ``realpath`` first means a traversal that only becomes
+    visible after symlink resolution (``ws/link -> /etc``) can't slip through.
+    """
+    target = os.path.normpath(os.path.realpath(os.path.expanduser(path)))
+    for ws in ws_store.load():
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(ws)))
+        if target == base:
+            # The workspace root itself. Return the *configured* string, not the
+            # request's — identical value, but it carries no user input with it.
+            return Path(base)
+        if target.startswith(base + os.sep):
+            return Path(target)
+    raise HTTPException(403, "path is outside the configured workspaces")
+
+
+async def resolve_openable_path(path: str) -> tuple[Path, bool]:
+    """Like :func:`resolve_workspace_path`, but a lab netlab itself is running may be
+    opened wherever it lives. Returns ``(path, inside_workspace)``.
+
+    Running labs come from netlab's own registry (``netlab status --all``), so the
+    directory is one this user already started a lab in, never a client-supplied
+    root. The caller opens such a lab read-only (see ``create_session``).
+    """
+    target = os.path.normpath(os.path.realpath(os.path.expanduser(path)))
+    for ws in ws_store.load():
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(ws)))
+        if target == base:
+            return Path(base), True
+        if target.startswith(base + os.sep):
+            return Path(target), True
+    try:
+        instances = await runner.status_cached()
+    except (runner.NetlabError, runner.NetlabNotInstalled):
+        instances = {}
+    for lab in instances.values() if isinstance(instances, dict) else ():
+        if not isinstance(lab, dict) or not lab.get("dir"):
+            continue  # realpath("") would be the working directory
+        base = os.path.normpath(os.path.realpath(os.path.expanduser(str(lab["dir"]))))
+        if target == base or target.startswith(base + os.sep):
+            return Path(target), False
+    raise HTTPException(403, "path is outside the configured workspaces")
+
+
+def resolve_within(root: Path, name: str) -> Path:
+    """Resolve ``name`` beneath ``root``, rejecting anything that escapes it.
+
+    For endpoints that build a path from a user-supplied *name* rather than a
+    full path: the name may not traverse out of ``root``, nor into a
+    subdirectory of it."""
+    base = os.path.normpath(os.path.realpath(str(root)))
+    target = os.path.normpath(os.path.realpath(os.path.join(base, name)))
+    if not target.startswith(base + os.sep):
+        raise HTTPException(400, "invalid path")
+    if os.path.dirname(target) != base:
+        raise HTTPException(400, "invalid path")
+    return Path(target)
+
+
+def session_path(session_id: str) -> str:
+    try:
+        return store.require(session_id).topology_path
+    except KeyError as exc:
+        raise HTTPException(404, "unknown session") from exc
+
+
+# Artifacts netlab (and our own sidecars) generate next to topology sources.
+# The file explorer groups these under a collapsed "generated" node per
+# directory so the tree shows the user's actual sources first.
+GENERATED_FILES = {
+    "clab.yml",
+    "hosts.yml",
+    "ansible.cfg",
+    "Vagrantfile",
+    "netlab.snapshot.yml",
+    "netlab.snapshot.pickle",
+    "netlab.lock",
+    "ansible-inventory.yml",
+    "nornir-simple-inventory.yml",
+}
+GENERATED_DIRS = {
+    "clab_files",
+    "node_files",
+    "group_vars",
+    "host_vars",
+    ".vagrant",
+    "__pycache__",
+    "monitoring",
+    "grafana",
+}
+GENERATED_SUFFIXES = (".clab.yml", ".netlab-ui.json", ".annotations.json", ".log")
+
+
+def is_generated(entry: Path, is_dir: bool) -> bool:
+    if is_dir:
+        return entry.name in GENERATED_DIRS
+    return entry.name in GENERATED_FILES or entry.name.endswith(GENERATED_SUFFIXES)
+
+
+def topology_candidates(workspace_path: Path) -> list[Path]:
+    """Find candidate lab topology YAML files in a workspace, applying the
+    same filtering used by the explorer (skip generated artifacts, hidden and
+    vendored directories, dedupe by resolved path)."""
+    seen: set[Path] = set()
+    candidates: list[Path] = []
+    for path in workspace_path.rglob("*"):
+        if not (path.is_file() and path.suffix in (".yml", ".yaml")):
+            continue
+        if path.name == "docker-compose.yml":
+            continue
+        # Skip netlab-generated artifacts (provider files, Ansible inventory):
+        # they are YAML but not lab topologies, and listing them as
+        # "Undeployed Labs" bloats the explorer. They remain reachable under
+        # the file explorer's per-directory "generated" group.
+        # Only the part inside the workspace counts: a workspace that itself
+        # lives under a hidden or "dist" directory still has labs.
+        parts = path.relative_to(workspace_path).parts
+        if is_generated(path, is_dir=False) or any(p in GENERATED_DIRS for p in parts):
+            continue
+        if any(p.startswith(".") for p in parts):
+            continue
+        if any(p in ("node_modules", "dist", ".git", "__pycache__") for p in parts):
+            continue
+        # Workspace unit library: real topologies, but they belong to the Units
+        # panel (which opens them on demand), not the "Undeployed Labs" list.
+        if "units" in parts[:-1]:
+            continue
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            candidates.append(path)
+    return candidates
+
+
+def is_lab_running(abs_path: str, lab_name: str, stem: str, running_status: dict) -> bool:
+    """Whether a netlab instance record exists for this topology — matched by lab
+    name or by directory, since `netlab status --all` summaries only carry `dir`.
+    Container state is deliberately not required: a crashed deploy must still
+    read as deployed so the UI offers destroy/cleanup instead of a second deploy."""
+    for key, info in (running_status or {}).items():
+        lab_dir = str(info.get("dir") or "")
+        if (
+            key in (lab_name, stem)
+            or info.get("name") == lab_name
+            or (lab_dir != "" and abs_path.startswith(f"{lab_dir}/"))
+        ):
+            return True
+    return False

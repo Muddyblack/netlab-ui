@@ -1,16 +1,18 @@
 # netlab-ui as a container — `docker compose up -d`, then open
 # http://localhost:8000.
 #
-# The UI only: netlab and containerlab stay on the host, where you installed
-# them, and the container uses that install. Set NETLAB_BIN to the host's netlab
-# and CLAB_DIR to the directory holding containerlab:
+# The UI only: netlab, Ansible and containerlab stay on the host, where you
+# installed them (pipx, pip, a venv, your distro or Nix: any of them). The
+# container runs them *on the host*, as you, by entering the host with nsenter
+# (privileged + pid: host below), so there is nothing to point it at and no
+# second netlab to keep in step. Lab files belong to you, not root.
 #
-#   NETLAB_BIN=$(command -v netlab) CLAB_DIR=$(dirname "$(command -v containerlab)") \
-#     docker compose up -d
+#   mkdir -p ~/.netlab labs     # first time: Docker would create them as root
+#   docker compose up -d
 #
-# The install is mounted at the same path it has on the host, so its shebangs
-# and (on NixOS) store references resolve unchanged. HOST_TOOLS_DIR is the
-# directory that holds it: /nix/store on NixOS, or e.g. the venv netlab lives in.
+# The host user is the owner of ~/.netlab (override: NETLAB_UI_HOST_UID).
+# For a normal Linux host the native package (`pipx install netlab-ui`, then
+# `netlab-ui install-service`) is simpler still.
 #
 # Why each setting is here (the UI checks all of them itself and explains any
 # that are missing under Settings → Environment → Container Setup):
@@ -23,9 +25,8 @@
 #   * the labs directory is mounted at the SAME path it has on the host:
 #     containerlab asks the host daemon to bind-mount node files by their
 #     in-container path, so the two must match.
-#   * ~/.netlab — netlab's running-lab registry. Shared with `netlab status`
-#     on the host and kept across container re-creation (otherwise labs
-#     started from the UI become orphans).
+#   * ~/.netlab — netlab's running-lab registry, shared with `netlab status`
+#     on the host; its owner is the user netlab runs as.
 
 services:
   netlab-ui:
@@ -33,6 +34,7 @@ services:
     # `docker compose build` builds the same image from a checkout.
     build:
       context: .
+      dockerfile: packaging/docker/Dockerfile
       target: ui
     container_name: netlab-ui
     restart: unless-stopped
@@ -47,16 +49,12 @@ services:
       UVICORN_PORT: ${NETLAB_UI_PORT:-8000}
       # Set NETLAB_UI_AUTH=user:password (e.g. in .env) before exposing it.
       NETLAB_UI_AUTH: ${NETLAB_UI_AUTH:-}
-      NETLAB_GUI_CONTAINER: netlab-ui
-      NETLAB_BIN: ${NETLAB_BIN:?set NETLAB_BIN to the host netlab, e.g. NETLAB_BIN=$(command -v netlab)}
-      # containerlab is called directly for a few features (netem, cleanup, link reconcile).
-      PATH: ${CLAB_DIR:-/usr/bin}:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+      NETLAB_UI_CONTAINER: netlab-ui
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/run/netns:/var/run/netns
       - ${LABS_DIR:-${PWD}/labs}:${LABS_DIR:-${PWD}/labs}
       - ${HOME}/.netlab:/root/.netlab
-      - ${HOST_TOOLS_DIR:-/nix/store}:${HOST_TOOLS_DIR:-/nix/store}:ro
       # UI settings, workspaces list, assistant history.
       - netlab-ui-state:/root
 

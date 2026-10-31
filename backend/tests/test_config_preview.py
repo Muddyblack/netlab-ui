@@ -1,6 +1,6 @@
 import pytest
 
-from services.netlab.config_preview import MAX_FILE_BYTES, is_safe_node_name, read_node_files
+from netlab_ui.services.netlab.config_preview import MAX_FILE_BYTES, is_safe_node_name, read_node_files
 
 
 @pytest.mark.parametrize("node", ["r1", "router-1", "router_1", "router.example"])

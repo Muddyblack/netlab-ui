@@ -2,9 +2,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.sessions.store import store
-from services.netlab import custom_configs
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.netlab import custom_configs
 
 
 def test_discovery_finds_directory_and_file_templates_but_not_lab_artifacts(tmp_path, monkeypatch):

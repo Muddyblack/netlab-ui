@@ -12,9 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from app.sessions.store import store
-from services.assistant import proposals, tools
-from services.netlab import runner
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.assistant import proposals, tools
+from netlab_ui.services.netlab import runner
 
 TOPOLOGY = "name: demo\nnodes:\n  r1:\n    device: frr\n  r2:\n    device: frr\nlinks:\n- r1-r2\n"
 
@@ -327,7 +327,7 @@ def test_netlab_show_error_reads_as_message(monkeypatch):
 
 
 def test_read_netlab_docs_lists_and_reads_pages(monkeypatch):
-    from services.netlab import docs
+    from netlab_ui.services.netlab import docs
 
     fetched = []
     monkeypatch.setattr(docs, "repo_paths", lambda: _REPO)
@@ -339,7 +339,7 @@ def test_read_netlab_docs_lists_and_reads_pages(monkeypatch):
 
 
 def test_netlab_examples_groups_by_feature_and_skips_harness_files(monkeypatch):
-    from services.netlab import docs
+    from netlab_ui.services.netlab import docs
 
     monkeypatch.setattr(docs, "repo_paths", lambda: _REPO)
     monkeypatch.setattr(docs, "fetch_repo_file", lambda path: f"# {path}")
@@ -350,7 +350,7 @@ def test_netlab_examples_groups_by_feature_and_skips_harness_files(monkeypatch):
 
 
 def test_reference_tools_say_when_offline(monkeypatch):
-    from services.netlab import docs
+    from netlab_ui.services.netlab import docs
 
     monkeypatch.setattr(docs, "repo_paths", lambda: None)
     monkeypatch.setattr(docs, "netsim_version", lambda: "26.05")

@@ -4,6 +4,7 @@ import { RunningLabsDialog } from "../dialogs/RunningLabsDialog";
 import { WorkspaceDialogs } from "../WorkspaceDialogs";
 import { EnvWarningBanner } from "../EnvWarningBanner";
 import { ContainerSetupBanner } from "../ContainerSetup";
+import { HostSetupBanner } from "../HostSetup";
 import { RuntimeSnackbarView } from "../RuntimeSnackbarView";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
@@ -99,6 +100,7 @@ export function AppSecondaryDialogs({
 
       <EnvWarningBanner health={DEMO_MODE ? null : startup.health} />
       {!DEMO_MODE && <ContainerSetupBanner onOpenSettings={openEnvironmentSettings} />}
+      {!DEMO_MODE && <HostSetupBanner onOpenSettings={openEnvironmentSettings} />}
 
       <RuntimeSnackbarView snackbar={runtimeSnackbar} onClose={() => setRuntimeSnackbar(defaultRuntimeSnackbar)} />
     </>

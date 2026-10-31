@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from services.lenses import teaching
-from services.netlab import runner
+from netlab_ui.services.lenses import teaching
+from netlab_ui.services.netlab import runner
 
 
 def test_validation_tests_are_listed_with_description_and_nodes():

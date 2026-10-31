@@ -174,7 +174,7 @@ Where something isn't possible for a node, the UI says why instead of failing.
   see whether it runs, open its web UI, connect to its CLI (`netlab connect
   suzieq`) or start and stop it. The commands are netlab's own.
 - **Monitoring** (Ctrl+P → *Monitoring*, or a lab's context menu): turns on
-  the netlab [`monitoring` plugin](../monitoring/README.md) shipped with the
+  the netlab [`monitoring` plugin](../plugins/monitoring/README.md) shipped with the
   UI. It shows the lab's health against what the topology defines (BGP
   sessions, OSPF and IS-IS adjacencies up vs expected, and which are missing),
   how every node is collected, and opens the Grafana dashboards. *Fault

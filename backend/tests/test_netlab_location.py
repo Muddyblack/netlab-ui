@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from services.netlab import location
+from netlab_ui.services.netlab import location
 
 
 def test_configured_netlab_wins_and_prepends_its_bin(tmp_path, monkeypatch):

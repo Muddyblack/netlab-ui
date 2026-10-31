@@ -1,0 +1,204 @@
+"""Generic / shared response models (command results, health, validation)."""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel
+
+
+class CommandResult(BaseModel):
+    """Result of running a netlab CLI verb (up/down/restart/exec/...)."""
+
+    code: int
+    stdout: str
+    stderr: str
+
+
+class OkResult(BaseModel):
+    ok: bool
+
+
+class OkMessageResult(BaseModel):
+    ok: bool
+    message: str
+
+
+class RevisionResult(BaseModel):
+    ok: bool
+    revision: int
+
+
+class NetlabComponentStatus(BaseModel):
+    name: str
+    version: str | None = None
+    category: Literal["required", "optional", "ansible"]
+    installed: bool
+
+
+class HealthStatus(BaseModel):
+    ok: bool
+    appVersion: str | None = None
+    netlab: bool
+    containerlab: bool | None = None
+    libvirt: bool | None = None
+    netlabVersion: str | None = None
+    containerlabVersion: str | None = None
+    libvirtVersion: str | None = None
+    netlabVersionSupported: bool | None = None
+    minNetlabVersion: str | None = None
+    netlabComponents: list[NetlabComponentStatus] = []
+
+
+class VersionResult(BaseModel):
+    version: str | None = None
+    code: int | None = None
+    error: str | None = None
+
+
+class NetlabEnvironment(BaseModel):
+    """Where netlab resolved to and how — drives the Settings UI and Info tab."""
+
+    configured: str | None = None
+    source: str
+    command: str
+    binPath: str | None = None
+    found: bool
+    binDir: str | None = None
+    targetPython: str | None = None
+    inBackendVenv: bool
+    envVar: str
+    configPath: str
+    netlabVersion: str | None = None
+    netlabVersionSupported: bool | None = None
+    minNetlabVersion: str | None = None
+    containerlab: bool = False
+    libvirt: bool = False
+
+
+class ContainerCheck(BaseModel):
+    id: str
+    ok: bool
+    severity: Literal["error", "warning"]
+    title: str
+    detail: str
+    fix: str | None = None
+
+
+class ContainerDiagnostics(BaseModel):
+    """Self-inspection of the containerized UI's `docker run` setup."""
+
+    inContainer: bool
+    inspected: bool
+    checks: list[ContainerCheck] = []
+
+
+class HostDiagnostics(BaseModel):
+    """Preflight checks for deploying labs from this host (empty inside a container)."""
+
+    inContainer: bool
+    ready: bool
+    checks: list[ContainerCheck] = []
+
+
+class SetNetlabPathRequest(BaseModel):
+    path: str | None = None
+
+
+class ValidationIssue(BaseModel):
+    severity: Literal["error", "warning"]
+    message: str
+    entityType: Literal["node", "link", "topology"]
+    entityId: str | None = None
+
+
+class ValidationResult(CommandResult):
+    issues: list[ValidationIssue] = []
+
+
+class ConfigPreviewFile(BaseModel):
+    path: str
+    content: str
+
+
+class ConfigPreviewResult(BaseModel):
+    node: str
+    files: list[ConfigPreviewFile] = []
+    generated: bool = False
+    message: str | None = None
+
+
+class DeployDiffResult(BaseModel):
+    changed: bool
+    baselineExists: bool
+    recordedAt: str | None = None
+    diff: str = ""
+
+
+class InstanceConflict(BaseModel):
+    instanceId: str
+    directory: str
+    name: str | None = None
+
+
+class DeployPlan(BaseModel):
+    """What `netlab up` would collide with (see services/netlab/multilab.py)."""
+
+    instanceId: str
+    configured: bool
+    conflict: InstanceConflict | None = None
+    suggestedMultilabId: int | None = None
+
+
+class RuntimeInterfaceStats(BaseModel):
+    rxBps: int | None = None
+    txBps: int | None = None
+    rxPps: int | None = None
+    txPps: int | None = None
+    rxBytes: int = 0
+    txBytes: int = 0
+    rxPackets: int = 0
+    txPackets: int = 0
+    statsIntervalSeconds: float | None = None
+    # Error/drop counters — beyond clab-ui's contract, read by the Traffic lens.
+    rxErrors: int = 0
+    txErrors: int = 0
+    rxDropped: int = 0
+    txDropped: int = 0
+    # Errors + drops added since the previous sample (None on the first one).
+    newErrors: int | None = None
+
+
+class RuntimeNetemState(BaseModel):
+    delay: str | None = None
+    jitter: str | None = None
+    loss: str | None = None
+    rate: str | None = None
+    corruption: str | None = None
+
+
+class RuntimeInterface(BaseModel):
+    name: str
+    alias: str
+    label: str | None = None
+    mac: str = ""
+    mtu: int = 0
+    state: str = "unknown"
+    type: str = ""
+    ifIndex: int | None = None
+    stats: RuntimeInterfaceStats | None = None
+    netemState: RuntimeNetemState | None = None
+
+
+class RuntimeContainer(BaseModel):
+    name: str
+    nodeName: str
+    labName: str
+    state: str
+    kind: str = ""
+    image: str = ""
+    ipv4Address: str = ""
+    ipv6Address: str = ""
+    # clab | libvirt | external — which runtime actions apply to the node.
+    provider: str = ""
+    interfaces: list[RuntimeInterface] = []

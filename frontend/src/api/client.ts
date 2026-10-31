@@ -6,7 +6,7 @@
  * Response types are imported from ./generated.ts, which is generated from the
  * backend's FastAPI OpenAPI schema (`npm run gen:api`). Do not hand-roll
  * response shapes here — add/adjust the Pydantic models in
- * backend/app/contract/responses.py and regenerate so the two never drift.
+ * backend/netlab_ui/app/contract/responses.py and regenerate so the two never drift.
  */
 
 import type { components } from "./generated";
@@ -21,6 +21,7 @@ const eventHandlers = new Set<(event: BackendEvent) => void>();
 
 export type HealthStatus = Schemas["HealthStatus"];
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
+export type HostDiagnostics = Schemas["HostDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
 export type LabFileEntry = Schemas["LabFileEntry"];
 export type LabInstance = Schemas["LabInstance"];
@@ -107,7 +108,7 @@ export interface NetlabEnvironment {
  *
  * Hand-written rather than generated: the snapshot is typed as a bare dict on
  * the backend (see SnapshotResponse), so it never reaches the OpenAPI schema.
- * Mirrors `ProjectionSource` in backend/app/contract/snapshot.py.
+ * Mirrors `ProjectionSource` in backend/netlab_ui/app/contract/snapshot.py.
  */
 export interface NetlabProjection {
   /**
@@ -258,6 +259,9 @@ export const api = {
   // cannot leave the gate apparently frozen behind the generic 3-attempt
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
+
+  getHostDiagnostics: (refresh = false) =>
+    http<HostDiagnostics>(`/api/environment/host${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
 
   getContainerDiagnostics: (refresh = false) =>
     http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),

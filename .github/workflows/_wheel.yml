@@ -1,0 +1,39 @@
+name: Build and test wheel
+
+# Builds the backend wheel and sdist with the UI and monitoring plugin bundled in
+# (scripts/build-wheel.sh), then installs the wheel into a clean venv and starts it
+# (scripts/smoke-test.sh). Called by release.yml. Publishing happens there, after this and the
+# image have passed, and uploads exactly the files built and tested here (artifact `dist`).
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Release version without the leading v (e.g. 1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: scripts/build-wheel.sh
+      - name: Check the package metadata
+        run: twine check --strict backend/dist/*
+      - name: Install the wheel in a clean venv and start it
+        run: scripts/smoke-test.sh wheel backend/dist/*.whl "${{ inputs.version }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: backend/dist/
+          if-no-files-found: error

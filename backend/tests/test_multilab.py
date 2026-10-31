@@ -1,4 +1,4 @@
-from services.netlab import multilab, runner
+from netlab_ui.services.netlab import multilab, runner
 
 
 def _topo(tmp_path, body="name: lab\nnodes: [r1]\n"):
@@ -61,7 +61,7 @@ def test_up_argv_carries_multilab_plugin(tmp_path):
 def test_restart_keeps_the_registered_multilab_id(tmp_path, monkeypatch):
     import asyncio
 
-    from app.lab import lifecycle
+    from netlab_ui.app.lab import lifecycle
 
     path = _topo(tmp_path)
 
@@ -75,7 +75,7 @@ def test_restart_keeps_the_registered_multilab_id(tmp_path, monkeypatch):
 def test_sequence_stops_at_first_failure(monkeypatch):
     import asyncio
 
-    from app.lab import lifecycle
+    from netlab_ui.app.lab import lifecycle
 
     async def fake_stream(args, cwd=None):
         yield "stdout", f"ran {args[0]}"

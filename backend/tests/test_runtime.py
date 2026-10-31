@@ -1,5 +1,5 @@
-from services.model.topology import Topology
-from services.netlab import runner, runtime
+from netlab_ui.services.model.topology import Topology
+from netlab_ui.services.netlab import runner, runtime
 
 
 def test_interface_rates_are_derived_from_counter_delta(monkeypatch):

@@ -3,13 +3,16 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+  # release.yml runs the whole suite on the release commit before it publishes anything.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are superseded by a newer push; a release's run must finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   hygiene:
@@ -99,13 +102,13 @@ jobs:
 
           match() { echo "$changed" | grep -qE "$1"; }
 
-          if match '^(backend/|pyproject\.toml|\.github/workflows/ci\.yml)'; then
+          if match '^(backend/|plugins/monitoring/|\.github/workflows/ci\.yml)'; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if match '^(monitoring/|\.github/workflows/ci\.yml)'; then
+          if match '^(plugins/monitoring/|\.github/workflows/ci\.yml)'; then
             echo "monitoring=true" >> "$GITHUB_OUTPUT"
           else
             echo "monitoring=false" >> "$GITHUB_OUTPUT"
@@ -118,8 +121,8 @@ jobs:
           fi
 
           # The release image is only ever built on a tag push, so without this
-          # a broken Dockerfile stays invisible until release day.
-          if match '^(Dockerfile|\.dockerignore|\.github/workflows/(ci|container-release)\.yml)'; then
+          # a broken Dockerfile stays invisible until release day. It also copies backend, frontend and the plugin.
+          if match '^(backend/|frontend/|plugins/monitoring/plugin/|\.dockerignore|packaging/docker/|docker-compose\.yml|\.github/workflows/(ci|_image)\.yml)'; then
             echo "docker=true" >> "$GITHUB_OUTPUT"
           else
             echo "docker=false" >> "$GITHUB_OUTPUT"
@@ -159,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: monitoring
+        working-directory: plugins/monitoring
     steps:
       - uses: actions/checkout@v7
 
@@ -206,7 +209,7 @@ jobs:
         env:
           NODE_OPTIONS: --max_old_space_size=4096
 
-  # Builds the release image exactly as container-release.yml would, minus the
+  # Builds the release image exactly as _image.yml would, minus the
   # push — so Dockerfile regressions surface on the PR instead of on a tag.
   docker:
     needs: changes
@@ -224,6 +227,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           context: .
+          file: packaging/docker/Dockerfile
           target: ${{ matrix.target }}
           push: false
           # Single arch on PRs: this is a "does it build" gate, and emulating

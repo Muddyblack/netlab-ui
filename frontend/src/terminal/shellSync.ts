@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react";
  * browser window; each Shell instance joins with its own id.
  */
 
-type Sink = (data: Uint8Array) => void;
+type Sink = (data: Uint8Array<ArrayBuffer>) => void;
 
 const members = new Map<string, { node: string; sink: Sink }>();
 const listeners = new Set<() => void>();
@@ -28,7 +28,7 @@ export function leaveShellSync(id: string): void {
 }
 
 /** Send `data` typed into shell `fromId` to every synced shell (itself included). */
-export function broadcastShellInput(fromId: string, data: Uint8Array): boolean {
+export function broadcastShellInput(fromId: string, data: Uint8Array<ArrayBuffer>): boolean {
   if (!members.has(fromId)) return false;
   for (const member of members.values()) member.sink(data);
   return true;

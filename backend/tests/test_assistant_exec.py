@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from services.assistant import exec_tool
+from netlab_ui.services.assistant import exec_tool
 
 ACCEPTED = [
     "show ip route",

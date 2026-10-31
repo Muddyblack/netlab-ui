@@ -6,10 +6,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.lab import lifecycle
-from app.main import app
-from app.sessions.store import store
-from services.netlab import runner
+from netlab_ui.app.lab import lifecycle
+from netlab_ui.app.main import app
+from netlab_ui.app.sessions.store import store
+from netlab_ui.services.netlab import runner
 
 
 @pytest.fixture

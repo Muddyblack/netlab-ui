@@ -9,7 +9,7 @@
 // (see bufferStore.ts) — localStorage holds only about 5 MB per site.
 //
 // Key naming: new keys use the `netlab.` prefix (`netlab.<area>.<name>`). The
-// older `netlab:`, `netlab-` and `netlab-gui:` keys stay as they are, since
+// older `netlab:`, `netlab-` and `netlab-ui:` keys stay as they are, since
 // renaming one would reset it for every existing user.
 
 type Area = "local" | "session";

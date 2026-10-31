@@ -1,6 +1,6 @@
 import os
 
-from app.environment import router
+from netlab_ui.app.environment import router
 
 
 def test_resolve_candidate_rejects_arbitrary_executable(tmp_path):
