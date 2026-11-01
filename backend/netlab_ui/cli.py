@@ -200,16 +200,19 @@ def _upgrade(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="netlab-ui", description=__doc__)
+    # The serve options, shared so `netlab-ui -h` lists them too (bare flags mean `serve`).
+    serving = argparse.ArgumentParser(add_help=False)
+    serving.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
+    serving.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
+    serving.add_argument(
+        "--app", action="store_true", help="open the UI in its own window (stops the server when it is closed)"
+    )
+
+    parser = argparse.ArgumentParser(prog="netlab-ui", description=__doc__, parents=[serving])
     parser.add_argument("--version", action="version", version=f"netlab-ui {installed_version()}")
     sub = parser.add_subparsers(dest="command")
 
-    serve = sub.add_parser("serve", help="run the web UI and API (default)")
-    serve.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
-    serve.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
-    serve.add_argument(
-        "--app", action="store_true", help="open the UI in its own window (stops the server when it is closed)"
-    )
+    serve = sub.add_parser("serve", help="run the web UI and API (default)", parents=[serving])
     serve.set_defaults(func=_serve)
 
     cfg = sub.add_parser("config", help="show the config file location and the settings the server will use")
