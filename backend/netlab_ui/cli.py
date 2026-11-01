@@ -51,8 +51,21 @@ def _serve(args: argparse.Namespace) -> int:
             "or set NETLAB_UI_AUTH=user:password.",
             file=sys.stderr,
         )
+    if args.app:
+        from netlab_ui import window
+
+        server_config = uvicorn.Config("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
+        return window.run(server_config, _app_url(host, port))
     uvicorn.run("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
     return 0
+
+
+def _app_url(host: str, port: int) -> str:
+    """Where the app window connects: this machine, signed in when a token is configured."""
+    local = "::1" if host == "::" else "127.0.0.1" if host in {"", "0.0.0.0"} else host
+    url = service.base_url(local, port)
+    token = auth.configured_token()
+    return f"{url}/?token={token}" if token else url
 
 
 def _is_loopback(host: str) -> bool:
@@ -194,6 +207,9 @@ def main(argv: list[str] | None = None) -> int:
     serve = sub.add_parser("serve", help="run the web UI and API (default)")
     serve.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
     serve.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
+    serve.add_argument(
+        "--app", action="store_true", help="open the UI in its own window (stops the server when it is closed)"
+    )
     serve.set_defaults(func=_serve)
 
     cfg = sub.add_parser("config", help="show the config file location and the settings the server will use")

@@ -27,6 +27,9 @@ netlab = [
     "ansible>=9",
     "ansible-pylibssh>=1.2",
 ]
+# `netlab-ui --app` draws a native window with pywebview. The Qt flavour is pip-installable, so it also
+# works inside a pipx venv (the GTK one needs system packages pipx cannot see).
+window = ["pywebview[qt]>=5"]
 dev = [
     "pytest>=8.0",
     "httpx>=0.28",
