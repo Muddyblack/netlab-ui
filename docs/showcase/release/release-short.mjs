@@ -14,7 +14,7 @@ const SHOWCASE = path.resolve(HERE, '..');
 const DURATION = 24, FPS = 30;
 const args = process.argv.slice(2);
 const opt = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
-const out = path.resolve(opt('--out', path.join(SHOWCASE, 'media/shorts/release-0.0.2')));
+const out = path.resolve(opt('--out', path.join(SHOWCASE, 'media/shorts/release-0.0.3')));
 const still = opt('--still');
 fs.mkdirSync(out, { recursive: true });
 
@@ -47,7 +47,7 @@ await browser.close();
 const music = path.join(SHOWCASE, '.cache/music/sappheiros-moments.mp3');
 const trackLength = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', music], { encoding: 'utf8' }));
 const musicStart = 24 + Math.floor(Math.random() * Math.max(1, trackLength - 12 - 24 - DURATION));
-const video = path.join(out, 'netlab-ui-0.0.2-short.mp4');
+const video = path.join(out, 'netlab-ui-0.0.3-short.mp4');
 execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y',
   '-framerate', String(FPS), '-i', path.join(tmp, 'f%04d.png'),
   '-ss', String(musicStart), '-t', String(DURATION), '-i', music,
@@ -57,9 +57,9 @@ execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y',
   '-c:a', 'libmp3lame', '-b:a', '256k', '-ar', '48000', video], { stdio: 'inherit' });
 fs.rmSync(tmp, { recursive: true, force: true });
 
-fs.writeFileSync(path.join(out, 'youtube.txt'), `netlab-ui 0.0.2 is out | Free network lab UI #Shorts
+fs.writeFileSync(path.join(out, 'youtube.txt'), `netlab-ui 0.0.3 is out | Free network lab UI #Shorts
 
-netlab-ui 0.0.2 is out: install with pipx, upgrade with one command, open the UI in its own app window, monitor labs with Grafana and review AI-agent proposals.
+netlab-ui 0.0.3 is out: install with pipx, upgrade with one command, open the UI in its own app window, monitor labs with Grafana and review AI-agent proposals.
 
 Try netlab-ui (free, open source): https://github.com/Muddyblack/netlab-ui
 Releases: https://github.com/Muddyblack/netlab-ui/releases
