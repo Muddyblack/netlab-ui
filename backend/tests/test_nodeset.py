@@ -25,3 +25,13 @@ def test_unordered_and_duplicate_input():
 
 def test_names_without_trailing_digits():
     assert format_nodeset(["alpha", "beta"]) == "alpha, beta"
+
+
+def test_select_rejects_nested_quantifiers():
+    import pytest
+
+    from netlab_ui.services.nodeset import select
+
+    with pytest.raises(ValueError, match="nests quantifiers"):
+        select("(a+)+$", ["aaaa"])
+    assert select("r(1|2)", ["r1", "r2", "r3"]) == ["r1", "r2"]
