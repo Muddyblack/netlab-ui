@@ -55,8 +55,9 @@ python="$(command -v python3 || true)"
   || die "Python 3.11+ is required, found $("$python" -V). Install a newer python3, then run this again."
 
 if ! command -v pipx >/dev/null; then
+  [[ ! -e /etc/NIXOS ]] || die "on NixOS, use the netlab-ui flake and its NixOS module instead of this script: https://github.com/Muddyblack/netlab-ui/blob/main/docs/install.md#nixos"
   say "pipx not found; installing it for your user"
-  "$python" -m pip install --user pipx 2>/dev/null \
+  "$python" -m pip install --user pipx \
     || die "could not install pipx. Install it with your package manager (apt install pipx / dnf install pipx), then run this again."
   "$python" -m pipx ensurepath >/dev/null || true
   pipx() { "$python" -m pipx "$@"; }

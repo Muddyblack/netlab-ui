@@ -196,6 +196,7 @@ def health():
         "libvirt": libvirt_present,
         "netlabVersion": netlab_version,
         "containerlabVersion": runner.containerlab_version() if containerlab_present else None,
+        "containerlabWantedVersion": runner.containerlab_wanted_version(),
         "libvirtVersion": runner.libvirt_version() if libvirt_present else None,
         "netlabVersionSupported": runner.version_at_least(netlab_version) if netlab_version else None,
         "minNetlabVersion": runner.MIN_NETLAB_VERSION,

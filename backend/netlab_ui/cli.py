@@ -13,7 +13,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from netlab_ui import config, service
+from netlab_ui import config, service, window
 from netlab_ui.app import auth
 
 
@@ -51,8 +51,19 @@ def _serve(args: argparse.Namespace) -> int:
             "or set NETLAB_UI_AUTH=user:password.",
             file=sys.stderr,
         )
+    if args.app:
+        server_config = uvicorn.Config("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
+        return window.run(server_config, _app_url(host, port), args.app)
     uvicorn.run("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
     return 0
+
+
+def _app_url(host: str, port: int) -> str:
+    """Where the app window connects: this machine, signed in when a token is configured."""
+    local = "::1" if host == "::" else "127.0.0.1" if host in {"", "0.0.0.0"} else host
+    url = service.base_url(local, port)
+    token = auth.configured_token()
+    return f"{url}/?token={token}" if token else url
 
 
 def _is_loopback(host: str) -> bool:
@@ -187,13 +198,24 @@ def _upgrade(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="netlab-ui", description=__doc__)
+    # The serve options, shared so `netlab-ui -h` lists them too (bare flags mean `serve`).
+    serving = argparse.ArgumentParser(add_help=False)
+    serving.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
+    serving.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
+    serving.add_argument(
+        "--app",
+        nargs="?",
+        const="auto",
+        choices=["auto", "ask", *window.MODES],
+        help="open the UI in its own window, which stops the server when closed. Optionally pick how: "
+        "webview (pywebview), chromium (Chrome/Chromium/Edge app mode), browser, or ask (show the menu again)",
+    )
+
+    parser = argparse.ArgumentParser(prog="netlab-ui", description=__doc__, parents=[serving])
     parser.add_argument("--version", action="version", version=f"netlab-ui {installed_version()}")
     sub = parser.add_subparsers(dest="command")
 
-    serve = sub.add_parser("serve", help="run the web UI and API (default)")
-    serve.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
-    serve.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
+    serve = sub.add_parser("serve", help="run the web UI and API (default)", parents=[serving])
     serve.set_defaults(func=_serve)
 
     cfg = sub.add_parser("config", help="show the config file location and the settings the server will use")

@@ -65,11 +65,11 @@ export function HostSetupBanner({ onOpenSettings }: { onOpenSettings: () => void
     <Box sx={{ position: "fixed", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 2000, maxWidth: 640, width: "calc(100% - 32px)" }}>
       <Alert
         severity="warning"
-        variant="filled"
-        sx={{ boxShadow: 4, alignItems: "center" }}
+        variant="outlined"
+        sx={{ boxShadow: 4, alignItems: "center", bgcolor: "background.paper", color: "text.primary", "& .MuiAlert-icon": { color: "warning.main" } }}
         action={
           <Stack direction="row" alignItems="center">
-            <Button color="inherit" size="small" onClick={() => { onOpenSettings(); dismiss(); }}>Set up</Button>
+            <Button color="warning" variant="outlined" size="small" onClick={() => { onOpenSettings(); dismiss(); }}>Set up</Button>
             <IconButton color="inherit" size="small" onClick={dismiss} aria-label="Dismiss host setup warning">
               <CloseIcon sx={{ fontSize: 18 }} />
             </IconButton>

@@ -80,3 +80,19 @@ def test_upgrade_runs_the_install_command_then_restarts_the_service(monkeypatch)
     assert cli.main(["upgrade"]) == 0
     assert ran[0] == ["pipx", "upgrade", cli.PACKAGE]
     assert ran[1][:3] == ["systemctl", "--user", "try-restart"]
+
+
+def test_app_flag_serves_in_a_window(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(cli.auth, "configured_token", lambda: None)
+    monkeypatch.setattr(
+        "netlab_ui.window.run",
+        lambda server_config, url, mode: seen.update(port=server_config.port, url=url, mode=mode) or 0,
+    )
+    assert cli.main(["--app", "--host", "0.0.0.0", "--port", "9123"]) == 0
+    assert seen == {"port": 9123, "url": "http://127.0.0.1:9123", "mode": "auto"}
+
+
+def test_app_window_signs_in_with_the_token(monkeypatch):
+    monkeypatch.setattr(cli.auth, "configured_token", lambda: "s3cret")
+    assert cli._app_url("127.0.0.1", 8000) == "http://127.0.0.1:8000/?token=s3cret"

@@ -44,6 +44,7 @@ class HealthStatus(BaseModel):
     libvirt: bool | None = None
     netlabVersion: str | None = None
     containerlabVersion: str | None = None
+    containerlabWantedVersion: str | None = None
     libvirtVersion: str | None = None
     netlabVersionSupported: bool | None = None
     minNetlabVersion: str | None = None
