@@ -87,7 +87,7 @@ def _nests_quantifiers(text: str) -> bool:
             inner_quantified[-1] = True
         elif char == ")" and inner_quantified:
             had_quantifier = inner_quantified.pop()
-            if had_quantifier and text[index + 1 : index + 2] in {"+", "*", "{"}:  # noqa: SIM102
+            if had_quantifier and text[index + 1 : index + 2] in {"+", "*", "{"}:
                 return True
     return False
 
