@@ -1,0 +1,129 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  body { width: 1080px; height: 1920px; overflow: hidden; color: #f0f0f0; position: relative;
+    font-family: "Noto Sans", "Inter", system-ui, sans-serif;
+    background: radial-gradient(900px 620px at 0% 0%, rgba(245,158,11,.20), transparent 70%),
+                radial-gradient(800px 560px at 100% 100%, rgba(210,100,0,.14), transparent 70%),
+                linear-gradient(180deg, #1b1b1c 0%, #141415 100%); }
+  /* Safe area: YouTube covers the bottom ~380px and the right edge with its UI. */
+  .scene { position: absolute; left: 72px; right: 72px; top: 150px; bottom: 380px; opacity: 0; display: flex; flex-direction: column; justify-content: center; }
+  .kicker { font-size: 28px; font-weight: 700; letter-spacing: .26em; text-transform: uppercase; color: #f59e0b; }
+  h1 { margin-top: 16px; font-size: 76px; font-weight: 800; letter-spacing: -.02em; line-height: 1.04; text-wrap: balance; }
+  h1::after { content: ""; display: block; width: 84px; height: 6px; margin-top: 26px; border-radius: 3px; background: #f59e0b; }
+  p.sub { margin-top: 26px; font-size: 38px; line-height: 1.3; color: #b8b8b8; }
+  /* hero */
+  #hero { justify-content: center; align-items: center; text-align: center; }
+  #hero .logo { width: 260px; height: 220px; }
+  #hero .logo svg { width: 100%; height: 100%; }
+  #hero .name { margin-top: 30px; font-size: 52px; font-weight: 800; }
+  #hero .ver { margin-top: 10px; font-size: 230px; font-weight: 800; line-height: 1; letter-spacing: -.04em; color: #f59e0b; }
+  #hero .out { margin-top: 6px; font-size: 96px; font-weight: 800; letter-spacing: -.02em; }
+  /* terminal */
+  .term { margin-top: 56px; background: #0e0e0f; border: 2px solid #3c3c3c; border-radius: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.55); overflow: hidden; }
+  .term .bar { height: 56px; background: #252526; display: flex; align-items: center; gap: 12px; padding: 0 24px; }
+  .term .bar i { width: 18px; height: 18px; border-radius: 50%; background: #3c3c3c; }
+  .term .body { padding: 36px 36px 44px; font: 500 44px/1.7 "JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace; min-height: 400px; }
+  .term .prompt { color: #f59e0b; }
+  .term .ok { color: #6ee7a0; }
+  .cursor { display: inline-block; width: 22px; height: 44px; background: #f0f0f0; vertical-align: -8px; margin-left: 4px; }
+  /* screenshot cards */
+  .shot { margin-top: 56px; border-radius: 24px; border: 2px solid #3c3c3c; box-shadow: 0 30px 80px rgba(0,0,0,.6); overflow: hidden; height: 800px; background: #000; position: relative; }
+  .shot img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover; object-position: center top; will-change: transform; }
+  .cap { margin-top: 36px; font-size: 40px; font-weight: 700; color: #f0f0f0; } .cap::before { content: "→ "; color: #f59e0b; }
+  #ctaLogo { width: 330px; height: 276px; margin: 40px 0; } #ctaLogo svg { width: 100%; height: 100%; }
+  /* cta */
+  #cta { justify-content: center; align-items: center; text-align: center; } #cta h1::after { margin-left: auto; margin-right: auto; }
+  #cta .btn { margin-top: 56px; background: #f59e0b; color: #1b1b1c; font-size: 46px; font-weight: 800; padding: 26px 42px; border-radius: 22px; }
+  #cta .url { margin-top: 28px; font: 500 36px "JetBrainsMono Nerd Font Mono", "JetBrains Mono", monospace; color: #b8b8b8; }
+  /* progress */
+  .shot.wide { height: auto; } .shot.wide img { position: static; height: auto; display: block; }
+  .shot.ai img { object-position: 22% 30%; }
+</style></head><body>
+
+<div class="scene" id="hero">
+  <div class="logo"><img src="../../../frontend/public/favicon.svg" style="width:100%;height:100%"></div>
+  <div class="name">netlab-ui</div>
+  <div class="ver">0.0.2</div>
+  <div class="out">is out</div>
+</div>
+
+<div class="scene" id="install">
+  <div class="kicker">Install</div>
+  <h1>One line to install, one to upgrade</h1>
+  <div class="term"><div class="bar"><i></i><i></i><i></i></div><div class="body" id="termBody"></div></div>
+</div>
+
+<div class="scene" id="app">
+  <div class="kicker">New</div>
+  <h1>Opens in its own app window</h1>
+  <p class="sub"><span style="font-family:'JetBrainsMono Nerd Font Mono',monospace;color:#f59e0b">netlab-ui --app</span></p>
+  <div class="shot"><img src="../../images/canvas-new-link.webp" data-pan="1"></div><div class="cap">No browser tab, no URL bar</div>
+</div>
+
+<div class="scene" id="mon">
+  <div class="kicker">Monitoring</div>
+  <h1>Grafana dashboards, inside the lab</h1>
+  <div class="shot wide"><img src="../../images/monitoring-health.webp" data-pan="1"></div><div class="cap">Health per link and protocol</div>
+</div>
+
+<div class="scene" id="ai">
+  <div class="kicker">AI agents</div>
+  <h1>Agents propose changes. You review.</h1>
+  <div class="shot ai"><img src="../../images/ai-agents-proposal.webp" data-pan="1"></div><div class="cap">Nothing applied without you</div>
+</div>
+
+<div class="scene" id="cta">
+  <div class="kicker">Free &amp; open source</div>
+  <div id="ctaLogo"></div>
+  <h1>Update to 0.0.2 today</h1>
+  <div class="btn">netlab-ui upgrade</div>
+  <div class="url">github.com/Muddyblack/netlab-ui</div>
+</div>
+
+<script>
+  const TOTAL = 24;
+  const SCENES = [
+    ['hero', 0, 3.6], ['install', 3.6, 9.2], ['app', 9.2, 13.6],
+    ['mon', 13.6, 17.8], ['ai', 17.8, 20.8], ['cta', 20.8, TOTAL],
+  ];
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const FADE = 0.4;
+
+  function typed(text, t, t0, cps = 20) { return text.slice(0, Math.max(0, Math.floor((t - t0) * cps))); }
+
+  window.__ready = fetch('../../../frontend/public/favicon_animated.svg').then(r => r.text()).then(svg => {
+    document.getElementById('ctaLogo').innerHTML = svg;
+  }).catch(() => {});
+
+  window.__render = (t) => {
+    for (const [id, a, b] of SCENES) {
+      const el = document.getElementById(id), local = t - a;
+      const fin = ease(local / FADE), fout = id === 'cta' ? 1 : 1 - clamp((t - (b - FADE)) / FADE);
+      const on = t >= a && t < b + 0.001;
+      el.style.opacity = on ? Math.min(fin, fout) : 0;
+      el.style.transform = `translateY(${(1 - fin) * 40}px)`;
+      const img = el.querySelector('img[data-pan]');
+      if (img && on) img.style.transform = `scale(${1.04 + 0.08 * clamp(local / (b - a))})`;
+    }
+    // Scrub the animated logo to this frame (CSS animations, paused).
+    document.getAnimations().forEach(an => { an.pause(); an.currentTime = Math.max(0, (t - 20.8 + 1.4) * 1000); });
+    // hero pop
+    const hero = document.getElementById('hero');
+    hero.querySelector('.ver').style.transform = `scale(${0.8 + 0.2 * ease(t / 0.6)})`;
+    // install terminal
+    const L1 = 'pipx install netlab-ui', L2 = 'netlab-ui upgrade';
+    const a = typed(L1, t, 4.3), done1 = a.length === L1.length;
+    const showOk = t > 4.3 + L1.length / 20 + 0.4;
+    const b2 = typed(L2, t, 6.4), done2 = b2.length === L2.length;
+    const cur = '<span class="cursor" style="opacity:' + (Math.floor(t * 2) % 2 ? 0 : 1) + '"></span>';
+    let html = `<div><span class="prompt">$</span> ${a}${t >= 4.3 && !done1 ? cur : ''}</div>`;
+    if (showOk) html += `<div class="ok">✓ installed netlab-ui</div>`;
+    if (t >= 6.4) html += `<div><span class="prompt">$</span> ${b2}${!done2 || t < 8.3 ? cur : ''}</div>`;
+    if (t > 6.4 + L2.length / 20 + 0.4) html += `<div class="ok">✓ up to date, service restarted</div>`;
+    document.getElementById('termBody').innerHTML = html;
+  };
+</script>
+</body></html>
