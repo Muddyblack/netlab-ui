@@ -86,10 +86,11 @@ def test_app_flag_serves_in_a_window(monkeypatch):
     seen = {}
     monkeypatch.setattr(cli.auth, "configured_token", lambda: None)
     monkeypatch.setattr(
-        "netlab_ui.window.run", lambda server_config, url: seen.update(port=server_config.port, url=url) or 0
+        "netlab_ui.window.run",
+        lambda server_config, url, mode: seen.update(port=server_config.port, url=url, mode=mode) or 0,
     )
     assert cli.main(["--app", "--host", "0.0.0.0", "--port", "9123"]) == 0
-    assert seen == {"port": 9123, "url": "http://127.0.0.1:9123"}
+    assert seen == {"port": 9123, "url": "http://127.0.0.1:9123", "mode": "auto"}
 
 
 def test_app_window_signs_in_with_the_token(monkeypatch):

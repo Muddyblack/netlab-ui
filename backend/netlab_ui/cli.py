@@ -13,7 +13,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-from netlab_ui import config, service
+from netlab_ui import config, service, window
 from netlab_ui.app import auth
 
 
@@ -52,10 +52,8 @@ def _serve(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
     if args.app:
-        from netlab_ui import window
-
         server_config = uvicorn.Config("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
-        return window.run(server_config, _app_url(host, port))
+        return window.run(server_config, _app_url(host, port), args.app)
     uvicorn.run("netlab_ui.app.main:app", host=host, port=port, timeout_graceful_shutdown=2)
     return 0
 
@@ -205,7 +203,12 @@ def main(argv: list[str] | None = None) -> int:
     serving.add_argument("--host", help="bind address (default 127.0.0.1, or $UVICORN_HOST)")
     serving.add_argument("--port", type=int, help="port (default 8000, or $UVICORN_PORT)")
     serving.add_argument(
-        "--app", action="store_true", help="open the UI in its own window (stops the server when it is closed)"
+        "--app",
+        nargs="?",
+        const="auto",
+        choices=["auto", "ask", *window.MODES],
+        help="open the UI in its own window, which stops the server when closed. Optionally pick how: "
+        "webview (pywebview), chromium (Chrome/Chromium/Edge app mode), browser, or ask (show the menu again)",
     )
 
     parser = argparse.ArgumentParser(prog="netlab-ui", description=__doc__, parents=[serving])
