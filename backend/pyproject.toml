@@ -1,9 +1,25 @@
 [project]
 name = "netlab-ui"
 version = "0.0.1"
-description = "Backend adapter/BFF for a netlab APP — drives the netlab CLI and speaks the clab-ui ClabUiHost contract"
+description = "Web UI for netlab and containerlab: draw, deploy and monitor network labs in the browser"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+# LICENSE is a symlink to the repository's, so the sdist and wheel carry it.
+license-files = ["LICENSE"]
+keywords = ["netlab", "containerlab", "networking", "network-automation", "topology", "lab", "web-ui"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Telecommunications Industry",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Networking",
+]
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -36,6 +52,14 @@ dev = [
     "ruff>=0.10.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Muddyblack/netlab-ui"
+Documentation = "https://github.com/Muddyblack/netlab-ui/tree/main/docs"
+Source = "https://github.com/Muddyblack/netlab-ui"
+Issues = "https://github.com/Muddyblack/netlab-ui/issues"
+Changelog = "https://github.com/Muddyblack/netlab-ui/releases"
+"Live preview" = "https://muddyblack.github.io/netlab-ui/"
+
 [project.scripts]
 netlab-ui = "netlab_ui.cli:main"
 
@@ -44,7 +68,7 @@ pythonpath = ["."]
 testpaths = ["tests"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # 77 adds SPDX `license` and `license-files` (PEP 639)
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
