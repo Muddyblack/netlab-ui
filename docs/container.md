@@ -7,14 +7,15 @@ The image is the UI only. netlab, Ansible and containerlab stay on the host, ins
 ## Quick start
 
 ```bash
-mkdir -p ~/.netlab labs     # first time only: Docker would create missing folders as root
-docker compose up -d        # uses docker-compose.yml; labs live in ./labs
+docker compose -f https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/docker-compose.yml up -d
 ```
+
+No checkout needed (from one, plain `docker compose up -d` does the same). A one-shot `init` service first creates `~/.netlab` and the labs folder (`~/netlab-labs`, or `LABS_DIR`) owned by you, because Docker would otherwise create missing bind-mount folders as root and the UI runs netlab as the owner of `~/.netlab`.
 
 Open `http://localhost:8000`. The equivalent `docker run`:
 
 ```bash
-mkdir -p ~/.netlab "$PWD/labs"
+mkdir -p ~/.netlab "$PWD/labs"     # by hand here: only compose has the init step
 docker run -d --name netlab-ui \
   --privileged --network host --pid host \
   -v /var/run/docker.sock:/var/run/docker.sock \
