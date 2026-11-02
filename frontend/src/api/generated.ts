@@ -4298,6 +4298,8 @@ export interface components {
             netlabVersion?: string | null;
             /** Containerlabversion */
             containerlabVersion?: string | null;
+            /** Containerlabwantedversion */
+            containerlabWantedVersion?: string | null;
             /** Libvirtversion */
             libvirtVersion?: string | null;
             /** Netlabversionsupported */

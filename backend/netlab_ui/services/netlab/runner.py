@@ -1381,6 +1381,20 @@ def containerlab_version() -> str | None:
     return tool_version("containerlab", ["version", "--short"])
 
 
+def containerlab_wanted_version() -> str | None:
+    """The containerlab release the installed netlab asks for (``version:`` in
+    its ``providers/clab.yml``), so the UI never carries its own copy."""
+    package = location.netsim_package_dir()
+    if package is None:
+        return None
+    try:
+        text = (package / "providers" / "clab.yml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    match = re.search(r'^version:\s*["\']?(\d+(?:\.\d+)+)', text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
 def libvirt_version() -> str | None:
     return tool_version("virsh", ["--version"])
 
