@@ -25,6 +25,23 @@
     "electron-builder": "^26.18.0",
     "oxlint": "^1.89.0"
   },
+  "overrides": {
+    "app-builder-lib": {
+      "minimatch": "11.0.4",
+      "@electron/asar": {
+        "minimatch": "3.1.5"
+      },
+      "@electron/universal": {
+        "minimatch": "9.0.9",
+        "dir-compare": {
+          "minimatch": "3.1.5"
+        }
+      },
+      "ejs": {
+        "minimatch": "5.1.9"
+      }
+    }
+  },
   "build": {
     "appId": "app.netlab.desktop",
     "productName": "netlab-ui",
