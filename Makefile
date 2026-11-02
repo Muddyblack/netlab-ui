@@ -1,6 +1,6 @@
 # One entry point for the whole repo. Each package keeps its own tooling and config; these targets
 # only fan out to them (the same commands CI runs). Run inside `nix develop` for the toolchain.
-.PHONY: help install dev test lint format build wheel
+.PHONY: help install dev test lint format build wheel tag tag-beta
 
 help:
 	@echo "make install  install backend (editable) and frontend dependencies"
@@ -10,6 +10,8 @@ help:
 	@echo "make format   ruff format"
 	@echo "make build    typecheck and build the frontend"
 	@echo "make wheel    build the PyPI wheel with the UI and plugin bundled in"
+	@echo "make tag      start a release: bump the version and open the release PR (merging it publishes)"
+	@echo "make tag-beta same, as a pre-release (PyPI pre-release, no :latest image)"
 
 install:
 	cd backend && pip install -e ".[dev]"
@@ -42,3 +44,9 @@ build:
 
 wheel:
 	scripts/build-wheel.sh
+
+tag:
+	scripts/tag.sh
+
+tag-beta:
+	scripts/tag.sh --beta
