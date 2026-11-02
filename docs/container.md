@@ -10,7 +10,7 @@ The image is the UI only. netlab, Ansible and containerlab stay on the host, ins
 docker compose -f https://github.com/Muddyblack/netlab-ui.git up -d
 ```
 
-No checkout needed: compose reads the file from the repository (plain `https://raw...` URLs are not supported by compose, only git and OCI ones; it needs `git` on the host). From a checkout, plain `docker compose up -d` does the same. A one-shot `init` service first creates `~/.netlab` and the labs folder (`~/netlab-labs`, or `LABS_DIR`) owned by you, because Docker would otherwise create missing bind-mount folders as root and the UI runs netlab as the owner of `~/.netlab`.
+No checkout needed: compose reads the file from the repository (plain `https://raw...` URLs are not supported by compose, only git and OCI ones; it needs `git` on the host). Compose asks you to confirm the variables it will use, as it does for any remote file: answer `Y`, or add `-y`. From a checkout, plain `docker compose up -d` does the same. A one-shot `init` service first creates `~/.netlab` and the labs folder (`~/netlab-labs`, or `LABS_DIR`) owned by you, because Docker would otherwise create missing bind-mount folders as root and the UI runs netlab as the owner of `~/.netlab`.
 
 Open `http://localhost:8000`. The equivalent `docker run`:
 
