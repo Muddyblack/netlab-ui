@@ -88,6 +88,9 @@ def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     """
     env = dict(os.environ)
     env["PYTHONUNBUFFERED"] = "1"
+    # Tells netlab's own tool definitions (netsim/tools/netlab_ui.yml) that the UI started this command,
+    # so `netlab down` run from the UI does not remove the UI's container out from under it.
+    env["NETLAB_UI_RUN"] = "1"
     # Prepend the resolved netlab's bin/ so a netlab living in its own venv finds
     # that venv's ansible-playbook / containerlab rather than a host copy.
     env["PATH"] = location.child_path()

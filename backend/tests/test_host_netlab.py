@@ -176,3 +176,11 @@ def test_a_netlab_behind_an_absolute_symlink_is_found(on_host):
 def test_a_symlink_loop_does_not_hang(on_host):
     os.symlink("/loop", on_host / "loop")
     host.host_file("/loop")
+
+
+def test_commands_started_by_the_ui_say_so_on_the_host(on_host):
+    """netlab's netlab-ui tool skips removing the UI container when $NETLAB_UI_RUN is set; the host
+    command starts from a cleared environment, so the marker has to be forwarded explicitly."""
+    env = {**os.environ, "NETLAB_UI_RUN": "1"}
+    argv, _ = location.spawn_args(["netlab", "down"], env, "/home/alice/labs/l1")
+    assert "NETLAB_UI_RUN=1" in argv
