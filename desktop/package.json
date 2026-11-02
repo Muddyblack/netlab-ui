@@ -32,7 +32,6 @@
         "minimatch": "3.1.5"
       },
       "@electron/universal": {
-        "minimatch": "9.0.9",
         "dir-compare": {
           "minimatch": "3.1.5"
         }
