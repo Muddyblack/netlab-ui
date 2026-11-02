@@ -1,5 +1,9 @@
-# netlab-ui as a container — `docker compose up -d`, then open
-# http://localhost:8000.
+# netlab-ui as a container. No checkout needed, one command, then open
+# http://localhost:8000 :
+#
+#   docker compose -f https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/docker-compose.yml up -d
+#
+# (or `docker compose up -d` from a checkout). Labs live in ~/netlab-labs (LABS_DIR=... to change).
 #
 # The UI only: netlab, Ansible and containerlab stay on the host, where you
 # installed them (pipx, pip, a venv, your distro or Nix: any of them). The
@@ -7,8 +11,8 @@
 # (privileged + pid: host below), so there is nothing to point it at and no
 # second netlab to keep in step. Lab files belong to you, not root.
 #
-#   mkdir -p ~/.netlab labs     # first time: Docker would create them as root
-#   docker compose up -d
+# The one-shot `init` service creates ~/.netlab and the labs folder as you (Docker would make
+# missing bind-mount folders root-owned, and the UI runs netlab as the owner of ~/.netlab).
 #
 # The host user is the owner of ~/.netlab (override: NETLAB_UI_HOST_UID).
 # For a normal Linux host the native package (`pipx install netlab-ui`, then
@@ -29,6 +33,25 @@
 #     on the host; its owner is the user netlab runs as.
 
 services:
+  # Creates the folders the UI bind-mounts, owned by the user who owns $HOME, before it starts.
+  init:
+    image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}
+    restart: "no"
+    # Uses the image's own tools on the host's file system, so it works on any distribution
+    # (NixOS has no /bin/sh to step into). Root is only needed to chown what it creates.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        owner="$$(stat -c %u:%g "/host$$HOME_DIR")"
+        for d in "$$HOME_DIR/.netlab" "$$LABS"; do
+          [ -d "/host$$d" ] || { mkdir -p "/host$$d" && chown "$$owner" "/host$$d"; }
+        done
+    environment:
+      HOME_DIR: ${HOME}
+      LABS: ${LABS_DIR:-${HOME}/netlab-labs}
+    volumes:
+      - /:/host
+
   netlab-ui:
     image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}
     # `docker compose build` builds the same image from a checkout.
@@ -38,11 +61,14 @@ services:
       target: ui
     container_name: netlab-ui
     restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
     privileged: true
     network_mode: host
     pid: host
     environment:
-      NETLAB_WORKSPACE: ${LABS_DIR:-${PWD}/labs}
+      NETLAB_WORKSPACE: ${LABS_DIR:-${HOME}/netlab-labs}
       # The UI can deploy labs and open root shells on their nodes: keep it on
       # loopback unless you mean to expose it (set NETLAB_UI_HOST=0.0.0.0).
       UVICORN_HOST: ${NETLAB_UI_HOST:-127.0.0.1}
@@ -53,7 +79,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/run/netns:/var/run/netns
-      - ${LABS_DIR:-${PWD}/labs}:${LABS_DIR:-${PWD}/labs}
+      - ${LABS_DIR:-${HOME}/netlab-labs}:${LABS_DIR:-${HOME}/netlab-labs}
       - ${HOME}/.netlab:/root/.netlab
       # UI settings, workspaces list, assistant history.
       - netlab-ui-state:/root

@@ -280,7 +280,7 @@ def spawn_args(
 
 
 # Set for netlab whether or not the backend's own environment happens to have them too.
-_ALWAYS_FORWARD = {"PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE"}
+_ALWAYS_FORWARD = {"PYTHONUNBUFFERED", "PYTHONDONTWRITEBYTECODE", "NETLAB_UI_RUN"}
 
 
 def probe_netsim() -> dict[str, str] | None:

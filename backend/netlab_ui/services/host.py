@@ -319,8 +319,34 @@ HOST_ROOT = Path("/proc/1/root")
 
 
 def host_file(path: str | Path) -> Path:
-    """Where this container sees the host's ``path`` (an absolute path on the host)."""
-    return HOST_ROOT / str(path).lstrip("/")
+    """Where this container sees the host's ``path`` (an absolute path on the host).
+
+    Symlinks are followed *inside* the host's root. Left to the kernel, an absolute link such as
+    ``/usr/local/bin/netlab -> /home/me/venv/bin/netlab`` would be read against the container's own
+    root, where that path does not exist, and a netlab behind such a link would look missing."""
+    pending = [part for part in str(path).split("/") if part]
+    resolved = HOST_ROOT
+    links = 0
+    while pending:
+        part = pending.pop(0)
+        if part == ".":
+            continue
+        if part == "..":
+            resolved = resolved.parent if resolved != HOST_ROOT else resolved
+            continue
+        candidate = resolved / part
+        try:
+            target = os.readlink(candidate)
+        except OSError:  # not a link, or not there: plain path component
+            resolved = candidate
+            continue
+        links += 1
+        if links > 40:  # a loop
+            return candidate
+        if target.startswith("/"):
+            resolved = HOST_ROOT
+        pending = [piece for piece in target.split("/") if piece] + pending
+    return resolved
 
 
 def expand_user(path: str) -> str:

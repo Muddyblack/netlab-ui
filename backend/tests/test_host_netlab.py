@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -19,7 +20,9 @@ def on_host(monkeypatch, tmp_path):
     venv_bin.mkdir(parents=True)
     (venv_bin / "netlab").write_text("#!/home/alice/.local/share/pipx/venvs/networklab/bin/python\n")
     (root / "home/alice/.local/bin").mkdir(parents=True)
-    (root / "home/alice/.local/bin/netlab").symlink_to(venv_bin / "netlab")
+    # The link target is a host path, as pipx makes it.
+    pipx_netlab = "/home/alice/.local/share/pipx/venvs/networklab/bin/netlab"
+    os.symlink(pipx_netlab, root / "home/alice/.local/bin/netlab")
     monkeypatch.setattr(host, "reachable", lambda: True)
     monkeypatch.setattr(host, "_user", lambda: ALICE)
     monkeypatch.setattr(host, "HOST_ROOT", root)
@@ -157,3 +160,29 @@ def test_a_netlab_path_typed_in_settings_reaches_the_host_as_data_not_code(on_ho
         assert not any("rm -rf" in part or "/home/alice/bin" in part for part in argv)
     assert calls[0][1] == "/home/alice/bin/$(rm -rf ~)\n"  # ~ is the host user's home
     assert calls[1][1] == "/home/alice/bin\n"
+
+
+def test_a_netlab_behind_an_absolute_symlink_is_found(on_host):
+    """/usr/local/bin/netlab -> /home/alice/venv/bin/netlab: the link's target is a *host* path, which
+    the kernel would resolve against the container's root, where it does not exist."""
+    (on_host / "home/alice/venv/bin").mkdir(parents=True)
+    (on_host / "home/alice/venv/bin/netlab").write_text("#!/home/alice/venv/bin/python3\n")
+    (on_host / "usr/local/bin").mkdir(parents=True)
+    os.symlink("/home/alice/venv/bin/netlab", on_host / "usr/local/bin/netlab")
+    assert not os.path.exists("/home/alice/venv/bin/netlab")
+    assert host.host_file("/usr/local/bin/netlab") == on_host / "home/alice/venv/bin/netlab"
+    assert host.host_file("/usr/local/bin/netlab").exists()
+    assert location._read_shebang(Path("/usr/local/bin/netlab")) == "/home/alice/venv/bin/python3"
+
+
+def test_a_symlink_loop_does_not_hang(on_host):
+    os.symlink("/loop", on_host / "loop")
+    host.host_file("/loop")
+
+
+def test_commands_started_by_the_ui_say_so_on_the_host(on_host):
+    """netlab's netlab-ui tool skips removing the UI container when $NETLAB_UI_RUN is set; the host
+    command starts from a cleared environment, so the marker has to be forwarded explicitly."""
+    env = {**os.environ, "NETLAB_UI_RUN": "1"}
+    argv, _ = location.spawn_args(["netlab", "down"], env, "/home/alice/labs/l1")
+    assert "NETLAB_UI_RUN=1" in argv
