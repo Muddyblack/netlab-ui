@@ -74,7 +74,22 @@ _RANGE = re.compile(r"^(?P<prefix>.*?)(?P<lo>\d+)\s*-\s*(?P=prefix)?(?P<hi>\d+)$
 _WILDCARDS = re.compile(r"[*?#]")
 _MAX_EXPRESSION = 200  # node names are short; a longer pattern is a typo or an attempt to stall the matcher
 _REGEX_SYNTAX = re.compile(r"[\\()|^$+{}\[\]]")
-_NESTED_QUANTIFIER = re.compile(r"\([^()]*[+*}][^()]*\)[+*{]")  # (a+)+ and friends: catastrophic backtracking
+
+
+def _nests_quantifiers(text: str) -> bool:
+    """True for a quantified group that itself holds a quantifier, e.g. ``(a+)+`` (catastrophic
+    backtracking). A single linear scan rather than a regex, so the check can't stall either."""
+    inner_quantified: list[bool] = []
+    for index, char in enumerate(text):
+        if char == "(":
+            inner_quantified.append(False)
+        elif char in "+*}" and inner_quantified:
+            inner_quantified[-1] = True
+        elif char == ")" and inner_quantified:
+            had_quantifier = inner_quantified.pop()
+            if had_quantifier and text[index + 1 : index + 2] in {"+", "*", "{"}:  # noqa: SIM102
+                return True
+    return False
 
 
 def _number_test(bounds: list[tuple[str, str]]):
@@ -110,7 +125,7 @@ def select(expression: str, names: list[str]) -> list[str] | None:
         bounds = [(part.split("-")[0], part.split("-")[-1]) for part in hostlist.group("spec").split(",")]
         return _numbered(names, hostlist.group("prefix"), hostlist.group("suffix"), bounds)
     if _REGEX_SYNTAX.search(text):
-        if _NESTED_QUANTIFIER.search(text):
+        if _nests_quantifiers(text):
             raise ValueError(f"{text!r} nests quantifiers, which can stall the matcher")
         try:
             pattern = re.compile(text, re.IGNORECASE)
