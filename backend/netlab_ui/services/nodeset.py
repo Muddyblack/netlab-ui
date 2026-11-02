@@ -74,6 +74,7 @@ _RANGE = re.compile(r"^(?P<prefix>.*?)(?P<lo>\d+)\s*-\s*(?P=prefix)?(?P<hi>\d+)$
 _WILDCARDS = re.compile(r"[*?#]")
 _MAX_EXPRESSION = 200  # node names are short; a longer pattern is a typo or an attempt to stall the matcher
 _REGEX_SYNTAX = re.compile(r"[\\()|^$+{}\[\]]")
+_NESTED_QUANTIFIER = re.compile(r"\([^()]*[+*}][^()]*\)[+*{]")  # (a+)+ and friends: catastrophic backtracking
 
 
 def _number_test(bounds: list[tuple[str, str]]):
@@ -109,6 +110,8 @@ def select(expression: str, names: list[str]) -> list[str] | None:
         bounds = [(part.split("-")[0], part.split("-")[-1]) for part in hostlist.group("spec").split(",")]
         return _numbered(names, hostlist.group("prefix"), hostlist.group("suffix"), bounds)
     if _REGEX_SYNTAX.search(text):
+        if _NESTED_QUANTIFIER.search(text):
+            raise ValueError(f"{text!r} nests quantifiers, which can stall the matcher")
         try:
             pattern = re.compile(text, re.IGNORECASE)
         except re.error as exc:

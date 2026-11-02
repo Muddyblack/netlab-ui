@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -18,21 +19,19 @@ def read_node_files(topology_path: str | Path, node: str) -> list[dict[str, str]
     """Return textual files below ``node_files/<node>`` in stable path order."""
     if not is_safe_node_name(node):
         return []
-    node_files = (Path(topology_path).resolve().parent / "node_files").resolve()
-    # node is regex-validated above; containment is checked below before any read.
-    root = (node_files / node).resolve()  # lgtm[py/path-injection]
-    if not root.is_relative_to(node_files):
+    node_files = os.path.realpath(os.path.join(os.path.dirname(os.path.realpath(topology_path)), "node_files"))
+    root_name = os.path.realpath(os.path.join(node_files, node))
+    if not root_name.startswith(node_files + os.sep) or not os.path.isdir(root_name):
         return []
-    if not root.is_dir():
-        return []
+    root = Path(root_name)
 
     files: list[dict[str, str]] = []
-    # root was validated above; each candidate is re-checked with is_relative_to below.
-    for path in sorted(root.rglob("*")):  # lgtm[py/path-injection]
+    for path in sorted(root.rglob("*")):
         try:
-            candidate = path.resolve()
-            if not candidate.is_relative_to(root) or not candidate.is_file():
+            candidate_name = os.path.realpath(path)
+            if not candidate_name.startswith(root_name + os.sep) or not os.path.isfile(candidate_name):
                 continue
+            candidate = Path(candidate_name)
             if candidate.stat().st_size > MAX_FILE_BYTES:
                 continue
             raw = candidate.read_bytes()

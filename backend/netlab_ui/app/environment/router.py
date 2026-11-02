@@ -84,14 +84,14 @@ def _resolve_candidate(path: str) -> str | None:
         return _resolve_on_host(path)
     if os.path.sep in path or (os.altsep and os.altsep in path):
         candidate = Path(path).expanduser()
-        # lgtm[py/path-injection] -- by design: this is a Settings-UI feature letting an
+        # By design: this is a Settings-UI feature letting an
         # operator point the backend at any netlab install on the host, so there is no
         # workspace/root to contain it to. It's gated by is_file()/name/X_OK below and by
         # `_runs_as_netlab` actually invoking the binary before it's trusted.
         resolved = candidate.resolve() if candidate.is_file() else None
     else:
         found = shutil.which(path)
-        resolved = Path(found).resolve() if found else None  # lgtm[py/path-injection] -- see rationale above
+        resolved = Path(found).resolve() if found else None
     if resolved is None or resolved.name.lower() not in {"netlab", "netlab.exe"}:
         return None
     if not os.access(resolved, os.X_OK):
