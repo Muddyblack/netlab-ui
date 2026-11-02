@@ -1,7 +1,7 @@
 # netlab-ui as a container. No checkout needed, one command, then open
 # http://localhost:8000 :
 #
-#   docker compose -f https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/docker-compose.yml up -d
+#   docker compose -f https://github.com/Muddyblack/netlab-ui.git up -d
 #
 # (or `docker compose up -d` from a checkout). Labs live in ~/netlab-labs (LABS_DIR=... to change).
 #
@@ -54,6 +54,10 @@ services:
 
   netlab-ui:
     image: ghcr.io/muddyblack/netlab-ui:${NETLAB_UI_TAG:-latest}
+    # Pull the published image on `up` instead of building it (the build section below would win
+    # for a user who has no local image, e.g. running this file straight from its git URL).
+    # From a checkout, `docker compose up --build` still builds it.
+    pull_policy: always
     # `docker compose build` builds the same image from a checkout.
     build:
       context: .
