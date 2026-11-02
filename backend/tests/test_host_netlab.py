@@ -20,7 +20,9 @@ def on_host(monkeypatch, tmp_path):
     venv_bin.mkdir(parents=True)
     (venv_bin / "netlab").write_text("#!/home/alice/.local/share/pipx/venvs/networklab/bin/python\n")
     (root / "home/alice/.local/bin").mkdir(parents=True)
-    os.symlink("/home/alice/.local/share/pipx/venvs/networklab/bin/netlab", root / "home/alice/.local/bin/netlab")  # a host path, as pipx makes it
+    # The link target is a host path, as pipx makes it.
+    pipx_netlab = "/home/alice/.local/share/pipx/venvs/networklab/bin/netlab"
+    os.symlink(pipx_netlab, root / "home/alice/.local/bin/netlab")
     monkeypatch.setattr(host, "reachable", lambda: True)
     monkeypatch.setattr(host, "_user", lambda: ALICE)
     monkeypatch.setattr(host, "HOST_ROOT", root)
