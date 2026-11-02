@@ -54,3 +54,4 @@ labs/
 backend/netlab_ui/_frontend/
 backend/netlab_ui/_monitoring_plugin/
 backend/dist/
+backend/build/
