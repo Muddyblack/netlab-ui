@@ -20,6 +20,14 @@ let eventSource: EventSource | null = null;
 const eventHandlers = new Set<(event: BackendEvent) => void>();
 
 export type HealthStatus = Schemas["HealthStatus"];
+/** GET /api/update (not in generated.ts until `npm run gen:api` is rerun). */
+export interface UpdateStatus {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  releaseUrl: string;
+  upgradeCommand: string | null;
+}
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
 export type HostDiagnostics = Schemas["HostDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
@@ -259,6 +267,8 @@ export const api = {
   // cannot leave the gate apparently frozen behind the generic 3-attempt
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
+
+  getUpdateStatus: () => http<UpdateStatus>("/api/update", undefined, 1, 8000),
 
   getHostDiagnostics: (refresh = false) =>
     http<HostDiagnostics>(`/api/environment/host${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),

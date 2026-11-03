@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from netlab_ui.app.auth import BasicAuthMiddleware, configured_token, configured_users
 from netlab_ui.app.contract.responses import HealthStatus
@@ -31,7 +32,7 @@ from netlab_ui.app.plugins.router import router as plugins_router
 from netlab_ui.app.schema.router import router as schema_router
 from netlab_ui.app.shell.ws import router as shell_router
 from netlab_ui.app.user_state import router as user_state_router
-from netlab_ui.services import assistant, events, lab_limits, monitoring
+from netlab_ui.services import assistant, events, host, lab_limits, monitoring, updates
 from netlab_ui.services.netlab import runner
 
 logger = logging.getLogger(__name__)
@@ -202,6 +203,27 @@ def health():
         "minNetlabVersion": runner.MIN_NETLAB_VERSION,
         "netlabComponents": runner.cached_version_components(),
     }
+
+
+class UpdateStatus(BaseModel):
+    current: str
+    latest: str | None = None
+    available: bool
+    releaseUrl: str
+    upgradeCommand: str | None = None
+
+
+# Plain `def`: the lookup is a blocking HTTP call (cached for hours, so it is rare).
+@app.get("/api/update", response_model=UpdateStatus)
+def update_status():
+    """Is a newer netlab-ui release on PyPI? The UI shows a notice the user can dismiss per version."""
+    if host.in_container():
+        command = ["docker", "compose", "pull", "&&", "docker", "compose", "up", "-d"]
+    else:
+        from netlab_ui import cli
+
+        command = cli.upgrade_command()
+    return updates.status(APP_VERSION, command)
 
 
 # In dev, the frontend runs on its own Vite server (:5173) and CORS above
