@@ -127,7 +127,17 @@ def is_deployed(lab_dir: Path) -> bool:
     return (lab_dir / SNAPSHOT).is_file()
 
 
-async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, dict[str, Any]]:
+def public_address(requested: str | None = None) -> str | None:
+    """The address a browser reaches this UI at: the request's host, else ``NETLAB_UI_PUBLIC_HOST``.
+
+    netlab guesses it from ``SSH_CONNECTION`` (the SSH endpoint of whoever started the UI), which is not
+    where the browser went and is refused when the UI listens on loopback only."""
+    return (requested or "").strip() or os.environ.get("NETLAB_UI_PUBLIC_HOST", "").strip() or None
+
+
+async def _bridge(
+    lab_dir: Path, *args: str, timeout: float = 20, address: str | None = None
+) -> tuple[int, dict[str, Any]]:
     """Run the bridge in ``lab_dir`` (any directory for ``host`` commands)."""
     python = location.target_python()
     if not python:
@@ -135,7 +145,10 @@ async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, 
     # Passed as -c, not by path: when netlab runs on the host, this file is not there. -c puts the
     # working directory (the lab) first on sys.path; drop it so a lab's own json.py cannot shadow imports.
     script = "import sys\nif sys.path and sys.path[0] == '': del sys.path[0]\n" + BRIDGE.read_text()
-    argv, env = location.spawn_args([python, "-c", script, *args], runner._child_env(lab_dir), lab_dir)
+    child_env = runner._child_env(lab_dir)
+    if public := public_address(address):
+        child_env["NETLAB_UI_PUBLIC_ADDR"] = public
+    argv, env = location.spawn_args([python, "-c", script, *args], child_env, lab_dir)
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=str(lab_dir),
@@ -159,11 +172,11 @@ async def _bridge(lab_dir: Path, *args: str, timeout: float = 20) -> tuple[int, 
     return proc.returncode or 0, data if isinstance(data, dict) else {}
 
 
-async def deployed_tools(lab_dir: Path) -> dict[str, dict[str, Any]]:
+async def deployed_tools(lab_dir: Path, address: str | None = None) -> dict[str, dict[str, Any]]:
     """Tools of the deployed lab with their rendered message and containers."""
     if not is_deployed(lab_dir):
         return {}
-    _code, data = await _bridge(lab_dir, "info")
+    _code, data = await _bridge(lab_dir, "info", address=address)
     tools = data.get("tools")
     return tools if isinstance(tools, dict) else {}
 
@@ -191,10 +204,10 @@ def urls(message: str) -> list[str]:
     return list(dict.fromkeys(url.rstrip(".,)") for url in _URL_RE.findall(message or "")))
 
 
-async def lab_tools(lab_dir: Path, attrs: dict[str, Any]) -> list[dict[str, Any]]:
+async def lab_tools(lab_dir: Path, attrs: dict[str, Any], address: str | None = None) -> list[dict[str, Any]]:
     """The catalog annotated for one lab: enabled, deployed, running, URLs."""
     wanted = enabled(attrs)
-    deployed = await deployed_tools(lab_dir)
+    deployed = await deployed_tools(lab_dir, address)
     known = {item["id"] for item in catalog()}
     items = catalog() + [
         {"id": tool, "title": tool, "description": "", "runtime": "", "canConnect": False, "docsUrl": DOCS}
@@ -219,11 +232,11 @@ async def lab_tools(lab_dir: Path, attrs: dict[str, Any]) -> list[dict[str, Any]
     return list({item["id"]: item for item in result}.values())
 
 
-async def action(lab_dir: Path, tool: str, what: str) -> runner.CommandResult:
+async def action(lab_dir: Path, tool: str, what: str, address: str | None = None) -> runner.CommandResult:
     """Start (``up``) or stop (``down``) one tool of the deployed lab."""
     if not is_deployed(lab_dir):
         return runner.CommandResult(1, "", "The lab isn't deployed — its tools start with it.")
-    code, data = await _bridge(lab_dir, what, tool, timeout=300)
+    code, data = await _bridge(lab_dir, what, tool, timeout=300, address=address)
     output = _clean(str(data.get("output") or ""))
     message = str(data.get("message") or "")
     if code or not data.get("ok"):

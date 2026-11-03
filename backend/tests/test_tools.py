@@ -105,3 +105,22 @@ def test_netlab_children_get_the_lab_directory_as_pwd(tmp_path):
 
     # netlab's Ansible playbooks find the lab through $PWD, not the process cwd.
     assert runner._child_env(tmp_path)["PWD"] == str(tmp_path.resolve())
+
+
+def test_bridge_uses_the_address_the_browser_used(monkeypatch):
+    import importlib.util
+    from types import SimpleNamespace
+
+    from netlab_ui.services.netlab import tools
+
+    spec = importlib.util.spec_from_file_location("bridge", tools.BRIDGE)
+    bridge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    monkeypatch.delenv("NETLAB_UI_PUBLIC_ADDR", raising=False)
+    topology = SimpleNamespace(sys=SimpleNamespace())
+    bridge._set_address(topology, "10.0.0.5")  # netlab's SSH-endpoint guess
+    assert (topology.sys.ipaddr, topology.sys.ipurl) == ("10.0.0.5", "10.0.0.5")
+    monkeypatch.setenv("NETLAB_UI_PUBLIC_ADDR", "fd00::1")
+    bridge._set_address(topology, "10.0.0.5")
+    assert (topology.sys.ipaddr, topology.sys.ipurl) == ("[fd00::1]", "[fd00::1]")
+    assert tools.public_address("lab.example") == "lab.example"
