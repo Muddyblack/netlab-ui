@@ -39,6 +39,13 @@ function describeSaveError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  config: "chosen here (Settings)",
+  env: "NETLAB_BIN environment variable",
+  path: "first netlab on PATH",
+  default: "not found",
+};
+
 export interface SettingsEnvironmentTabProps {
   active: boolean;
   onEnvironmentChanged: () => void;
@@ -88,6 +95,12 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
     <Stack spacing={2.5}>
       {envError && <Alert severity="error">{envError}</Alert>}
 
+      {(environment?.warnings ?? []).map((warning) => (
+        <Alert key={warning} severity="warning">
+          {warning}
+        </Alert>
+      ))}
+
       <ContainerSetupPanel active={active} />
       <HostSetupPanel active={active} />
 
@@ -125,7 +138,13 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
           <Stack spacing={1.25}>
             <InfoRow label="Netlab executable" value={environment?.binPath || environment?.command} />
             <InfoRow label="Netlab version" value={cleanVersion(environment?.netlabVersion)} />
-            <InfoRow label="Resolution source" value={environment?.source} />
+            <InfoRow label="Resolution source" value={SOURCE_LABELS[environment?.source ?? ""] ?? environment?.source} />
+            <InfoRow label="netsim package" value={environment?.netsimDir} />
+            <InfoRow label="netsim version" value={cleanVersion(environment?.netsimVersion)} />
+            <InfoRow
+              label="Extra environment"
+              value={Object.entries(environment?.toolEnv ?? {}).map(([k, v]) => `${k}=${v}`).join("  ") || undefined}
+            />
             <InfoRow label="Target Python" value={environment?.targetPython} />
             <InfoRow label="Netlab config path" value={environment?.configPath} />
           </Stack>

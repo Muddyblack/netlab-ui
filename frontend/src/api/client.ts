@@ -110,6 +110,10 @@ export interface NetlabEnvironment {
   minNetlabVersion?: string | null;
   containerlab: boolean;
   libvirt: boolean;
+  netsimDir?: string | null;
+  netsimVersion?: string | null;
+  toolEnv?: Record<string, string>;
+  warnings?: string[];
 }
 /**
  * What the canvas nodes/edges in a snapshot actually are.

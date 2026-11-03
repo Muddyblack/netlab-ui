@@ -75,6 +75,10 @@ class NetlabEnvironment(BaseModel):
     minNetlabVersion: str | None = None
     containerlab: bool = False
     libvirt: bool = False
+    netsimDir: str | None = None
+    netsimVersion: str | None = None
+    toolEnv: dict[str, str] = {}
+    warnings: list[str] = []
 
 
 class ContainerCheck(BaseModel):
