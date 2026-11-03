@@ -144,14 +144,15 @@ The canvas is powered by [**clab-ui**](https://github.com/srl-labs/containerlab-
 
 ## Quick start
 
-On Linux, install the package (it uses the netlab and containerlab you already have; `netlab-ui upgrade` updates it):
+netlab-ui is the one tool to install. It finds your netlab, or installs one for you in a private environment, and drives it from there (`netlab-ui upgrade` updates the UI itself):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/packaging/install.sh | bash
 netlab-ui                  # then open http://127.0.0.1:8000
+netlab-ui netlab install   # only if you have no netlab yet (or press "Install netlab for me" in Settings → Environment)
 ```
 
-See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it runs the netlab and containerlab you have on the host, as you, on any distribution:
+Already have netlab, or a checkout you test pull requests with? It uses the first `netlab` on your PATH, or `netlab-ui netlab use /path/to/netlab` (plus `[tools.env]` for a `PYTHONPATH`). See [docs/install.md](docs/install.md) for options, NixOS and updating. Or run the UI as a container; it runs the netlab and containerlab you have on the host, as you, on any distribution:
 
 ```bash
 docker compose -f https://github.com/Muddyblack/netlab-ui.git up -d        # answer Y at the prompt (or add -y); labs live in ~/netlab-labs

@@ -12,7 +12,7 @@ Add options after `bash -s --`, for example `... | bash -s -- --with-netlab --se
 
 | Option | Does |
 | --- | --- |
-| `--with-netlab` | also installs netlab and Ansible (skip if you already have netlab) |
+| `--with-netlab` | also lets netlab-ui install netlab and Ansible in a private environment (`netlab-ui netlab install`); skip it if you already have netlab |
 | `--with-containerlab` | runs containerlab's own installer: Docker, containerlab, the `clab_admins` group (asks for sudo) |
 | `--service` | installs a systemd user service that starts at boot |
 | `--version X.Y.Z` | installs that release instead of the latest |
@@ -49,6 +49,19 @@ It checks that the service really started and answers on its port, and prints th
   ```
 
   A flag (`--port`) wins over an environment variable (`UVICORN_PORT`), which wins over the file. Restart the service after editing it.
+
+## netlab-ui installs and controls netlab
+
+netlab-ui is the tool you install; it finds, installs and runs netlab for you. It uses the first `netlab` on your PATH, or the one you chose, or a private copy it installs itself:
+
+```bash
+netlab-ui netlab status         # which netlab is used, where that came from, whether a private copy exists
+netlab-ui netlab install        # install or update a private netlab (venv + Ansible); the UI uses it from then on
+netlab-ui netlab use PATH       # use a netlab you already have (checked with `netlab version` first)
+netlab-ui netlab run up         # run the chosen netlab with the configured PATH and environment
+```
+
+`netlab-ui` prints a note at start-up when it finds no netlab, and the UI offers the same install (below).
 
 ## No netlab yet? Let netlab-ui install it
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import importlib.metadata
 import json
 import os
@@ -15,6 +16,7 @@ from pathlib import Path
 
 from netlab_ui import config, service, window
 from netlab_ui.app import auth
+from netlab_ui.services.netlab import location, managed, runner
 
 
 def _load_settings() -> config.Settings | None:
@@ -49,6 +51,12 @@ def _serve(args: argparse.Namespace) -> int:
             f"warning: listening on {host} without a login: anyone who can reach port {port} can deploy labs\n"
             "and read and change your lab files. Create a token with `netlab-ui token`,\n"
             "or set NETLAB_UI_AUTH=user:password.",
+            file=sys.stderr,
+        )
+    if not location.is_installed():
+        print(
+            "note: no netlab was found. Install one with `netlab-ui netlab install` (a private copy, nothing "
+            "system-wide) or use your own: `netlab-ui netlab use /path/to/netlab`. The UI offers the same.",
             file=sys.stderr,
         )
     if args.app:
@@ -91,6 +99,76 @@ def _config(_args: argparse.Namespace) -> int:
     for tool in service.TOOLS:
         print(f"  {tool:<17}{shutil.which(tool, path=search) or 'not found'}")
     return 0
+
+
+def _netlab_install(_args: argparse.Namespace) -> int:
+    """Create or update the netlab that netlab-ui manages, and use it."""
+    info = managed.status()
+    if not info["canInstall"]:
+        print("python3 was not found: install Python 3.10 or newer (with its venv module) first.", file=sys.stderr)
+        return 1
+    print(f"{'updating' if info['installed'] else 'installing'} netlab in {info['directory']} ({info['where']})")
+
+    async def run() -> int:
+        code = 1
+        async for stream, line in managed.install():
+            if stream == "exit":
+                code = int(line)
+            else:
+                print(line, end="", file=sys.stderr if stream == "stderr" else sys.stdout, flush=True)
+        return code
+
+    return asyncio.run(run())
+
+
+def _netlab_status(_args: argparse.Namespace) -> int:
+    """Which netlab the UI uses, where that came from, and what netlab-ui itself could install."""
+    settings = _load_settings()
+    if settings is None:
+        return 2
+    config.apply_tools(settings)
+    resolution = location.resolve()
+    info = managed.status()
+    if not resolution.found:
+        print("netlab       not found")
+    else:
+        version = runner.cached_version()
+        print(f"netlab       {resolution.bin_path}  ({(version or 'version unknown').strip()})")
+        print(f"chosen by    {resolution.source}")
+    print(f"managed copy {info['directory']}  ({'installed' if info['installed'] else 'not installed'})")
+    if not resolution.found or not info["installed"]:
+        print("install one  netlab-ui netlab install")
+    return 0 if resolution.found else 1
+
+
+def _netlab_use(args: argparse.Namespace) -> int:
+    """Make the UI use this netlab (an executable path, or a name on PATH)."""
+    from netlab_ui.app.environment import router as environment
+
+    resolved = environment._resolve_candidate(args.path)
+    if not resolved:
+        print(f"no netlab executable at {args.path!r}", file=sys.stderr)
+        return 1
+    if not environment._runs_as_netlab(resolved):
+        print(f"{resolved} was found but `netlab version` did not run", file=sys.stderr)
+        return 1
+    location.set_configured_bin(resolved)
+    print(f"netlab-ui now uses {resolved}")
+    return 0
+
+
+def _netlab_run(args: argparse.Namespace) -> int:
+    """Run the netlab the UI uses, with the configured PATH and environment: `netlab-ui netlab run up`."""
+    settings = _load_settings()
+    if settings is None:
+        return 2
+    config.apply_tools(settings)
+    if not location.is_installed():
+        print("no netlab found: run `netlab-ui netlab install`", file=sys.stderr)
+        return 127
+    env = {**os.environ, "PATH": location.child_path()}
+    command = location.netlab_command()
+    os.execve(command, [command, *args.args], env)  # replaces this process; never returns
 
 
 def _install_service(args: argparse.Namespace) -> int:
@@ -224,6 +302,21 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = sub.add_parser("config", help="show the config file location and the settings the server will use")
     cfg.set_defaults(func=_config)
+
+    nl = sub.add_parser("netlab", help="install and control the netlab this UI drives")
+    nl_sub = nl.add_subparsers(dest="netlab_command", required=True)
+    nl_sub.add_parser("install", help="install (or update) netlab in a private environment and use it").set_defaults(
+        func=_netlab_install
+    )
+    nl_sub.add_parser("status", help="which netlab the UI uses and where it came from").set_defaults(
+        func=_netlab_status
+    )
+    use = nl_sub.add_parser("use", help="use a netlab you already have")
+    use.add_argument("path", help="the netlab executable, e.g. ~/venvs/netlab/bin/netlab")
+    use.set_defaults(func=_netlab_use)
+    run = nl_sub.add_parser("run", help="run the netlab the UI uses: netlab-ui netlab run up")
+    run.add_argument("args", nargs=argparse.REMAINDER, help="arguments for netlab")
+    run.set_defaults(func=_netlab_run)
 
     svc = sub.add_parser("install-service", help="install and start a systemd service")
     svc.add_argument("--system", action="store_true", help="system-wide unit (needs root) instead of a user unit")

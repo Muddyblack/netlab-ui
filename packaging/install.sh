@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/Muddyblack/netlab-ui/main/packaging/install.sh | bash
 #
 # Options (pass after `bash -s --` when piping):
-#   --with-netlab          also install netlab and Ansible next to the GUI (skip if you already have netlab)
+#   --with-netlab          also let netlab-ui install netlab and Ansible in a private environment (netlab-ui netlab install)
 #   --with-containerlab    also run containerlab's installer (Docker, containerlab, the clab_admins group); needs sudo
 #   --service              install and start a systemd user service
 #   --version X.Y.Z        install a specific release instead of the latest
@@ -16,7 +16,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage: install.sh [options]   (when piping: curl -fsSL <url> | bash -s -- [options])
-  --with-netlab          also install netlab and Ansible next to the GUI (skip if you already have netlab)
+  --with-netlab          also let netlab-ui install netlab and Ansible in a private environment (netlab-ui netlab install)
   --with-containerlab    also run containerlab's installer (Docker, containerlab, the clab_admins group); needs sudo
   --service              install and start a systemd user service
   --version X.Y.Z        install a specific release instead of the latest
@@ -64,14 +64,17 @@ if ! command -v pipx >/dev/null; then
 fi
 
 spec="$PACKAGE"
-[[ $with_netlab -eq 1 ]] && spec="$PACKAGE[netlab]"
 [[ -n "$version" ]] && spec="$spec==$version"
 
 say "installing $spec"
-# --include-deps also puts netlab's and Ansible's commands on PATH; without it only `netlab-ui` is exposed.
-pipx_args=(install --force)
-[[ $with_netlab -eq 1 ]] && pipx_args+=(--include-deps)
-pipx "${pipx_args[@]}" "$spec"
+pipx install --force "$spec"
+
+# netlab-ui installs and controls netlab itself: it uses the one on PATH, or installs its own (never system-wide).
+export PATH="$HOME/.local/bin:$PATH"
+if [[ $with_netlab -eq 1 ]]; then
+  say "installing netlab in a private environment (netlab-ui netlab install)"
+  netlab-ui netlab install
+fi
 
 if [[ $with_clab -eq 1 ]]; then
   say "installing containerlab (Docker, containerlab and the clab_admins group; asks for sudo)"
@@ -101,6 +104,7 @@ else
 EOF
 fi
 cat <<EOF
+  netlab            netlab-ui netlab status   (install: netlab-ui netlab install, use yours: netlab-ui netlab use PATH)
   settings          netlab-ui config
   update later      netlab-ui upgrade
 The first time you open the UI it checks this machine (netlab, containerlab, Docker access) and says what is missing.
