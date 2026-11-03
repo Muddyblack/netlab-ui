@@ -1,5 +1,11 @@
 # Working with running labs
 
+## Locked and read-only labs
+
+Every lab opens **locked**, so a stray click cannot move nodes: press the lock in the toolbar (or "Unlock to edit" in the hint at the top) to edit. The hint goes away for good once you have unlocked a lab.
+
+A lab in a folder that is **not one of your workspaces** is read-only: the backend only writes inside workspaces. The UI says so and offers **Add folder as workspace**, which adds the lab's folder and reopens the lab editable. Workspaces can also be managed from the folder browser.
+
 ## Shortcuts
 
 | Keys | Opens |
