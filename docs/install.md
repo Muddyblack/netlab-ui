@@ -43,11 +43,43 @@ It checks that the service really started and answers on its port, and prints th
   [tools]
   path = ["~/.local/bin"]                  # searched for netlab, ansible-playbook, containerlab
   netlab = "~/venvs/netlab/bin/netlab"     # optional: the netlab executable itself
+
+  [tools.env]
+  PYTHONPATH = "~/scratch/netlab"          # optional: set for every netlab command
   ```
 
   A flag (`--port`) wins over an environment variable (`UVICORN_PORT`), which wins over the file. Restart the service after editing it.
 
+## Using a netlab checkout or another version
+
+The service does not see your terminal, so a `PATH` or `PYTHONPATH` you set in your shell (for example to test a netlab pull request from a scratch directory) never reaches it. Put them in the config file instead:
+
+```toml
+[tools]
+netlab = "~/scratch/netlab/bin/netlab"   # or put its directory in `path`
+
+[tools.env]
+PYTHONPATH = "~/scratch/netlab"
+```
+
+The variables are set for every netlab command and for the check that reads netlab's version. `netlab-ui config` lists what the server will use; Settings → Environment shows which netlab it found.
+
+## Links to lab tools (Graphite, Grafana, Edgeshark, ...)
+
+netlab builds these links from `SSH_CONNECTION`, the SSH endpoint of whoever started the UI, which a browser on another machine usually cannot use. The UI therefore puts **the address your browser used to reach it** into the links (`sys.ipaddr` and `sys.ipurl`), so a link works wherever the UI does: through an SSH tunnel (`ssh -L 8000:127.0.0.1:8000 host`, then `localhost`) or on the host's own address.
+
+To use one fixed address instead (for example a DNS name in front of the host), set it in the config; commands the UI starts, such as `netlab up`, print it too:
+
+```toml
+[server]
+public_host = "lab.example.net"          # or NETLAB_UI_PUBLIC_HOST
+```
+
+The UI listens on `127.0.0.1` by default; over SSH use a tunnel, or set `host = "0.0.0.0"` together with a token (see Remote access).
+
 ## Updating
+
+The UI tells you when a newer release is on PyPI (a notice you can close; it comes back only for a still newer release). It asks PyPI at most every few hours; set `NETLAB_UI_UPDATE_CHECK=off` to turn the lookup off. A source checkout or dev build is never checked.
 
 ```bash
 netlab-ui upgrade           # install the newest release and restart the user service
