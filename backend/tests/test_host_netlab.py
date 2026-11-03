@@ -186,3 +186,18 @@ def test_commands_started_by_the_ui_say_so_on_the_host(on_host):
     env = {**os.environ, "NETLAB_UI_RUN": "1"}
     argv, _ = location.spawn_args(["netlab", "down"], env, "/home/alice/labs/l1")
     assert "NETLAB_UI_RUN=1" in argv
+
+
+def test_configured_tool_env_reaches_the_host(monkeypatch):
+    from netlab_ui import config
+    from netlab_ui.services import host
+    from netlab_ui.services.netlab import location
+
+    seen = {}
+    monkeypatch.setattr(location, "on_host", lambda: True)
+    monkeypatch.setattr(location, "resolve", lambda: type("R", (), {"bin_dir": None})())
+    monkeypatch.setattr(host, "command", lambda argv, extra, *_args, **_kw: seen.update(extra) or (argv, {}))
+    monkeypatch.setitem(config._tool_env, "PYTHONPATH", "/srv/netlab")
+    monkeypatch.setenv("PYTHONPATH", "/srv/netlab")
+    location.spawn_args(["netlab", "version"], {"PYTHONPATH": "/srv/netlab"})
+    assert seen["PYTHONPATH"] == "/srv/netlab"

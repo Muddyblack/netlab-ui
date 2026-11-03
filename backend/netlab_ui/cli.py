@@ -83,6 +83,10 @@ def _config(_args: argparse.Namespace) -> int:
     print(f"listen       {settings.host}:{settings.port}")
     print(f"tool path    {os.pathsep.join(settings.path) or '(none)'}")
     print(f"netlab       {settings.netlab or '(found on PATH)'}")
+    env = {**settings.env, **config._env_from_environment()}
+    print(f"tool env     {', '.join(f'{k}={v}' for k, v in env.items()) or '(none)'}")
+    public = os.environ.get("NETLAB_UI_PUBLIC_HOST") or settings.public_host
+    print(f"public host  {public or '(the host a browser request used; else netlab guesses from SSH_CONNECTION)'}")
     search = os.pathsep.join([*settings.path, os.environ.get("PATH", "")])
     for tool in service.TOOLS:
         print(f"  {tool:<17}{shutil.which(tool, path=search) or 'not found'}")

@@ -41,6 +41,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from netlab_ui import config
 from netlab_ui.services import host
 
 logger = logging.getLogger(__name__)
@@ -271,11 +272,14 @@ def spawn_args(
     env = dict(os.environ) if env is None else env
     if not on_host():
         return argv, env
+    configured = config.tool_env()
     extra = {
         key: value
         for key, value in env.items()
-        if key in _ALWAYS_FORWARD or (key != "PATH" and os.environ.get(key) != value)
+        if key in _ALWAYS_FORWARD or key in configured or (key != "PATH" and os.environ.get(key) != value)
     }
+    # What the user configured for netlab beats the container's own variables of the same name.
+    extra.update(configured)
     return host.command(argv, extra, cwd, path_prefix=resolve().bin_dir)
 
 

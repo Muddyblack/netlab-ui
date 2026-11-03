@@ -95,3 +95,21 @@ def test_serve_refuses_a_broken_config_instead_of_starting(tmp_path, monkeypatch
     monkeypatch.setenv(config.CONFIG_ENV, str(_write(tmp_path, "[server]\nport = 0\n")))
     assert cli.main(["serve"]) == 2
     assert "config problem" in capsys.readouterr().err
+
+
+def test_tool_env_and_public_host(tmp_path, monkeypatch):
+    from netlab_ui import config
+
+    file = tmp_path / "config.toml"
+    file.write_text('[server]\npublic_host = "lab.example"\n[tools.env]\nPYTHONPATH = "/srv/netlab"\n')
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    monkeypatch.delenv("NETLAB_UI_PUBLIC_HOST", raising=False)
+    monkeypatch.delenv("NETLAB_UI_TOOL_ENV", raising=False)
+    settings = config.load(file)
+    config.apply_tools(settings)
+    assert config.tool_env() == {"PYTHONPATH": "/srv/netlab"}
+    assert os.environ["NETLAB_UI_PUBLIC_HOST"] == "lab.example"
+    monkeypatch.setenv("NETLAB_UI_TOOL_ENV", '{"PYTHONPATH": "/other"}')
+    config.apply_tools(settings)
+    assert config.tool_env()["PYTHONPATH"] == "/other"
+    config._tool_env.clear()
