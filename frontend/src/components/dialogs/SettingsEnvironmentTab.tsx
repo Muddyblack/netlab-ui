@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, Box, Button, Card, Divider, Stack, TextField, Typography } from "@mui/material";
 import { api, HttpError, type HealthStatus, type NetlabEnvironment } from "../../api/client";
 import { RuntimeInfo } from "../NetlabAboutModal";
+import { ManagedNetlabCard } from "../ManagedNetlabCard";
 import { NetlabSetupHelpers } from "../NetlabSetupHelpers";
 import { ProviderSupportTable } from "../ProviderSupportTable";
 import { ContainerSetupPanel } from "../ContainerSetup";
@@ -101,6 +102,16 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
         </Alert>
       ))}
 
+      {environment && !environment.found && (
+        <ManagedNetlabCard
+          netlabFound={false}
+          onChanged={() => {
+            void loadEnvironment();
+            onEnvironmentChanged();
+          }}
+        />
+      )}
+
       <ContainerSetupPanel active={active} />
       <HostSetupPanel active={active} />
 
@@ -127,6 +138,16 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
           </Button>
         </Stack>
       </Box>
+
+      {environment?.found && (
+        <ManagedNetlabCard
+          netlabFound
+          onChanged={() => {
+            void loadEnvironment();
+            onEnvironmentChanged();
+          }}
+        />
+      )}
 
       <Divider />
 

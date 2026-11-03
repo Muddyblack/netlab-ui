@@ -115,6 +115,17 @@ export interface NetlabEnvironment {
   toolEnv?: Record<string, string>;
   warnings?: string[];
 }
+/** GET /api/environment/netlab/managed: the netlab netlab-ui can install for you in its own venv. */
+export interface ManagedNetlab {
+  directory: string;
+  installed: boolean;
+  netlabPath: string;
+  active: boolean;
+  canInstall: boolean;
+  python?: string | null;
+  packages: string[];
+  where: string;
+}
 /**
  * What the canvas nodes/edges in a snapshot actually are.
  *
@@ -279,6 +290,8 @@ export const api = {
 
   getContainerDiagnostics: (refresh = false) =>
     http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
+
+  getManagedNetlab: () => http<ManagedNetlab>("/api/environment/netlab/managed", { cache: "no-store" }, 1, 15000),
 
   getNetlabEnvironment: () =>
     http<NetlabEnvironment>("/api/environment/netlab", { cache: "no-store" }, 1, 15000),

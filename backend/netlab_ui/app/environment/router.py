@@ -36,7 +36,7 @@ from netlab_ui.app.contract.responses import (
 )
 from netlab_ui.app.lab.common import SSE_HEADERS
 from netlab_ui.services import container_env, host, host_env
-from netlab_ui.services.netlab import location, runner, setup
+from netlab_ui.services.netlab import location, managed, runner, setup
 from netlab_ui.services.netlab.logfmt import LineFilter
 
 router = APIRouter(prefix="/api/environment", tags=["environment"])
@@ -65,7 +65,8 @@ def _warnings(info: dict, version: str | None, netsim: dict | None, tool_env: di
     if not info["found"]:
         where = "on the host" if location.on_host() else "on this machine"
         result.append(
-            f"No netlab was found {where}. Install it (pipx install networklab) or pick its executable below."
+            f"No netlab was found {where}. Press “Install netlab for me” below (a private copy, nothing "
+            "system-wide), or pick the executable of one you already have."
         )
     return result
 
@@ -181,6 +182,38 @@ async def set_netlab_path(body: SetNetlabPathRequest) -> dict:
     # the response (and later health polls) reflect the newly configured netlab.
     runner.reset_version_cache()
     return _environment()
+
+
+class ManagedNetlab(BaseModel):
+    directory: str
+    installed: bool
+    netlabPath: str
+    active: bool
+    canInstall: bool
+    python: str | None = None
+    packages: list[str]
+    where: str
+
+
+@router.get("/netlab/managed", response_model=ManagedNetlab)
+def get_managed_netlab() -> dict:
+    """The netlab that netlab-ui can install for you in its own virtual environment."""
+    return managed.status()
+
+
+@router.post("/netlab/install/stream", response_model=None)
+async def install_managed_netlab():
+    """Create or update the managed netlab (venv + ``pip install networklab ansible``) and stream the output
+    (``{stream, line}`` then ``{done, code}``). On success the UI uses it. Closing the stream stops pip."""
+
+    async def gen():
+        async for stream, line in managed.install():
+            if stream == "exit":
+                yield f"data: {json.dumps({'done': True, 'code': int(line)})}\n\n"
+            else:
+                yield f"data: {json.dumps({'stream': stream, 'line': line})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @router.get("/container", response_model=ContainerDiagnostics)

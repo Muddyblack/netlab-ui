@@ -50,6 +50,12 @@ It checks that the service really started and answers on its port, and prints th
 
   A flag (`--port`) wins over an environment variable (`UVICORN_PORT`), which wins over the file. Restart the service after editing it.
 
+## No netlab yet? Let netlab-ui install it
+
+Open **Settings → Environment** and press **Install netlab for me**. netlab-ui creates a private virtual environment (`~/.local/share/netlab-ui/netlab`, on the host when it runs as a container), installs `networklab`, Ansible and `ansible-pylibssh` there and uses it from then on. Nothing is installed system-wide and a netlab you already have is left alone. The same button reads **Update netlab** afterwards. It needs `python3` with the `venv` module and internet access; containerlab and Docker are separate (Settings → Environment has helpers for them).
+
+To use your own install instead, save its `netlab` path in the same page, or set it in the config file below.
+
 ## Using a netlab checkout or another version
 
 The service does not see your terminal, so a `PATH` or `PYTHONPATH` you set in your shell (for example to test a netlab pull request from a scratch directory) never reaches it. Put them in the config file instead:
