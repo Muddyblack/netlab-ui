@@ -17,6 +17,18 @@ import re
 import sys
 
 
+def _set_address(topology, loc_addr):
+    """Point ``sys.ipaddr`` and ``sys.ipurl`` (what the tools' messages put into URLs) at the address the UI
+    was reached at (NETLAB_UI_PUBLIC_ADDR) when known, else at netlab's own guess: the SSH endpoint of whoever
+    started the UI. Older netlab versions build the URLs from ipaddr, newer ones from ipurl; both are set."""
+    import os
+
+    addr = os.environ.get("NETLAB_UI_PUBLIC_ADDR", "").strip() or loc_addr
+    url = f"[{addr}]" if ":" in addr else addr
+    topology.sys.ipaddr = url if addr != loc_addr else loc_addr
+    topology.sys.ipurl = url
+
+
 def _name_of(cmd):
     match = re.search(r"--name[ =]+['\"]?([^'\"\s]+)", cmd)
     return match.group(1) if match else None
@@ -52,8 +64,7 @@ def host_tool(action, tool, bind):
         print(json.dumps({"ok": False, "output": f"this netlab has no {tool} tool"}))
         return 1
     loc_addr = external_commands.get_local_addr()
-    topology.sys.ipaddr = loc_addr
-    topology.sys.ipurl = f"[{loc_addr}]" if ":" in loc_addr else loc_addr
+    _set_address(topology, loc_addr)
     topology.sys.docker_net = ""
     topology.tools[tool] = {}
     with contextlib.redirect_stdout(io.StringIO()):
@@ -92,8 +103,7 @@ def main(argv):
         topology = load_snapshot(Box({"quiet": True}), warn_modified=False)
     tools = list((topology.get("tools") or {}).keys())
     loc_addr = external_commands.get_local_addr()
-    topology.sys.ipaddr = loc_addr
-    topology.sys.ipurl = f"[{loc_addr}]" if ":" in loc_addr else loc_addr
+    _set_address(topology, loc_addr)
     topology.sys.docker_net = ""
     if external_commands.docker_is_used(topology):
         topology.sys.docker_net = f"--network={topology.addressing.mgmt.get('_network', None) or 'netlab_mgmt'}"

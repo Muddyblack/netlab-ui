@@ -20,6 +20,14 @@ let eventSource: EventSource | null = null;
 const eventHandlers = new Set<(event: BackendEvent) => void>();
 
 export type HealthStatus = Schemas["HealthStatus"];
+/** GET /api/update (not in generated.ts until `npm run gen:api` is rerun). */
+export interface UpdateStatus {
+  current: string;
+  latest: string | null;
+  available: boolean;
+  releaseUrl: string;
+  upgradeCommand: string | null;
+}
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
 export type HostDiagnostics = Schemas["HostDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
@@ -102,6 +110,21 @@ export interface NetlabEnvironment {
   minNetlabVersion?: string | null;
   containerlab: boolean;
   libvirt: boolean;
+  netsimDir?: string | null;
+  netsimVersion?: string | null;
+  toolEnv?: Record<string, string>;
+  warnings?: string[];
+}
+/** GET /api/environment/netlab/managed: the netlab netlab-ui can install for you in its own venv. */
+export interface ManagedNetlab {
+  directory: string;
+  installed: boolean;
+  netlabPath: string;
+  active: boolean;
+  canInstall: boolean;
+  python?: string | null;
+  packages: string[];
+  where: string;
 }
 /**
  * What the canvas nodes/edges in a snapshot actually are.
@@ -260,11 +283,15 @@ export const api = {
   // request policy used by ordinary background API calls.
   health: () => http<HealthStatus>("/api/health", undefined, 1, 5000),
 
+  getUpdateStatus: () => http<UpdateStatus>("/api/update", undefined, 1, 8000),
+
   getHostDiagnostics: (refresh = false) =>
     http<HostDiagnostics>(`/api/environment/host${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
 
   getContainerDiagnostics: (refresh = false) =>
     http<ContainerDiagnostics>(`/api/environment/container${refresh ? "?refresh=true" : ""}`, { cache: "no-store" }, 1, 15000),
+
+  getManagedNetlab: () => http<ManagedNetlab>("/api/environment/netlab/managed", { cache: "no-store" }, 1, 15000),
 
   getNetlabEnvironment: () =>
     http<NetlabEnvironment>("/api/environment/netlab", { cache: "no-store" }, 1, 15000),

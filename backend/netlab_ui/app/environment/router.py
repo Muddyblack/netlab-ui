@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from netlab_ui import config
 from netlab_ui.app.contract.responses import (
     ContainerDiagnostics,
     HostDiagnostics,
@@ -35,17 +36,52 @@ from netlab_ui.app.contract.responses import (
 )
 from netlab_ui.app.lab.common import SSE_HEADERS
 from netlab_ui.services import container_env, host, host_env
-from netlab_ui.services.netlab import location, runner, setup
+from netlab_ui.services.netlab import location, managed, runner, setup
 from netlab_ui.services.netlab.logfmt import LineFilter
 
 router = APIRouter(prefix="/api/environment", tags=["environment"])
 
 
+def _warnings(info: dict, version: str | None, netsim: dict | None, tool_env: dict[str, str]) -> list[str]:
+    """Plain-language explanations of the mismatches that make netlab misbehave."""
+    result = []
+    netsim_version = (netsim or {}).get("version")
+    cli, package = runner._parse_version(version or ""), runner._parse_version(netsim_version or "")
+    if cli and package and cli[:2] != package[:2]:
+        result.append(
+            f"The netlab command reports {version.strip()} but the netsim package it imports is {netsim_version} "
+            f"({netsim['packageDir']}). A different install is being imported: check the PYTHONPATH and PATH "
+            "netlab runs with (config file [tools.env], or Settings below)."
+        )
+    elif info["found"] and info["source"] != "config" and info.get("binPath") and version:
+        supported = runner.version_at_least(version)
+        if supported is False and location.on_host() and not tool_env:
+            result.append(
+                f"netlab {version.strip()} is older than the {runner.MIN_NETLAB_VERSION} this UI wants. The container "
+                "runs the netlab on your host's login PATH, not the PATH and PYTHONPATH of your terminal. To use "
+                "another install, pick its netlab executable below, or set NETLAB_UI_TOOL_ENV "
+                '(for example {"PYTHONPATH": "/path/to/netlab"}).'
+            )
+    if not info["found"]:
+        where = "on the host" if location.on_host() else "on this machine"
+        result.append(
+            f"No netlab was found {where}. Press “Install netlab for me” below (a private copy, nothing "
+            "system-wide), or pick the executable of one you already have."
+        )
+    return result
+
+
 def _environment() -> dict:
     info = location.environment_info()
     version = runner.cached_version() if info["found"] else None
+    netsim = location.probe_netsim() if info["found"] else None
+    tool_env = config.tool_env()
     info.update(
         {
+            "netsimDir": (netsim or {}).get("packageDir"),
+            "netsimVersion": (netsim or {}).get("version") or None,
+            "toolEnv": tool_env,
+            "warnings": _warnings(info, version, netsim, tool_env),
             "netlabVersion": version,
             "netlabVersionSupported": runner.version_at_least(version) if version else None,
             "minNetlabVersion": runner.MIN_NETLAB_VERSION,
@@ -146,6 +182,38 @@ async def set_netlab_path(body: SetNetlabPathRequest) -> dict:
     # the response (and later health polls) reflect the newly configured netlab.
     runner.reset_version_cache()
     return _environment()
+
+
+class ManagedNetlab(BaseModel):
+    directory: str
+    installed: bool
+    netlabPath: str
+    active: bool
+    canInstall: bool
+    python: str | None = None
+    packages: list[str]
+    where: str
+
+
+@router.get("/netlab/managed", response_model=ManagedNetlab)
+def get_managed_netlab() -> dict:
+    """The netlab that netlab-ui can install for you in its own virtual environment."""
+    return managed.status()
+
+
+@router.post("/netlab/install/stream", response_model=None)
+async def install_managed_netlab():
+    """Create or update the managed netlab (venv + ``pip install networklab ansible``) and stream the output
+    (``{stream, line}`` then ``{done, code}``). On success the UI uses it. Closing the stream stops pip."""
+
+    async def gen():
+        async for stream, line in managed.install():
+            if stream == "exit":
+                yield f"data: {json.dumps({'done': True, 'code': int(line)})}\n\n"
+            else:
+                yield f"data: {json.dumps({'stream': stream, 'line': line})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @router.get("/container", response_model=ContainerDiagnostics)

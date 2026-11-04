@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -69,20 +69,20 @@ def _tool_name(tool: str) -> str:
     return tool
 
 
-async def _payload(path: str) -> LabTools:
+async def _payload(path: str, address: str | None = None) -> LabTools:
     topo = commands.load_topology(path)
     lab_dir = Path(path).parent
-    items = await tools.lab_tools(lab_dir, topo.attrs)
+    items = await tools.lab_tools(lab_dir, topo.attrs, address)
     return LabTools(deployed=tools.is_deployed(lab_dir), tools=[LabTool(**item) for item in items])
 
 
 @router.get("/tools", response_model=LabTools)
-async def get_tools(sessionId: str):
-    return await _payload(common.session_path(sessionId))
+async def get_tools(sessionId: str, request: Request):
+    return await _payload(common.session_path(sessionId), request.url.hostname)
 
 
 @router.put("/tools", response_model=LabTools)
-async def toggle_tool(body: ToolToggle):
+async def toggle_tool(body: ToolToggle, request: Request):
     """Add the tool to the lab's ``tools:`` or remove it. Takes effect when the
     lab is next deployed."""
     tool = _tool_name(body.tool)
@@ -93,14 +93,14 @@ async def toggle_tool(body: ToolToggle):
     tools.set_enabled(topo.attrs, tool, body.enabled)
     with session.host.transaction():
         commands.save_topology(session.topology_path, topo)
-    return await _payload(session.topology_path)
+    return await _payload(session.topology_path, request.url.hostname)
 
 
 @router.post("/tools/action", response_model=ToolActionResult)
-async def tool_action(body: ToolAction):
+async def tool_action(body: ToolAction, request: Request):
     """Start or stop one tool of the deployed lab, as ``netlab up``/``down`` do."""
     path = common.session_path(body.sessionId)
-    result = await tools.action(Path(path).parent, _tool_name(body.tool), body.action)
+    result = await tools.action(Path(path).parent, _tool_name(body.tool), body.action, request.url.hostname)
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}
 
 

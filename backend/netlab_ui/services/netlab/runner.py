@@ -94,6 +94,9 @@ def _child_env(cwd: Path | str | None = None) -> dict[str, str]:
     # Prepend the resolved netlab's bin/ so a netlab living in its own venv finds
     # that venv's ansible-playbook / containerlab rather than a host copy.
     env["PATH"] = location.child_path()
+    # netlab puts the SSH endpoint of whoever started the UI into tool URLs; name the configured address instead.
+    if public := os.environ.get("NETLAB_UI_PUBLIC_HOST", "").strip():
+        env["SSH_CONNECTION"] = f"0.0.0.0 0 {public} 22"
     # netlab's Ansible playbooks locate the lab through $PWD
     # (lookup('env','PWD'): collected configs, node_files). A shell sets PWD
     # on cd; a subprocess cwd doesn't, so it would still name the backend's

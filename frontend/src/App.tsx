@@ -8,6 +8,7 @@ import "@containerlab/clab-ui/styles/global.css";
 import "highlight.js/styles/github-dark.css";
 
 import type { OpenWebTab } from "./lifecycle/types";
+import { LabHints } from "./components/LabHints";
 import { StartupGate } from "./components/StartupGate";
 import { AppToolbarActions } from "./app/AppToolbarActions";
 import { AppCanvasArea } from "./components/app/AppCanvasArea";
@@ -122,6 +123,17 @@ export default function App() {
             sessionDock={c.sessionDock}
             openShell={c.openShell}
             handleSessionPopOut={c.handleSessionPopOut}
+          />
+
+          <LabHints
+            sessionId={c.sessionId}
+            openTabs={c.openTabs}
+            activeTabId={c.activeTabId}
+            workspaces={c.workspaces}
+            setWorkspaces={c.setWorkspaces}
+            isLocked={c.isTopologyLocked}
+            openLab={c.handleOpenLab as (ref: never) => unknown}
+            toast={c.addToast}
           />
 
           <AppDialogs

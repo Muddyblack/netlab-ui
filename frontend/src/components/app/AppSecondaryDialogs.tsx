@@ -6,6 +6,7 @@ import { EnvWarningBanner } from "../EnvWarningBanner";
 import { ContainerSetupBanner } from "../ContainerSetup";
 import { HostSetupBanner } from "../HostSetup";
 import { RuntimeSnackbarView } from "../RuntimeSnackbarView";
+import { UpdateNotice } from "../UpdateNotice";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
 
@@ -102,6 +103,7 @@ export function AppSecondaryDialogs({
       {!DEMO_MODE && <ContainerSetupBanner onOpenSettings={openEnvironmentSettings} />}
       {!DEMO_MODE && <HostSetupBanner onOpenSettings={openEnvironmentSettings} />}
 
+      {!DEMO_MODE && <UpdateNotice />}
       <RuntimeSnackbarView snackbar={runtimeSnackbar} onClose={() => setRuntimeSnackbar(defaultRuntimeSnackbar)} />
     </>
   );

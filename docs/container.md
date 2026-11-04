@@ -34,6 +34,9 @@ netlab is Python: a venv, an interpreter and Ansible, none of which work when mo
 - **Lab files belong to you.** netlab writes them as you; what the UI itself writes in a lab folder (edits, layout files, git history) is handed to you as soon as it appears. containerlab's own `clab-<lab>/` folders are left as containerlab made them.
 - **Which netlab:** the first `netlab` on your login PATH, or the one you pick under **Settings → Environment** (a path on the host; `~` is your home there).
 - **Setup checks:** Settings → Environment → Host Setup then checks the host as you (netlab version, containerlab without sudo, Docker access), and Container Setup checks the flags below.
+- **A netlab that needs variables** (a checkout needs `PYTHONPATH`; your shell's values never reach the container): `NETLAB_UI_TOOL_ENV='{"PYTHONPATH": "/home/you/scratch/netlab"}'` is set for every netlab command and the version check, on the host. Pick that checkout's `netlab` under Settings → Environment.
+- **Links to lab tools** use the address your browser used. For a fixed one, set `NETLAB_UI_PUBLIC_HOST` (see [install.md](install.md)).
+- **Update notice:** the UI shows when a newer release exists and the command to get it (`docker compose pull && docker compose up -d`). `NETLAB_UI_UPDATE_CHECK=off` disables the lookup.
 - `NETLAB_UI_NETLAB=container` turns this off and uses a netlab inside the container instead (only if you build an image with one).
 
 Why each flag matters — each one fails late and cryptically when missing:

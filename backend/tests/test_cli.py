@@ -1,4 +1,12 @@
+import pytest
+
 from netlab_ui import cli
+
+
+@pytest.fixture(autouse=True)
+def _netlab_present(monkeypatch):
+    """Serving warns when there is no netlab; most tests are not about that."""
+    monkeypatch.setattr(cli.location, "is_installed", lambda: True)
 
 
 def test_bare_flags_mean_serve(monkeypatch):
@@ -96,3 +104,61 @@ def test_app_flag_serves_in_a_window(monkeypatch):
 def test_app_window_signs_in_with_the_token(monkeypatch):
     monkeypatch.setattr(cli.auth, "configured_token", lambda: "s3cret")
     assert cli._app_url("127.0.0.1", 8000) == "http://127.0.0.1:8000/?token=s3cret"
+
+
+def test_serve_says_how_to_get_netlab_when_there_is_none(monkeypatch, capsys):
+    monkeypatch.setattr("uvicorn.run", lambda *_a, **_kw: None)
+    monkeypatch.setattr(cli.location, "is_installed", lambda: False)
+    assert cli.main([]) == 0
+    assert "netlab-ui netlab install" in capsys.readouterr().err
+
+
+def test_netlab_install_streams_the_output_and_returns_the_exit_code(monkeypatch, capsys):
+    async def fake_install():
+        yield "stdout", "creating the environment\n"
+        yield "stderr", "a warning\n"
+        yield "exit", "0"
+
+    monkeypatch.setattr(cli.managed, "install", fake_install)
+    monkeypatch.setattr(
+        cli.managed,
+        "status",
+        lambda: {"canInstall": True, "installed": False, "directory": "/d", "where": "on this machine"},
+    )
+    assert cli.main(["netlab", "install"]) == 0
+    captured = capsys.readouterr()
+    assert "creating the environment" in captured.out and "a warning" in captured.err
+
+
+def test_netlab_install_without_python_is_a_message(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli.managed, "status", lambda: {"canInstall": False, "installed": False, "directory": "/d", "where": "x"}
+    )
+    assert cli.main(["netlab", "install"]) == 1
+    assert "python3 was not found" in capsys.readouterr().err
+
+
+def test_netlab_use_validates_before_saving(monkeypatch, tmp_path, capsys):
+    from netlab_ui.app.environment import router as environment
+
+    monkeypatch.setenv("NETLAB_UI_CONFIG", str(tmp_path / "ui.json"))
+    monkeypatch.setattr(environment, "_resolve_candidate", lambda _p: None)
+    assert cli.main(["netlab", "use", "/nope/netlab"]) == 1
+    assert cli.location.get_configured_bin() is None
+    monkeypatch.setattr(environment, "_resolve_candidate", lambda _p: "/opt/venv/bin/netlab")
+    monkeypatch.setattr(environment, "_runs_as_netlab", lambda _b: True)
+    assert cli.main(["netlab", "use", "/opt/venv/bin/netlab"]) == 0
+    assert cli.location.get_configured_bin() == "/opt/venv/bin/netlab"
+    assert "now uses /opt/venv/bin/netlab" in capsys.readouterr().out
+
+
+def test_netlab_run_hands_over_to_the_chosen_netlab(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(cli.location, "netlab_command", lambda: "/opt/venv/bin/netlab")
+    monkeypatch.setattr(cli.location, "child_path", lambda: "/opt/venv/bin:/usr/bin")
+    monkeypatch.setattr(
+        cli.os, "execve", lambda path, argv, env: seen.update(path=path, argv=argv, path_env=env["PATH"])
+    )
+    cli.main(["netlab", "run", "up", "--no-config"])
+    assert seen["argv"] == ["/opt/venv/bin/netlab", "up", "--no-config"]
+    assert seen["path_env"].startswith("/opt/venv/bin")
