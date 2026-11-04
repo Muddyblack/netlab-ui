@@ -10,6 +10,12 @@ updates:
     ignore:
       # Needs its patch-package patches ported by hand; tracked by clab-ui-watch.yml
       - dependency-name: "@containerlab/clab-ui"
+      # clab-ui pins @mui/material 7.x exactly, and @mui/icons-material 9 peers on
+      # material 9, so these majors cannot install until clab-ui moves (#79)
+      - dependency-name: "@mui/material"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@mui/icons-material"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /desktop
     schedule:
