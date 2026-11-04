@@ -161,6 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -172,17 +173,27 @@ jobs:
           path: dist/
 
       # The GitHub Release is the landing page people reach from the tag, so it leads with how to
-      # install rather than only a source zip. Notes are grouped by commit type, with breaking
-      # changes first (scripts/release-notes.sh).
+      # install rather than only a source zip. The notes are the release PR's description between
+      # the release-notes markers (tag.sh drafts them there, grouped by commit type with breaking
+      # changes first via scripts/release-notes.sh; edit them before merging). Without that, the
+      # same script's output is used.
       - name: Generate release notes and the pinned compose file
         id: notes
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          PREV_TAG="$(git tag --sort=-creatordate | grep -E '^v[0-9]' | sed -n '1p')"
+          NOTES="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq '.[0].body // ""' \
+            | tr -d '\r' \
+            | sed -n '/<!-- release-notes:start -->/,/<!-- release-notes:end -->/p' \
+            | sed '1d;$d' || true)"
+          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            PREV_TAG="$(git tag --sort=-creatordate | grep -E '^v[0-9]' | sed -n '1p')"
+            NOTES="$(scripts/release-notes.sh "$PREV_TAG" HEAD)"
+          fi
           {
             echo "notes<<EOF"
-            scripts/release-notes.sh "$PREV_TAG" HEAD
+            echo "$NOTES"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
