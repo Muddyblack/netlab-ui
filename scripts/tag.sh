@@ -129,9 +129,20 @@ fi
 
 git push -u origin "$RELEASE_BRANCH"
 
+# The release notes are drafted into the PR description, between the markers.
+# Edit them there before merging: release.yml publishes exactly that text.
+NOTES="$(scripts/release-notes.sh "$(git tag --list 'v[0-9]*' --sort=-creatordate | head -1)" "origin/${DEFAULT_BRANCH}")"
+PR_BODY="Bumps the version to ${NEW_VERSION}. Merging this PR tags ${TAG_NAME} and publishes the release: the PyPI package, the container image and the GitHub release (see .github/workflows/release.yml).
+
+**Edit the release notes below before merging; they become the release text.**
+
+<!-- release-notes:start -->
+${NOTES}
+<!-- release-notes:end -->"
+
 PR_URL="$(gh pr create --base "$DEFAULT_BRANCH" --head "$RELEASE_BRANCH" \
     --title "$COMMIT_MSG" \
-    --body "Bumps the version to ${NEW_VERSION}. Merging this PR tags ${TAG_NAME} and publishes the release: the PyPI package, the container image and the GitHub release (see .github/workflows/release.yml).")"
+    --body "$PR_BODY")"
 echo "$PR_URL"
 
 read -rp "Auto-merge once checks pass? [y/N]: " auto_merge
