@@ -53,7 +53,7 @@ export function UpdateNotice() {
         action={
           <>
             <Button color="inherit" size="small" href={update.releaseUrl} target="_blank" rel="noreferrer" onClick={dismiss}>
-              What's new
+              What&apos;s new
             </Button>
             <IconButton aria-label="Dismiss update notice" color="inherit" size="small" onClick={dismiss}>
               <CloseIcon fontSize="inherit" />
