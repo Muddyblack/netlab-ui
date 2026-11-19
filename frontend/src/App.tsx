@@ -33,7 +33,19 @@ const PHONE_STYLES = {
     },
     // clab-ui's panel toggles are 20px wide: too small for a finger.
     "[data-testid='panel-toggle-btn']": { width: "32px !important", height: "64px !important" },
-    // The lab toolbar has ~20 buttons: let it scroll sideways instead of pushing search and settings off-screen.
+    // The lab toolbar has ~20 buttons (800px). Keep what a phone is for (deploy, lock, fit, find node, settings)
+    // and drop editing and desktop-only ones, so it fits a 390px screen without cut-off icons.
+    [[
+      "navbar-lab-settings", "navbar-undo", "navbar-redo", "navbar-bulk-link", "navbar-split-view", "navbar-layout",
+      "navbar-link-labels", "navbar-capture", "navbar-shortcuts", "navbar-shortcut-display"
+    ].map((id) => `[data-testid='topoviewer-app'] > .MuiAppBar-root [data-testid='${id}']`).join(", ") +
+      ", [data-testid='topoviewer-app'] > .MuiAppBar-root .MuiDivider-root" +
+      ", [data-testid='topoviewer-app'] > .MuiAppBar-root [aria-label*='AI agents']" +
+      ", [data-testid='topoviewer-app'] > .MuiAppBar-root [aria-label*='system notifications']" +
+      // Quick open is the Ctrl+P search; on a phone the explorer's filter does that, and its magnifier sat next to
+      // find-node's identical one.
+      ", [data-testid='topoviewer-app'] > .MuiAppBar-root [aria-label='Quick open']"]: { display: "none !important" },
+    // Whatever still does not fit (a long lab name) scrolls sideways instead of pushing settings off-screen.
     "[data-testid='topoviewer-app'] > .MuiAppBar-root .MuiToolbar-root": {
       overflowX: "auto",
       overflowY: "hidden",
