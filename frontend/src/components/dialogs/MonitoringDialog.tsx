@@ -29,6 +29,7 @@ import {
   createFilterOptions
 } from "@mui/material";
 import { openWebTab } from "../../host/webTabStore";
+import { useIsPhone } from "../../hooks/useIsPhone";
 import { MonitoringOptions, type MonitoringOptionChange } from "./MonitoringOptions";
 import { MonitoringScopeEditor } from "./MonitoringScopeEditor";
 import { SetupSection } from "./SetupSection";
@@ -968,6 +969,7 @@ export function MonitoringDialog() {
   const request = useMonitoringDialogRequest();
   const sessionId = request?.sessionId ?? null;
   const c = useMonitoringController(sessionId, request);
+  const phone = useIsPhone();
   if (!request || !sessionId) return null;
   const { state, summary, busy, error, setError, tab, setTab, updatedAt, reload, showError, toggle, place, options, act, status } = c;
   const close = () => openMonitoringDialog(null);
@@ -978,7 +980,8 @@ export function MonitoringDialog() {
       onClose={close}
       maxWidth="md"
       fullWidth
-      slotProps={{ paper: { sx: { minHeight: 480 } } }}
+      fullScreen={phone} // checking a lab from a phone is what this dialog is for there
+      slotProps={{ paper: { sx: { minHeight: phone ? undefined : 480 } } }}
     >
       <DialogTitle sx={{ pr: 6, pb: 0 }}>
         <Stack direction="row" spacing={1.5} alignItems="center">
@@ -1000,7 +1003,7 @@ export function MonitoringDialog() {
               title={state.enabled ? "Stop monitoring this lab" : "Monitor this lab (every deploy)"}
             >
               <Stack direction="row" alignItems="center">
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
                   Monitor this lab
                 </Typography>
                 <Switch

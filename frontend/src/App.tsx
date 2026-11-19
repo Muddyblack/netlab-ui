@@ -1,5 +1,5 @@
 import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
-import { Box } from "@mui/material";
+import { Box, GlobalStyles } from "@mui/material";
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
@@ -17,6 +17,33 @@ import { AppCanvasOverlays } from "./components/app/AppCanvasOverlays";
 import { AppDialogs } from "./components/app/AppDialogs";
 import { AppSecondaryDialogs } from "./components/app/AppSecondaryDialogs";
 import { useAppController } from "./app/useAppController";
+
+/**
+ * Phone-sized screens (below MUI's `sm`). Most dialogs and tab bars here and in clab-ui are sized for a desktop, so
+ * instead of patching each one: dialogs use nearly the whole screen, and a row of tabs that does not fit scrolls
+ * sideways rather than being cut off.
+ */
+const PHONE_STYLES = {
+  "@media (max-width: 599.95px)": {
+    ".MuiDialog-paper:not(.MuiDialog-paperFullScreen)": {
+      margin: "8px !important",
+      width: "calc(100% - 16px) !important",
+      maxWidth: "none !important",
+      maxHeight: "calc(100% - 16px) !important"
+    },
+    // clab-ui's panel toggles are 20px wide: too small for a finger.
+    "[data-testid='panel-toggle-btn']": { width: "32px !important", height: "64px !important" },
+    // The lab toolbar has ~20 buttons: let it scroll sideways instead of pushing search and settings off-screen.
+    "[data-testid='topoviewer-app'] > .MuiAppBar-root .MuiToolbar-root": {
+      overflowX: "auto",
+      overflowY: "hidden",
+      scrollbarWidth: "none",
+      "&::-webkit-scrollbar": { display: "none" }
+    },
+    ".MuiTabs-scroller": { overflowX: "auto !important", scrollbarWidth: "none" },
+    ".MuiTabs-scroller::-webkit-scrollbar": { display: "none" }
+  }
+} as const;
 
 export default function App() {
   const c = useAppController();
@@ -44,6 +71,7 @@ export default function App() {
 
   return (
     <MuiThemeProvider>
+      <GlobalStyles styles={PHONE_STYLES} />
       {c.startup.status !== "ready" ? (
         <StartupGate startup={c.startup} onRetry={c.checkStartup} />
       ) : (
@@ -93,6 +121,7 @@ export default function App() {
             addToast={c.addToast}
             leftSidebarToggleContainer={c.leftSidebarToggleContainer}
             isLeftSidebarOpen={c.isLeftSidebarOpen}
+            isPhone={c.isPhone}
             handleToggleLeftSidebar={c.handleToggleLeftSidebar}
             tabBarContainer={c.tabBarContainer}
             openTabs={c.openTabs}

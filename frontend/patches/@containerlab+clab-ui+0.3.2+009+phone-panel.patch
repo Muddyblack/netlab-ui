@@ -1,0 +1,41 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-TEX73Q7H.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-TEX73Q7H.js
+index e5d926c..0822825 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-TEX73Q7H.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-TEX73Q7H.js
+@@ -247,7 +247,10 @@ function useDeploymentCommands() {
+ }
+ var PANEL_SIDE_KEY = "contextPanelSide";
+ function useContextPanel() {
+-  const [isContextPanelOpen, setIsContextPanelOpen] = useState2(true);
++  // netlab-ui: on a phone the panel covers the canvas, so it starts closed there.
++  const [isContextPanelOpen, setIsContextPanelOpen] = useState2(
++    () => typeof window === "undefined" || !window.matchMedia("(max-width: 599.95px)").matches
++  );
+   const [contextPanelOpenReason, setContextPanelOpenReason] = useState2(
+     "manual"
+   );
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+index 534753c..81359a2 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-WM5ZW3ZW.js
+@@ -20803,7 +20803,9 @@ function usePanelResize(sideRef) {
+     },
+     [sideRef]
+   );
+-  return { panelWidth, isDragging, handleResizeStart };
++  // netlab-ui: never wider than a phone screen, less a strip for the toggle handle (which sits at panelWidth).
++  const fitted = typeof window !== "undefined" && window.innerWidth < 600 ? Math.min(panelWidth, window.innerWidth - 36) : panelWidth;
++  return { panelWidth: fitted, isDragging, handleResizeStart };
+ }
+ function haveFooterHandlersChanged(prev, next) {
+   return prev?.handleApply !== next?.handleApply || prev?.handleSave !== next?.handleSave || prev?.handleDiscard !== next?.handleDiscard;
+@@ -22288,7 +22290,8 @@ var AppContent = ({
+     if (hasActiveTopology) {
+       return;
+     }
+-    if (!panelVisibility.isContextPanelOpen) {
++    // netlab-ui: not on a phone, where the open panel would cover the lab that opens next.
++    if (!panelVisibility.isContextPanelOpen && !window.matchMedia("(max-width: 599.95px)").matches) {
+       panelVisibility.handleOpenContextPanel("manual");
+     }
+     if (panelVisibility.findPopoverPosition !== null) {
