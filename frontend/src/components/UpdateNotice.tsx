@@ -60,14 +60,12 @@ export function UpdateNotice() {
   };
 
   return (
-    // Bottom right, lifted above the row the bottom-centre toasts (host setup, runtime) use: at the bottom left it hid
-    // the sidebar's Help & Feedback links and slid under those toasts, which covered its buttons; the top centre
-    // belongs to the host-setup banner and lab hints.
+    // Bottom right: the setup notice sits top centre, and transient toasts use the bottom centre.
     <Snackbar
       open
       anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       sx={{
-        bottom: { xs: 200, sm: 120 }, // a phone wraps the bottom toast onto more lines
+        bottom: { xs: 88, sm: 24 }, // a phone keeps the bottom centre free for transient toasts
         left: { xs: 16, sm: "auto" },
         right: { xs: 16, sm: 24 }
       }}
