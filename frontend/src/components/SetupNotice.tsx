@@ -6,7 +6,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import type { HealthStatus } from "../api/client";
 import { useContainerDiagnostics } from "./ContainerSetup";
 import { useHostDiagnostics } from "./HostSetup";
-import { MarkdownDocumentDialog } from "./MarkdownDocumentDialog";
+import { MarkdownDocumentDialog } from "./LazyMarkdownDocumentDialog";
 
 const DISMISS_KEY = "netlab-ui:setup-notice-dismissed";
 const MAX_SHOWN = 3;
