@@ -69,6 +69,29 @@ def _inspect_self() -> dict[str, Any] | None:
     return None
 
 
+_COMPOSE_UPGRADE = ["docker", "compose", "pull", "&&", "docker", "compose", "up", "-d"]
+_upgrade_cache: list[str] | None = None
+
+
+def upgrade_command() -> list[str]:
+    """How to move this container to a newer image, by who started it.
+
+    netlab's ``netlab_ui`` tool names it ``<lab>_netlab_ui`` and removes it on ``netlab down`` (unless the UI ran that
+    down itself), so ``netlab restart`` in the lab directory recreates it from the pulled image. Anything else is
+    taken to be the compose file. Asked once: who started this container does not change while it runs."""
+    global _upgrade_cache
+    if _upgrade_cache is None:
+        info = _inspect_self() or {}
+        labels = (info.get("Config") or {}).get("Labels") or {}
+        name = str(info.get("Name") or os.environ.get("NETLAB_UI_CONTAINER", "")).lstrip("/")
+        image = (info.get("Config") or {}).get("Image") or "ghcr.io/muddyblack/netlab-ui:latest"
+        if name.endswith("_netlab_ui") and "com.docker.compose.project" not in labels:
+            _upgrade_cache = ["docker", "pull", image, "&&", "netlab", "restart"]
+        else:
+            _upgrade_cache = _COMPOSE_UPGRADE
+    return _upgrade_cache
+
+
 def _mount_for(path: str, mounts: list[dict[str, Any]]) -> dict[str, Any] | None:
     """The mount whose destination most specifically contains ``path``."""
     best: dict[str, Any] | None = None
