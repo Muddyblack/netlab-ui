@@ -175,7 +175,11 @@ function defaultExplorerUiState() {
 
 export function readPersistedExplorerUiState() {
   try {
-    const parsed = readJson<any>(EXPLORER_UI_STATE_KEY, null);
+    // Whatever an older (or newer) version stored: only these two maps are read, each merged over the defaults.
+    const parsed = readJson<{ collapsedBySection?: Record<string, boolean>; expandedBySection?: Record<string, string[]> } | null>(
+      EXPLORER_UI_STATE_KEY,
+      null
+    );
     if (!parsed) return defaultExplorerUiState();
 
     const expandedBySection = {

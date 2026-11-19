@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Autocomplete,
@@ -461,7 +461,7 @@ function FaultsTab({
   prefill?: FaultTestPrefill;
   onError: (text: string) => void;
 }) {
-  const links = state.links ?? [];
+  const links = useMemo(() => state.links ?? [], [state.links]); // a fresh [] each render re-ran the effect below
   const [link, setLink] = useState(links[0]?.link ?? "");
   const [end, setEnd] = useState<"a" | "b" | "both">("a");
   const [cycles, setCycles] = useState(3);
