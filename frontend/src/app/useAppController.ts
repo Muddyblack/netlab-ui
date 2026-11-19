@@ -27,6 +27,7 @@ import { rememberAgents } from "../components/agents/agentNames";
 import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
 import { matchesTerminalShortcut, quickOpenShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
 import { useProposalWatcher } from "../components/agents/proposalsStore";
+import { useIsPhone } from "../hooks/useIsPhone";
 import { type SettingsTab } from "../components/dialogs/SettingsDialog";
 import type { TopologyRef } from "../hooks/useTabManager";
 import { runningLabMatches } from "../host/runningMatch";
@@ -255,6 +256,7 @@ export function useAppController() {
   }, [assistantOpen]);
 
   // ── Left sidebar toggle ──────────────────────────────────────────────────────
+  const isPhone = useIsPhone();
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const handleToggleLeftSidebar = useCallback(() => {
     setIsLeftSidebarOpen(prev => !prev);
@@ -328,10 +330,19 @@ export function useAppController() {
       "border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)"
     ].join(", ");
 
+    // On a phone the explorer slides over the canvas instead of squeezing it: almost full width, leaving a strip
+    // for the handle, so the lab keeps the whole screen once a tab is open.
+    const row = layoutRow as HTMLElement;
+    row.style.position = isPhone ? "relative" : "";
+    Object.assign(pane.style, isPhone
+      ? { position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "1250", boxShadow: isLeftSidebarOpen ? "0 0 24px rgba(0,0,0,.35)" : "none" }
+      : { position: "", top: "", bottom: "", left: "", zIndex: "", boxShadow: "" });
+
     if (isLeftSidebarOpen) {
-      pane.style.width = "";
-      pane.style.minWidth = "";
-      pane.style.maxWidth = "";
+      const width = isPhone ? "calc(100% - 36px)" : "";
+      pane.style.width = width;
+      pane.style.minWidth = width;
+      pane.style.maxWidth = width;
       pane.style.borderRightWidth = "";
       pane.style.pointerEvents = "";
     } else {
@@ -341,7 +352,7 @@ export function useAppController() {
       pane.style.borderRightWidth = "0px";
       pane.style.pointerEvents = "none";
     }
-  }, [isLeftSidebarOpen]);
+  }, [isLeftSidebarOpen, isPhone, leftSidebarToggleContainer]); // the handle exists once clab-ui rendered the pane
 
   // Stable data refs consumed by the explorer controller (avoids rebuilding controller on every render)
   const labFilesRef = useRef(labFiles); labFilesRef.current = labFiles;
@@ -617,6 +628,19 @@ export function useAppController() {
   // switching to another dock tab and back.
   // Keyed by the last lab tab so visiting a file/web tab does not refetch lenses.
   const lastLabTabId = useRef<string | undefined>(undefined);
+  // On a phone the explorer covers the canvas: get it out of the way when a lab or file opens, and bring it back
+  // when the last tab closes (it is then the only thing to look at).
+  const hasTabs = openTabs.length > 0;
+  useEffect(() => {
+    if (!isPhone) return;
+    setIsLeftSidebarOpen(!hasTabs);
+    if (!hasTabs) return;
+    // The canvas laid itself out while the explorer covered it: fit the topology to the whole screen once the
+    // explorer has slid away (its transition is 250ms).
+    const timer = window.setTimeout(() => hostRef.current?.emitTopoViewerEvent?.({ type: "fitViewport" }), 400);
+    return () => window.clearTimeout(timer);
+  }, [isPhone, activeTabId, hasTabs]);
+
   if (openTabs.some((t) => t.id === activeTabId && t.kind === "topology")) lastLabTabId.current = activeTabId ?? undefined;
   const netlabLenses = useNetlabLenses(sessionId ?? "", lastLabTabId.current);
   const { applyDeploymentProgress } = netlabLenses;
@@ -1246,7 +1270,7 @@ export function useAppController() {
     handleFileTabChange, handleFileTabSave, handleFileTabReload,
     handleCreateLab, openNewLabWithAi, getOrCreateSession,
     portalContainer, navbarPortalContainer, tabBarContainer, leftSidebarToggleContainer, netlabLinksPaletteContainer,
-    isLeftSidebarOpen, handleToggleLeftSidebar,
+    isLeftSidebarOpen, handleToggleLeftSidebar, isPhone,
     themeMode, handleThemeChange,
     labFiles, workspaces, setWorkspaces, fetchFiles,
     startup, checkStartup,
