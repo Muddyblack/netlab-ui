@@ -218,7 +218,9 @@ class UpdateStatus(BaseModel):
 def update_status():
     """Is a newer netlab-ui release on PyPI? The UI shows a notice the user can dismiss per version."""
     if host.in_container():
-        command = ["docker", "compose", "pull", "&&", "docker", "compose", "up", "-d"]
+        from netlab_ui.services import container_env
+
+        command = container_env.upgrade_command()
     else:
         from netlab_ui import cli
 

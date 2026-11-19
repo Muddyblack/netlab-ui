@@ -64,3 +64,23 @@ def test_exposed_without_login_is_flagged(monkeypatch):
     monkeypatch.setenv("UVICORN_HOST", "127.0.0.1")
     monkeypatch.delenv("NETLAB_UI_AUTH")
     assert container_env._exposure_check()["ok"]
+
+
+def _upgrade_for(monkeypatch, info):
+    monkeypatch.setattr(container_env, "_upgrade_cache", None)
+    monkeypatch.setattr(container_env, "_inspect_self", lambda: info)
+    return container_env.upgrade_command()
+
+
+def test_upgrade_command_for_netlab_tool_container(monkeypatch):
+    """netlab's netlab_ui tool names the container <lab>_netlab_ui and recreates it on `netlab restart`."""
+    info = {"Name": "/demo_netlab_ui", "Config": {"Image": "ghcr.io/muddyblack/netlab-ui:latest", "Labels": {}}}
+    assert _upgrade_for(monkeypatch, info) == [
+        "docker", "pull", "ghcr.io/muddyblack/netlab-ui:latest", "&&", "netlab", "restart",
+    ]  # fmt: skip
+
+
+def test_upgrade_command_for_compose_and_unknown(monkeypatch):
+    compose = {"Name": "/netlab-ui", "Config": {"Labels": {"com.docker.compose.project": "netlab-ui"}}}
+    assert _upgrade_for(monkeypatch, compose)[:3] == ["docker", "compose", "pull"]
+    assert _upgrade_for(monkeypatch, None)[:3] == ["docker", "compose", "pull"]

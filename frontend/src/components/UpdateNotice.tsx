@@ -45,7 +45,19 @@ export function UpdateNotice() {
   };
 
   return (
-    <Snackbar open anchorOrigin={{ vertical: "bottom", horizontal: "left" }} sx={{ maxWidth: { xs: "calc(100vw - 32px)", sm: 460 } }}>
+    // Bottom right, lifted above the row the bottom-centre toasts (host setup, runtime) use: at the bottom left it hid
+    // the sidebar's Help & Feedback links and slid under those toasts, which covered its buttons; the top centre
+    // belongs to the host-setup banner and lab hints.
+    <Snackbar
+      open
+      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      sx={{
+        maxWidth: { sm: 400 },
+        bottom: { xs: 200, sm: 120 }, // a phone wraps the bottom toast onto more lines
+        left: { xs: 16, sm: "auto" },
+        right: { xs: 16, sm: 24 }
+      }}
+    >
       <Alert
         severity="info"
         variant="outlined"
