@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Alert, Box, Button, CircularProgress, Divider, List } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { getApiBase } from "../api/endpoint";
-import { MarkdownDocumentDialog } from "../components/MarkdownDocumentDialog";
+import { MarkdownDocumentDialog } from "../components/LazyMarkdownDocumentDialog";
 import { PluginPipelineStrip } from "./plugins/PluginPipelineStrip";
 import { PluginImportDialog } from "./plugins/PluginImportDialog";
 import { PluginSection } from "./plugins/PluginSection";
