@@ -22,6 +22,16 @@ def workspace(tmp_path, monkeypatch) -> Path:
     return ws
 
 
+def _netlab_frr_kind() -> str:
+    """clab.node.kind from the frr device file of the netlab the backend uses (the device name if unset)."""
+    from ruamel.yaml import YAML
+
+    from netlab_ui.services.netlab import location
+
+    device = YAML().load((location.netsim_package_dir() / "devices" / "frr.yml").read_text(encoding="utf-8"))
+    return str(((device.get("clab") or {}).get("node") or {}).get("kind") or "frr")
+
+
 def test_kind_references_include_device_defaults(client, workspace):
     res = client.get("/api/lab/images/kind-references")
     assert res.status_code == 200
@@ -31,7 +41,9 @@ def test_kind_references_include_device_defaults(client, workspace):
     assert defaults, "expected netsim device defaults in the catalog"
     frr = next((r for r in defaults if r["image"].startswith("quay.io/frrouting/frr")), None)
     assert frr is not None
-    assert frr["kind"] == "linux"  # frr runs as containerlab kind `linux`
+    # The kind is whatever the installed netlab says: FRR ran as containerlab kind `linux` up to
+    # netlab 26.10 and as kind `frr` from 26.11.
+    assert frr["kind"] == _netlab_frr_kind()
 
 
 def test_kind_references_include_topology_nodes(client, workspace):
