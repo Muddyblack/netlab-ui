@@ -56,6 +56,7 @@ rows:
         height: 8
       - type: timeseries
         title: OSPF neighbor states
+        no_value: No OSPF on the selected nodes
         description: All neighbors settle in Full (2-Way is normal between DROthers); time outside Full = convergence
         queries:
           - expr: count(netlab_ospf_neighbor_state{lab="$lab",node=~"$node"} == 8) or vector(0)
@@ -74,12 +75,14 @@ rows:
     panels:
       - type: timeseries
         title: OSPF SPF runs per minute
+        no_value: No OSPF on the selected nodes
         expr: sum by (node) (increase(netlab_ospf_spf_runs_total{lab="$lab",node=~"$node"}[1m]))
         legend: '{{node}}'
         width: 12
         height: 7
       - type: timeseries
         title: SPF duration
+        no_value: No OSPF or IS-IS on the selected nodes
         queries:
           - expr: netlab_ospf_spf_last_duration_seconds{lab="$lab",node=~"$node"}
             legend: OSPF {{node}}
@@ -93,6 +96,7 @@ rows:
     panels:
       - type: table
         title: BGP sessions
+        no_value: No BGP on the selected nodes
         queries:
           - netlab_bgp_session_state{lab="$lab",node=~"$node"}
           - sum without (afi, safi) (netlab_bgp_prefixes_received{lab="$lab",node=~"$node"})
@@ -122,6 +126,7 @@ rows:
         height: 8
       - type: timeseries
         title: BGP UPDATEs received per second
+        no_value: No BGP on the selected nodes
         expr: sum by (node) (rate(netlab_bgp_updates_received_total{lab="$lab",node=~"$node"}[$__rate_interval]))
         legend: '{{node}}'
         width: 12
@@ -138,6 +143,7 @@ rows:
     panels:
       - type: table
         title: OSPF neighbors
+        no_value: No OSPF on the selected nodes
         queries:
           - netlab_ospf_neighbor_state{lab="$lab",node=~"$node"}
         rename:
@@ -155,6 +161,7 @@ rows:
         height: 8
       - type: table
         title: IS-IS adjacencies
+        no_value: No IS-IS on the selected nodes
         queries:
           - netlab_isis_adjacency_up{lab="$lab",node=~"$node"}
         rename:
@@ -176,6 +183,7 @@ rows:
     panels:
       - type: table
         title: VXLAN VNIs
+        no_value: No VXLAN on the selected nodes
         queries:
           - netlab_vxlan_vni_up{lab="$lab",node=~"$node"}
           - netlab_vxlan_vni_macs{lab="$lab",node=~"$node"}
@@ -198,6 +206,7 @@ rows:
         height: 8
       - type: timeseries
         title: MAC addresses per VNI
+        no_value: No VXLAN on the selected nodes
         description: Learned or EVPN-advertised MACs, summed over the selected routers
         expr: sum by (vni) (netlab_vxlan_vni_macs{lab="$lab",node=~"$node",type="l2"})
         legend: VNI {{vni}}

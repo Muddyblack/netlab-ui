@@ -26,7 +26,8 @@ Row options: ``title``, ``collapsed`` (folded shut, one panel).
 Panel types and their options (besides ``title``, ``description``, ``width``, ``height``):
 
 * ``stat``: ``expr``, ``unit``, ``thresholds``, ``color_mode``, ``no_value``
-* ``timeseries``: ``expr`` or ``queries``, ``unit``, ``stack``, ``legend_mode`` (``table``)
+* ``timeseries``: ``expr`` or ``queries``, ``unit``, ``stack``, ``legend_mode`` (``table``),
+  ``no_value`` (text shown when there is nothing to draw, e.g. "No BGP on this node")
 * ``table``: ``queries``, ``rename`` (column names), ``hide`` (columns), ``no_value``,
   ``overrides`` (a column coloured with a state mapping, ``{field: State, colors: up_down}``, or
   any Grafana field override)
@@ -64,7 +65,7 @@ _COMMON_KEYS = {"type", "title", "description", "width", "height"}
 _QUERY_SOURCE_KEYS = {"expr", "legend", "queries"}
 PANEL_KEYS = {
     "stat": _COMMON_KEYS | _QUERY_SOURCE_KEYS | {"unit", "thresholds", "color_mode", "no_value"},
-    "timeseries": _COMMON_KEYS | _QUERY_SOURCE_KEYS | {"unit", "stack", "legend_mode", "datasource"},
+    "timeseries": _COMMON_KEYS | _QUERY_SOURCE_KEYS | {"unit", "stack", "legend_mode", "datasource", "no_value"},
     "table": _COMMON_KEYS | _QUERY_SOURCE_KEYS | {"rename", "hide", "mappings", "overrides", "no_value"},
     "logs": _COMMON_KEYS | _QUERY_SOURCE_KEYS,
     "topology": _COMMON_KEYS,
@@ -192,6 +193,7 @@ def _panel(panel: dict, where: str, macros: dict[str, str]) -> tuple[dict, int, 
             desc,
             stack=bool(panel.get("stack")),
             legend=str(panel.get("legend_mode", "list")),
+            no_value=str(panel.get("no_value", "")),
         )
         if panel.get("datasource") == "loki":
             panels.use_loki(built)

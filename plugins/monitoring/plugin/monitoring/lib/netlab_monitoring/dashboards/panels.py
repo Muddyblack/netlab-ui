@@ -255,6 +255,7 @@ def ts(
     description: str = "",
     stack: bool = False,
     legend: str = "list",
+    no_value: str = "",
 ) -> dict:
     return {
         "type": "timeseries",
@@ -272,6 +273,7 @@ def ts(
         "fieldConfig": {
             "defaults": {
                 "unit": unit,
+                **({"noValue": no_value} if no_value else {}),
                 "custom": {
                     "lineWidth": 1,
                     "fillOpacity": 12,

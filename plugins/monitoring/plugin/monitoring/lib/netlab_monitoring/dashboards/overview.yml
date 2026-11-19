@@ -20,33 +20,35 @@ rows:
         description: Running containers and VMs
         expr: sum(netlab_node_up{lab="$lab"})
         width: 4
-        height: 4
+        height: 3
       - type: stat
         title: Nodes in lab
         expr: count(netlab_node_info{lab="$lab"})
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: BGP sessions up
+        title: BGP up
         description: Established BGP sessions (both directions counted)
         expr: (sum(netlab_bgp_session_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_bgp_session{lab="$lab"}) > 0)
         no_value: —
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: OSPF adjacencies up
+        title: OSPF up
+        description: OSPF adjacencies in Full state
         expr: (sum(netlab_ospf_neighbor_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_ospf_adjacency{lab="$lab"}) > 0)
         no_value: —
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: IS-IS adjacencies up
+        title: IS-IS up
+        description: IS-IS adjacencies that are up
         expr: (sum(netlab_isis_adjacency_up{lab="$lab"}) or vector(0)) and on() (count(netlab_expected_isis_adjacency{lab="$lab"}) > 0)
         no_value: —
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: Missing (vs topology)
+        title: Missing
         description: Sessions and adjacencies the netlab topology defines that are not up
         expr: count(@MISSING_BGP@) + count(@MISSING_OSPF@) + count(@MISSING_ISIS@) or vector(0)
         thresholds:
@@ -54,7 +56,7 @@ rows:
             value: 1
         color_mode: background
         width: 4
-        height: 4
+        height: 3
       - type: table
         title: Missing sessions and adjacencies
         description: Expected by the netlab topology but not up right now
@@ -146,6 +148,7 @@ rows:
         height: 8
       - type: timeseries
         title: Interface errors and drops per minute
+        no_value: No errors or drops
         expr: sum by (node, ifname) (increase(netlab_if_rx_errors_total{lab="$lab"}[1m]) + increase(netlab_if_tx_errors_total{lab="$lab"}[1m]) + increase(netlab_if_rx_drops_total{lab="$lab"}[1m]) + increase(netlab_if_tx_drops_total{lab="$lab"}[1m])) > 0
         legend: '{{node}} {{ifname}}'
         unit: short
@@ -153,6 +156,7 @@ rows:
         height: 8
       - type: timeseries
         title: Link state changes (last 5 min)
+        no_value: No link went down or up
         description: Carrier up/down transitions
         expr: sum by (node, ifname) (increase(netlab_if_carrier_changes_total{lab="$lab", link!="mgmt"}[5m])) > 0
         legend: '{{node}} {{ifname}}'
