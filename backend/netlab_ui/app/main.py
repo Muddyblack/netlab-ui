@@ -125,7 +125,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 # No custom default_response_class: this FastAPI version serializes routes
 # with a response_model straight to JSON bytes via Pydantic, which is already
 # faster than orjson-wrapping (ORJSONResponse is deprecated upstream).
-app = FastAPI(title="netlab APP backend", version=APP_VERSION, lifespan=_lifespan)
+# One schema per model (no "-Input"/"-Output" pairs): FastAPI versions disagree on when to split them, so
+# frontend/src/api/generated.ts would change with whichever FastAPI ran `npm run gen:api`.
+app = FastAPI(title="netlab APP backend", version=APP_VERSION, lifespan=_lifespan, separate_input_output_schemas=False)
 
 # The frontend is served from a separate Vite dev server in development.
 # This backend can deploy labs and open shells into nodes, so it must not be

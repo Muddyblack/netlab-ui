@@ -20,14 +20,7 @@ let eventSource: EventSource | null = null;
 const eventHandlers = new Set<(event: BackendEvent) => void>();
 
 export type HealthStatus = Schemas["HealthStatus"];
-/** GET /api/update (not in generated.ts until `npm run gen:api` is rerun). */
-export interface UpdateStatus {
-  current: string;
-  latest: string | null;
-  available: boolean;
-  releaseUrl: string;
-  upgradeCommand: string | null;
-}
+export type UpdateStatus = Schemas["UpdateStatus"];
 export type ContainerDiagnostics = Schemas["ContainerDiagnostics"];
 export type HostDiagnostics = Schemas["HostDiagnostics"];
 export type ContainerCheck = Schemas["ContainerCheck"];
@@ -184,8 +177,7 @@ export type AssistantCapabilities = Schemas["AssistantCapabilities"];
 export type AssistantProposal = Schemas["AssistantProposal"];
 export type AssistantProposalList = Schemas["AssistantProposalList"];
 export type AssistantProposalResult = Schemas["AssistantProposalResult"];
-export type TeachingDocument = Schemas["TeachingDocument-Output"];
-export type TeachingDocumentInput = Schemas["TeachingDocument-Input"];
+export type TeachingDocument = Schemas["TeachingDocument"];
 export type TeachingStep = Schemas["TeachingStep"];
 export type ValidationTestInfo = Schemas["ValidationTestInfo"];
 export type TeachingCheckResult = Schemas["TeachingCheckResult"];
@@ -356,7 +348,7 @@ export const api = {
   checkTeachingStep: (sessionId: string, tests: string[]) =>
     http<TeachingCheckResult>("/api/topology/teaching/check", { method: "POST", body: JSON.stringify({ sessionId, tests }) }, 1, 330000),
 
-  saveTeaching: (sessionId: string, document: TeachingDocumentInput) =>
+  saveTeaching: (sessionId: string, document: TeachingDocument) =>
     http<Schemas["TeachingSaveResult"]>("/api/topology/teaching", {
       method: "PUT",
       body: JSON.stringify({ sessionId, document }),
