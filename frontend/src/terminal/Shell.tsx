@@ -8,6 +8,7 @@ import { useTheme } from "@mui/material/styles";
 import SyncAltIcon from "@mui/icons-material/SyncAlt";
 import { getApiWsBase } from "../api/endpoint";
 import { broadcastShellInput, joinShellSync, leaveShellSync, useShellSyncMembers } from "./shellSync";
+import { TouchKeys } from "./TouchKeys";
 
 const FONT_SIZE_KEY = "netlab.terminal.fontSize";
 const MIN_FONT_SIZE = 11;
@@ -232,6 +233,7 @@ export function Shell({ node, sessionId, onClose }: { node: string; sessionId: s
         </Box>
       </Box>
       <Box ref={ref} sx={{ flexGrow: 1, minHeight: 0, p: 1, "& .xterm": { height: "100%" } }} />
+      <TouchKeys termRef={termRef} />
     </Box>
   );
 }

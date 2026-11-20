@@ -7,6 +7,7 @@ import { Box, IconButton, Tooltip, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { getApiBase, getApiWsBase } from "../api/endpoint";
 import { registerAgentInput } from "../host/agentInput";
+import { TouchKeys } from "./TouchKeys";
 
 const FONT_SIZE_KEY = "netlab.terminal.fontSize";
 const MIN_FONT_SIZE = 11;
@@ -233,6 +234,7 @@ export function PtyTerminal({ path, title, onClose }: { path: string; title: str
         </Box>
       </Box>
       <Box ref={ref} sx={{ flexGrow: 1, minHeight: 0, p: 1, "& .xterm": { height: "100%" } }} />
+      <TouchKeys termRef={termRef} />
     </Box>
   );
 }
