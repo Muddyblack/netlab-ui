@@ -4,10 +4,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import CloseIcon from "@mui/icons-material/Close";
 import { api, type ContainerCheck, type ContainerDiagnostics } from "../api/client";
-
-const DISMISS_KEY = "netlab-ui:container-setup-dismissed";
 
 export function CheckIcon({ check }: { check: ContainerCheck }) {
   if (check.ok) return <CheckCircleOutlineIcon color="success" sx={{ fontSize: 18, mt: "2px" }} />;
@@ -24,7 +21,7 @@ function suggestedFlags(checks: ContainerCheck[]): string {
   return checks.filter((c) => !c.ok && c.fix).map((c) => c.fix).join(" \\\n  ");
 }
 
-function useContainerDiagnostics(enabled: boolean) {
+export function useContainerDiagnostics(enabled: boolean) {
   const [data, setData] = useState<ContainerDiagnostics | null>(null);
   const load = useCallback(async (refresh = false) => {
     try { setData(await api.getContainerDiagnostics(refresh)); }
@@ -83,43 +80,6 @@ export function ContainerSetupPanel({ active }: { active: boolean }) {
           </Tooltip>
         </Stack>
       )}
-    </Box>
-  );
-}
-
-/** One-time startup banner when the container setup would make deployments
- * fail. Points at Settings → Environment for the details. */
-export function ContainerSetupBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const [dismissed, setDismissed] = useState(() => {
-    try { return sessionStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
-  });
-  const { data } = useContainerDiagnostics(!dismissed);
-  const errors = data?.checks.filter((c) => !c.ok && c.severity === "error") ?? [];
-  if (dismissed || !data?.inContainer || errors.length === 0) return null;
-  const dismiss = () => {
-    try { sessionStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ }
-    setDismissed(true);
-  };
-  return (
-    // Top-centred: the bottom slot belongs to EnvWarningBanner ("netlab not
-    // found"), which a misconfigured UI-only container often shows as well.
-    <Box sx={{ position: "fixed", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 2000, maxWidth: 640, width: "calc(100% - 32px)" }}>
-      <Alert
-        severity="error"
-        variant="filled"
-        sx={{ boxShadow: 4, alignItems: "center" }}
-        action={
-          <Stack direction="row" alignItems="center">
-            <Button color="inherit" size="small" onClick={() => { onOpenSettings(); dismiss(); }}>Details</Button>
-            <IconButton color="inherit" size="small" onClick={dismiss} aria-label="Dismiss container setup warning">
-              <CloseIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Stack>
-        }
-      >
-        Container setup: {errors[0].title}
-        {errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}. Lab deployments will fail until the container is recreated.
-      </Alert>
     </Box>
   );
 }

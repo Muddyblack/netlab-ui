@@ -12,7 +12,7 @@
     "lint": "oxlint",
     "postinstall": "patch-package",
     "preview": "vite preview",
-    "gen:api": "openapi-typescript ${OPENAPI_URL:-http://localhost:8000/openapi.json} -o src/api/generated.ts"
+    "gen:api": "npx --yes -p typescript@5.9.3 -p openapi-typescript@7.13.0 openapi-typescript ${OPENAPI_URL:-http://localhost:8000/openapi.json} -o src/api/generated.ts"
   },
   "dependencies": {
     "@containerlab/clab-ui": "0.3.2",
@@ -42,7 +42,6 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
-    "openapi-typescript": "^7.13.0",
     "oxlint": "^1.93.0",
     "patch-package": "^8.0.1",
     "typescript": "7.0.2",
@@ -52,10 +51,6 @@
     "dompurify": "3.4.17",
     "js-yaml": "4.3.2",
     "maplibre-gl": "6.10.0",
-    "markdown-it": "14.3.3",
-    "minimatch": "11.0.4",
-    "openapi-typescript": {
-      "typescript": "$typescript"
-    }
+    "markdown-it": "14.3.3"
   }
 }

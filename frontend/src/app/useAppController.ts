@@ -1,4 +1,3 @@
-import { setSketchClient } from "../host/sketchStore";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsLocked, useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import {
@@ -15,22 +14,9 @@ import {
   type TopologySessionClient,
   type TopologySnapshot,
 } from "@containerlab/clab-ui/session";
-import { createApiClabUiHost, type AppClabUiHost } from "../host/createHost";
-import { createDemoClabUiHost } from "../host/createDemoHost";
-import { clearDirCache } from "../host/fileProvider";
-import { type DeploymentProgress } from "../components/CanvasDeploymentProgress";
 import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
-import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
-import { loadUserState } from "../api/userState";
-import { rememberAgents } from "../components/agents/agentNames";
-import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
 import { matchesTerminalShortcut, quickOpenShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
-import { useProposalWatcher } from "../components/agents/proposalsStore";
-import { type SettingsTab } from "../components/dialogs/SettingsDialog";
-import type { TopologyRef } from "../hooks/useTabManager";
-import { runningLabMatches } from "../host/runningMatch";
-import { useAgentGuide } from "./useAgentGuide";
 
 import {
   useAppData,
@@ -64,6 +50,25 @@ import {
   registerWebTabOpener,
   openPanelTab,
   requestCopyLab,
+  setSketchClient,
+  createApiClabUiHost,
+  type AppClabUiHost,
+  createDemoClabUiHost,
+  clearDirCache,
+  type DeploymentProgress,
+  readLastOpenLabPath,
+  readOpenTabSession,
+  resolveOpenLabTab,
+  loadUserState,
+  rememberAgents,
+  persistAgentsPanelOpen,
+  readAgentsPanelOpen,
+  useProposalWatcher,
+  useIsPhone,
+  type SettingsTab,
+  type TopologyRef,
+  runningLabMatches,
+  useAgentGuide
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
@@ -204,6 +209,23 @@ function lifecycleFollowUps(
   return [];
 }
 
+type CanvasSession = Parameters<typeof refreshTopologySnapshot>[1];
+
+/**
+ * Re-request the canvas snapshot from a background trigger (files changed, container state flipped, plugin edit).
+ * Such a refresh can be queued for a lab whose session was replaced meanwhile (tab switch, a lab copied and opened):
+ * the backend then answers 404 for the old session, which used to surface as an uncaught error. The new session
+ * refreshes itself, so that 404 is ignored; anything else is logged.
+ */
+async function refreshSnapshotQuietly(session: CanvasSession): Promise<void> {
+  try {
+    await refreshTopologySnapshot({ externalChange: true }, session);
+  } catch (err) {
+    if (/\b404\b/.test(err instanceof Error ? err.message : String(err))) return;
+    console.warn("Topology refresh failed:", err);
+  }
+}
+
 export function useAppController() {
   const canvasNodes = useNodes();
   const canvasNodesRef = useRef(canvasNodes);
@@ -255,6 +277,7 @@ export function useAppController() {
   }, [assistantOpen]);
 
   // ── Left sidebar toggle ──────────────────────────────────────────────────────
+  const isPhone = useIsPhone();
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
   const handleToggleLeftSidebar = useCallback(() => {
     setIsLeftSidebarOpen(prev => !prev);
@@ -328,10 +351,19 @@ export function useAppController() {
       "border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)"
     ].join(", ");
 
+    // On a phone the explorer slides over the canvas instead of squeezing it: almost full width, leaving a strip
+    // for the handle, so the lab keeps the whole screen once a tab is open.
+    const row = layoutRow as HTMLElement;
+    row.style.position = isPhone ? "relative" : "";
+    Object.assign(pane.style, isPhone
+      ? { position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "1250", boxShadow: isLeftSidebarOpen ? "0 0 24px rgba(0,0,0,.35)" : "none" }
+      : { position: "", top: "", bottom: "", left: "", zIndex: "", boxShadow: "" });
+
     if (isLeftSidebarOpen) {
-      pane.style.width = "";
-      pane.style.minWidth = "";
-      pane.style.maxWidth = "";
+      const width = isPhone ? "calc(100% - 36px)" : "";
+      pane.style.width = width;
+      pane.style.minWidth = width;
+      pane.style.maxWidth = width;
       pane.style.borderRightWidth = "";
       pane.style.pointerEvents = "";
     } else {
@@ -341,7 +373,7 @@ export function useAppController() {
       pane.style.borderRightWidth = "0px";
       pane.style.pointerEvents = "none";
     }
-  }, [isLeftSidebarOpen]);
+  }, [isLeftSidebarOpen, isPhone, leftSidebarToggleContainer]); // the handle exists once clab-ui rendered the pane
 
   // Stable data refs consumed by the explorer controller (avoids rebuilding controller on every render)
   const labFilesRef = useRef(labFiles); labFilesRef.current = labFiles;
@@ -544,7 +576,7 @@ export function useAppController() {
   runtimeSessionRef.current = runtime.session;
 
   const refreshCanvas = useCallback(() => {
-    if (runtime?.session) void refreshTopologySnapshot({ externalChange: true }, runtime.session);
+    if (runtime?.session) void refreshSnapshotQuietly(runtime.session);
   }, [runtime]);
   refreshCanvasRef.current = refreshCanvas;
 
@@ -554,7 +586,7 @@ export function useAppController() {
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
     handleCreateLab: createLab, getOrCreateSession, topologyPathForSession, restoreTabSession
-  } = useTabManager({ host, fetchFiles, addToast, runtimeRef });
+  } = useTabManager({ host, fetchFiles, addToast, runtimeRef, labFiles });
 
   const handleCreateLab = useCallback(async (name: string) => {
     const forAi = newLabForAiRef.current;
@@ -617,6 +649,19 @@ export function useAppController() {
   // switching to another dock tab and back.
   // Keyed by the last lab tab so visiting a file/web tab does not refetch lenses.
   const lastLabTabId = useRef<string | undefined>(undefined);
+  // On a phone the explorer covers the canvas: get it out of the way when a lab or file opens, and bring it back
+  // when the last tab closes (it is then the only thing to look at).
+  const hasTabs = openTabs.length > 0;
+  useEffect(() => {
+    if (!isPhone) return;
+    setIsLeftSidebarOpen(!hasTabs);
+    if (!hasTabs) return;
+    // The canvas laid itself out while the explorer covered it: fit the topology to the whole screen once the
+    // explorer has slid away (its transition is 250ms).
+    const timer = window.setTimeout(() => hostRef.current?.emitTopoViewerEvent?.({ type: "fitViewport" }), 400);
+    return () => window.clearTimeout(timer);
+  }, [isPhone, activeTabId, hasTabs]);
+
   if (openTabs.some((t) => t.id === activeTabId && t.kind === "topology")) lastLabTabId.current = activeTabId ?? undefined;
   const netlabLenses = useNetlabLenses(sessionId ?? "", lastLabTabId.current);
   const { applyDeploymentProgress } = netlabLenses;
@@ -916,7 +961,7 @@ export function useAppController() {
         // reload. Re-request the snapshot whenever a container state flips.
         const signature = containers.map((c) => `${c.name}=${c.state}`).sort().join(",");
         if (lastStateSignature !== null && signature !== lastStateSignature) {
-          void refreshTopologySnapshot({ externalChange: true }, runtime.session);
+          void refreshSnapshotQuietly(runtime.session);
         }
         lastStateSignature = signature;
       } catch (err) {
@@ -1153,13 +1198,11 @@ export function useAppController() {
   useAgentGuide(Boolean(assistantCapabilities), sessionId, quickActions, (node, ifname) => host.openCapture(node, ifname));
 
   const handlePluginPanelChanged = useCallback(async () => {
-    if (runtime?.session) {
-      await refreshTopologySnapshot({ externalChange: true }, runtime.session);
-      refreshCanvas();
-    }
+    // One snapshot request (it used to fetch it twice: here and again through refreshCanvas).
+    if (runtime?.session) await refreshSnapshotQuietly(runtime.session);
     await refreshMultiserverEnabled();
     await refreshOpenFiles();
-  }, [runtime, refreshCanvas, refreshMultiserverEnabled, refreshOpenFiles]);
+  }, [runtime, refreshMultiserverEnabled, refreshOpenFiles]);
   handlePluginPanelChangedRef.current = handlePluginPanelChanged;
 
   useEffect(() => {
@@ -1246,7 +1289,7 @@ export function useAppController() {
     handleFileTabChange, handleFileTabSave, handleFileTabReload,
     handleCreateLab, openNewLabWithAi, getOrCreateSession,
     portalContainer, navbarPortalContainer, tabBarContainer, leftSidebarToggleContainer, netlabLinksPaletteContainer,
-    isLeftSidebarOpen, handleToggleLeftSidebar,
+    isLeftSidebarOpen, handleToggleLeftSidebar, isPhone,
     themeMode, handleThemeChange,
     labFiles, workspaces, setWorkspaces, fetchFiles,
     startup, checkStartup,

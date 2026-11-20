@@ -101,9 +101,14 @@ def _probe() -> _Probe:
         result = _Probe(None, "nsenter is not installed in this image")
     else:
         try:
-            if _run_on_host(["true"], timeout=10).returncode:
+            entered = _run_on_host(["true"], timeout=10)
+            if entered.returncode:
+                # nsenter's own words tell a missing flag from a host that refuses it (nested Docker, seccomp, …).
+                why = (entered.stderr or "").strip().splitlines()
                 result = _Probe(
-                    None, "start the container with privileged: true and pid: host (see docker-compose.yml)"
+                    None,
+                    "start the container with privileged: true and pid: host (see docker-compose.yml)"
+                    + (f"; nsenter said: {why[-1]}" if why else ""),
                 )
             else:
                 user, reason = _find_user()

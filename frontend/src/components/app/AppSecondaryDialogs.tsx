@@ -2,9 +2,7 @@ import { DEMO_MODE, defaultRuntimeSnackbar, type RuntimeSnackbarState, type Star
 import type { TopologyRef } from "../../hooks/useTabManager";
 import { RunningLabsDialog } from "../dialogs/RunningLabsDialog";
 import { WorkspaceDialogs } from "../WorkspaceDialogs";
-import { EnvWarningBanner } from "../EnvWarningBanner";
-import { ContainerSetupBanner } from "../ContainerSetup";
-import { HostSetupBanner } from "../HostSetup";
+import { SetupNotice } from "../SetupNotice";
 import { RuntimeSnackbarView } from "../RuntimeSnackbarView";
 import { UpdateNotice } from "../UpdateNotice";
 
@@ -99,9 +97,7 @@ export function AppSecondaryDialogs({
         onCreateLab={handleCreateLab}
       />
 
-      <EnvWarningBanner health={DEMO_MODE ? null : startup.health} />
-      {!DEMO_MODE && <ContainerSetupBanner onOpenSettings={openEnvironmentSettings} />}
-      {!DEMO_MODE && <HostSetupBanner onOpenSettings={openEnvironmentSettings} />}
+      <SetupNotice health={DEMO_MODE ? null : startup.health} onOpenSettings={openEnvironmentSettings} />
 
       {!DEMO_MODE && <UpdateNotice />}
       <RuntimeSnackbarView snackbar={runtimeSnackbar} onClose={() => setRuntimeSnackbar(defaultRuntimeSnackbar)} />

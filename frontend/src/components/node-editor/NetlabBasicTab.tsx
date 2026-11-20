@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import { api, type DocsDocument } from "../../api/client";
 import { DocumentationActionButtons } from "../DocumentationActionButtons";
-import { MarkdownDocumentDialog } from "../MarkdownDocumentDialog";
+import { MarkdownDocumentDialog } from "../LazyMarkdownDocumentDialog";
 import { EmbeddedDocumentationDialog } from "../EmbeddedDocumentationDialog";
 
 // Kept here (not in lifecycle/types) — that module imports this component for

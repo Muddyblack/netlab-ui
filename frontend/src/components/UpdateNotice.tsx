@@ -1,5 +1,8 @@
+import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
-import { Alert, Button, IconButton, Snackbar } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import UpgradeIcon from "@mui/icons-material/Upgrade";
+import { Box, Button, IconButton, Paper, Snackbar, Stack, Tooltip, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { api, type UpdateStatus } from "../api/client";
 
@@ -19,6 +22,7 @@ function dismissedVersion(): string | null {
  */
 export function UpdateNotice() {
   const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,31 +48,78 @@ export function UpdateNotice() {
     setUpdate(null);
   };
 
+  const copy = () => {
+    if (!update.upgradeCommand) return;
+    navigator.clipboard
+      ?.writeText(update.upgradeCommand)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => undefined);
+  };
+
   return (
-    <Snackbar open anchorOrigin={{ vertical: "bottom", horizontal: "left" }} sx={{ maxWidth: { xs: "calc(100vw - 32px)", sm: 460 } }}>
-      <Alert
-        severity="info"
-        variant="outlined"
-        sx={{ bgcolor: "background.paper", alignItems: "flex-start" }}
-        action={
-          <>
-            <Button color="inherit" size="small" href={update.releaseUrl} target="_blank" rel="noreferrer" onClick={dismiss}>
-              What&apos;s new
-            </Button>
-            <IconButton aria-label="Dismiss update notice" color="inherit" size="small" onClick={dismiss}>
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          </>
-        }
+    // Bottom right: the setup notice sits top centre, and transient toasts use the bottom centre.
+    <Snackbar
+      open
+      anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      sx={{
+        bottom: { xs: 220, sm: 24 }, // on a phone, above the setup notice and the transient toasts
+        left: { xs: 16, sm: "auto" },
+        right: { xs: 16, sm: 24 }
+      }}
+    >
+      <Paper
+        elevation={6}
+        role="status"
+        sx={{
+          width: { xs: "100%", sm: 340 },
+          p: 1.5,
+          pl: 2,
+          borderRadius: 2,
+          borderLeft: 3,
+          borderLeftColor: "primary.main"
+        }}
       >
-        netlab-ui {update.latest} is available (you have {update.current}).
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <UpgradeIcon fontSize="small" color="primary" />
+          <Typography variant="subtitle2" sx={{ flex: 1, fontWeight: 600 }}>
+            netlab-ui {update.latest} is out
+          </Typography>
+          <IconButton aria-label="Dismiss update notice" size="small" onClick={dismiss} sx={{ mr: -0.5 }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" component="div" sx={{ ml: 3.5, mt: -0.25 }}>
+          You have {update.current}
+        </Typography>
         {update.upgradeCommand && (
-          <>
-            {" "}
-            Update with <code>{update.upgradeCommand}</code>.
-          </>
+          <Stack
+            direction="row"
+            alignItems="flex-start"
+            sx={{ mt: 1.25, pl: 1, borderRadius: 1, bgcolor: "action.hover", fontFamily: "monospace", fontSize: 12 }}
+          >
+            <Box
+              component="code"
+              title={update.upgradeCommand}
+              sx={{ flex: 1, minWidth: 0, py: 0.5, overflowWrap: "anywhere", lineHeight: 1.5 }}
+            >
+              {update.upgradeCommand}
+            </Box>
+            <Tooltip title={copied ? "Copied" : "Copy command"}>
+              <IconButton aria-label="Copy update command" size="small" onClick={copy}>
+                {copied ? <CheckIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
+              </IconButton>
+            </Tooltip>
+          </Stack>
         )}
-      </Alert>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.75, mb: -0.5 }}>
+          <Button size="small" variant="text" href={update.releaseUrl} target="_blank" rel="noreferrer" onClick={dismiss}>
+            What&apos;s new
+          </Button>
+        </Box>
+      </Paper>
     </Snackbar>
   );
 }

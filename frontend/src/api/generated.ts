@@ -2475,6 +2475,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/environment/netlab/managed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Managed Netlab
+         * @description The netlab that netlab-ui can install for you in its own virtual environment.
+         */
+        get: operations["get_managed_netlab_api_environment_netlab_managed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environment/netlab/install/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Managed Netlab
+         * @description Create or update the managed netlab (venv + ``pip install networklab ansible``) and stream the output
+         *     (``{stream, line}`` then ``{done, code}``). On success the UI uses it. Closing the stream stops pip.
+         */
+        post: operations["install_managed_netlab_api_environment_netlab_install_stream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environment/container": {
         parameters: {
             query?: never;
@@ -2810,6 +2851,26 @@ export interface paths {
         };
         /** Health */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Update Status
+         * @description Is a newer netlab-ui release on PyPI? The UI shows a notice the user can dismiss per version.
+         */
+        get: operations["update_status_api_update_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4960,6 +5021,25 @@ export interface components {
             /** Up */
             up: boolean;
         };
+        /** ManagedNetlab */
+        ManagedNetlab: {
+            /** Directory */
+            directory: string;
+            /** Installed */
+            installed: boolean;
+            /** Netlabpath */
+            netlabPath: string;
+            /** Active */
+            active: boolean;
+            /** Caninstall */
+            canInstall: boolean;
+            /** Python */
+            python?: string | null;
+            /** Packages */
+            packages: string[];
+            /** Where */
+            where: string;
+        };
         /** MissingItem */
         MissingItem: {
             /** Protocol */
@@ -5419,6 +5499,22 @@ export interface components {
              * @default false
              */
             libvirt: boolean;
+            /** Netsimdir */
+            netsimDir?: string | null;
+            /** Netsimversion */
+            netsimVersion?: string | null;
+            /**
+             * Toolenv
+             * @default {}
+             */
+            toolEnv: {
+                [key: string]: string;
+            };
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** NetlabLinkPut */
         NetlabLinkPut: {
@@ -6773,35 +6869,7 @@ export interface components {
             evidence: string;
         };
         /** TeachingDocument */
-        "TeachingDocument-Input": {
-            /**
-             * Schemaversion
-             * @default 2
-             */
-            schemaVersion: number;
-            /**
-             * Id
-             * @default default
-             */
-            id: string;
-            /**
-             * Title
-             * @default Guided tour
-             */
-            title: string;
-            /**
-             * Revision
-             * @default
-             */
-            revision: string;
-            /**
-             * Steps
-             * @default []
-             */
-            steps: components["schemas"]["TeachingStep"][];
-        };
-        /** TeachingDocument */
-        "TeachingDocument-Output": {
+        TeachingDocument: {
             /**
              * Schemaversion
              * @default 2
@@ -6832,13 +6900,13 @@ export interface components {
         TeachingSaveRequest: {
             /** Sessionid */
             sessionId: string;
-            document: components["schemas"]["TeachingDocument-Input"];
+            document: components["schemas"]["TeachingDocument"];
         };
         /** TeachingSaveResult */
         TeachingSaveResult: {
             /** Ok */
             ok: boolean;
-            document: components["schemas"]["TeachingDocument-Output"];
+            document: components["schemas"]["TeachingDocument"];
         };
         /** TeachingStep */
         TeachingStep: {
@@ -7075,6 +7143,19 @@ export interface components {
              * @default []
              */
             instances: components["schemas"]["UnitInstance"][];
+        };
+        /** UpdateStatus */
+        UpdateStatus: {
+            /** Current */
+            current: string;
+            /** Latest */
+            latest?: string | null;
+            /** Available */
+            available: boolean;
+            /** Releaseurl */
+            releaseUrl: string;
+            /** Upgradecommand */
+            upgradeCommand?: string | null;
         };
         /** UserStateValue */
         UserStateValue: {
@@ -11177,7 +11258,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeachingDocument-Output"];
+                    "application/json": components["schemas"]["TeachingDocument"];
                 };
             };
             /** @description Validation Error */
@@ -11861,6 +11942,46 @@ export interface operations {
             };
         };
     };
+    get_managed_netlab_api_environment_netlab_managed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedNetlab"];
+                };
+            };
+        };
+    };
+    install_managed_netlab_api_environment_netlab_install_stream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_container_diagnostics_api_environment_container_get: {
         parameters: {
             query?: {
@@ -12428,6 +12549,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthStatus"];
+                };
+            };
+        };
+    };
+    update_status_api_update_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateStatus"];
                 };
             };
         };

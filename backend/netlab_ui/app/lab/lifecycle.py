@@ -20,7 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from netlab_ui.app.auth import request_user
 from netlab_ui.app.contract.responses import (
@@ -747,7 +747,10 @@ async def lab_collect(body: LabAction):
 
 
 class LabSave(LabAction):
-    copy: str | None = None  # directory inside the lab dir to also copy the saved configs to
+    # Directory inside the lab dir to also copy the saved configs to. Sent as "copy"; named copy_to here because a
+    # field called copy shadows BaseModel.copy (pydantic warned about it at import).
+    model_config = ConfigDict(populate_by_name=True)
+    copy_to: str | None = Field(default=None, alias="copy")
 
 
 def _save_copy_dir(lab_dir: Path, copy: str | None) -> Path | None:
@@ -773,7 +776,7 @@ async def lab_save(body: LabSave):
 
     path = common.session_path(body.sessionId)
     lab_dir = Path(path).parent
-    copy_to = _save_copy_dir(lab_dir, body.copy)
+    copy_to = _save_copy_dir(lab_dir, body.copy_to)
     topo = commands.load_topology(path)
     result = await runner.clab_save(lab_dir, "", runtime_state.clab_runtime(topo), copy_to)
     return {"code": result.code, "stdout": result.stdout, "stderr": result.stderr}

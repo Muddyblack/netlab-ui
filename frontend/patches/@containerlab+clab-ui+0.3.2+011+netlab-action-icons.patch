@@ -1,0 +1,27 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-SCQAOR7K.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-SCQAOR7K.js
+index 8e7a5dc..82f785b 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-SCQAOR7K.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-SCQAOR7K.js
+@@ -337,7 +337,21 @@ var ACTION_ICON_BY_COMMAND = {
+   "containerlab.set.sessionhostname": SettingsEthernetIcon,
+   "containerlab.endpoint.reconnect": RefreshIcon,
+   "containerlab.endpoint.remove": DeleteOutlineIcon,
+-  "containerlab.endpoint.copyurl": ContentCopyIcon
++  "containerlab.endpoint.copyurl": ContentCopyIcon,
++  // netlab-ui: netlab's own actions, which otherwise all fell through to the wrench.
++  "netlab.workspace.addtoworkspace": FolderOpenIcon,
++  "netlab.workspace.clonehere": SourceIcon,
++  "netlab.workspace.remove": DeleteOutlineIcon,
++  "netlab.lab.clonerepo": SourceIcon,
++  "netlab.examples.browse": AccountTreeIcon,
++  "netlab.labs.running": ManageSearchIcon,
++  "netlab.lab.initial": PlayArrowIcon,
++  "netlab.lab.create-configs": NoteAddIcon,
++  "netlab.lab.validate": ManageSearchIcon,
++  "netlab.lab.collect": DownloadOutlinedIcon,
++  "netlab.lab.shell.tools": OpenInBrowserIcon,
++  "netlab.lab.shell.monitoring": OpenInBrowserIcon,
++  "netlab.lab.addtoworkspace.clabtarball": DownloadOutlinedIcon
+ };
+ var ACTION_ICON_RULES = [
+   { match: (command) => command.includes("upload"), icon: FileUploadOutlinedIcon },

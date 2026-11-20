@@ -60,7 +60,7 @@ function ShortcutSetting({ title, description, store }: { title: string; descrip
         {description}
       </Typography>
       <Card variant="outlined" sx={{ p: 2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
           <Box>
             <Typography variant="subtitle2" fontWeight={600}>
               {listening ? "Press the key to use (Esc cancels)…" : terminalShortcutLabel(shortcut)}
@@ -150,7 +150,7 @@ export function SettingsGeneralTab({
         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5 }}>
           Choose your preferred color scheme for netlab GUI.
         </Typography>
-        <Stack direction="row" spacing={2}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 1.5, sm: 2 }}>
           <ThemeOptionCard
             active={themeMode === "dark"}
             onSelect={onToggleTheme}

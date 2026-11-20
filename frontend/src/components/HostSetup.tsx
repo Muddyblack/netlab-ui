@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Card, IconButton, Stack, Typography } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Box, Button, Card, Stack, Typography } from "@mui/material";
 import { api, type HostDiagnostics } from "../api/client";
 import { CheckIcon } from "./ContainerSetup";
 
-const DISMISS_KEY = "netlab-ui:host-setup-dismissed";
-
-function useHostDiagnostics(enabled: boolean) {
+export function useHostDiagnostics(enabled: boolean) {
   const [data, setData] = useState<HostDiagnostics | null>(null);
   const load = useCallback(async (refresh = false) => {
     try { setData(await api.getHostDiagnostics(refresh)); }
@@ -45,40 +42,6 @@ export function HostSetupPanel({ active }: { active: boolean }) {
           ))}
         </Stack>
       </Card>
-    </Box>
-  );
-}
-
-/** Startup banner when the host cannot deploy labs yet (first run on a fresh machine). */
-export function HostSetupBanner({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const [dismissed, setDismissed] = useState(() => {
-    try { return sessionStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
-  });
-  const { data } = useHostDiagnostics(!dismissed);
-  const errors = data?.checks.filter((c) => !c.ok && c.severity === "error") ?? [];
-  if (dismissed || !data || data.inContainer || errors.length === 0) return null;
-  const dismiss = () => {
-    try { sessionStorage.setItem(DISMISS_KEY, "1"); } catch { /* ignore */ }
-    setDismissed(true);
-  };
-  return (
-    <Box sx={{ position: "fixed", top: 56, left: "50%", transform: "translateX(-50%)", zIndex: 2000, maxWidth: 640, width: "calc(100% - 32px)" }}>
-      <Alert
-        severity="warning"
-        variant="outlined"
-        sx={{ boxShadow: 4, alignItems: "center", bgcolor: "background.paper", color: "text.primary", "& .MuiAlert-icon": { color: "warning.main" } }}
-        action={
-          <Stack direction="row" alignItems="center">
-            <Button color="warning" variant="outlined" size="small" onClick={() => { onOpenSettings(); dismiss(); }}>Set up</Button>
-            <IconButton color="inherit" size="small" onClick={dismiss} aria-label="Dismiss host setup warning">
-              <CloseIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Stack>
-        }
-      >
-        Host setup: {errors[0].title}
-        {errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}. Lab deployments will fail until this is fixed.
-      </Alert>
     </Box>
   );
 }

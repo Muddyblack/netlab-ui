@@ -15,9 +15,7 @@ import { agentBase, agentName } from "./agentNames";
 import { TerminalSlot, focusAgent, setAgentPlacement, useAgentSurface } from "./AgentSurface";
 import { persistAgentConnect, persistAgentSkipPermissions, readAgentConnect, readAgentSkipPermissions, type AgentPlacement } from "./preferences";
 import { terminalShortcutLabel, useTerminalShortcut } from "../../app/terminalShortcut";
-import { ProposalBar } from "./ProposalBar";
-import { ProposalCard } from "./ProposalCard";
-import { pendingProposals, refreshProposals, useProposals } from "./proposalsStore";
+import { Proposals } from "./Proposals";
 
 type McpInfo = NonNullable<AssistantCapabilities["mcp"]>;
 type Harness = NonNullable<AssistantCapabilities["harnesses"]>[number];
@@ -56,14 +54,6 @@ function clientSnippets({ url, authHeader }: McpInfo, harnesses: Harness[]): Arr
       .filter((item) => item.connect)
       .map((item) => ({ id: item.id, label: item.name, where: item.connect!.where, text: item.connect!.text })),
   ];
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <Typography variant="caption" sx={{ display: "block", mb: 0.75, color: "text.secondary", fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase" }}>
-      {children}
-    </Typography>
-  );
 }
 
 function CopyBlock({ text, label }: { text: string; label: string }) {
@@ -208,6 +198,50 @@ function AgentCard({ item, connect, running, onStart, onHover }: {
   );
 }
 
+type HintInput = {
+  harnesses: Harness[];
+  hovered: Harness | null;
+  connect: boolean;
+  runningTotal: number;
+  runningHovered: number;
+  capabilities: AssistantCapabilities;
+};
+type Hint = { mood: MascotState; title: string; text: string };
+
+/** Hovering an agent that is not installed: why, and what to start instead. */
+function missingAgentHint(hovered: Harness, installed: Harness[], capabilities: AssistantCapabilities): Hint {
+  const others = installed.slice(0, 2).map((item) => item.name);
+  const why = capabilities.agentsRunOn === "container"
+    ? "netlab-ui runs in a container and only sees agents installed inside it."
+    : "Click to open its page and install it.";
+  const instead = others.length
+    ? ` Or start ${others.join(" or ")} now.`
+    : " Or connect an agent you already run by hand, below.";
+  return { mood: "alarm", title: `${hovered.name} isn't installed here`, text: why + instead };
+}
+
+/** Hovering an installed agent: what clicking it does. */
+function installedAgentText(hovered: Harness, connect: boolean, runningHovered: number): string {
+  if (runningHovered > 0) return "Already running. Click to show it, or + for another session.";
+  if (!connect) return "Starts as a plain terminal in the lab's folder (the MCP switch is off).";
+  if (hovered.mcp === "register") return "Starts connected; a small MCP config is added for it first.";
+  if (hovered.mcp === "manual") return "Can't be wired up automatically. Start it, then connect it by hand below.";
+  return "Starts already connected to this lab: it can read it, run show commands and propose changes.";
+}
+
+function agentHintText({ harnesses, hovered, connect, runningTotal, runningHovered, capabilities }: HintInput): Hint {
+  const installed = harnesses.filter((item) => item.available);
+  if (hovered && !hovered.available) return missingAgentHint(hovered, installed, capabilities);
+  if (hovered) return { mood: "giggle", title: hovered.name, text: installedAgentText(hovered, connect, runningHovered) };
+  if (installed.length === 0) {
+    return { mood: "sleeping", title: "No agents found", text: "Install one from the list, or connect one you run yourself, below." };
+  }
+  if (runningTotal > 0) {
+    return { mood: "hustle", title: `${runningTotal} agent${runningTotal > 1 ? "s" : ""} running`, text: "Click a running one to show it." };
+  }
+  return { mood: "idle", title: "Pick an agent", text: "Installed ones start right here, already connected to this lab." };
+}
+
 /** The mascot's line under the cards: explains the card being hovered (why one can't be started, what to do
  * instead) and otherwise sums up what is available. Fixed height, so the panel doesn't jump as it changes. */
 function AgentHint({ harnesses, hovered, connect, runningTotal, runningHovered, capabilities }: {
@@ -218,37 +252,7 @@ function AgentHint({ harnesses, hovered, connect, runningTotal, runningHovered, 
   runningHovered: number;
   capabilities: AssistantCapabilities;
 }) {
-  const installed = harnesses.filter((item) => item.available);
-  let mood: MascotState = "idle";
-  let title = "Pick an agent";
-  let text = "Installed ones start right here, already connected to this lab.";
-  if (hovered && !hovered.available) {
-    const others = installed.slice(0, 2).map((item) => item.name);
-    mood = "alarm";
-    title = `${hovered.name} isn't installed here`;
-    text = capabilities.agentsRunOn === "container"
-      ? "netlab-ui runs in a container and only sees agents installed inside it."
-      : "Click to open its page and install it.";
-    text += others.length
-      ? ` Or start ${others.join(" or ")} now.`
-      : " Or connect an agent you already run by hand, below.";
-  } else if (hovered) {
-    mood = "giggle";
-    title = hovered.name;
-    if (runningHovered > 0) text = "Already running. Click to show it, or + for another session.";
-    else if (!connect) text = "Starts as a plain terminal in the lab's folder (the MCP switch is off).";
-    else if (hovered.mcp === "register") text = "Starts connected; a small MCP config is added for it first.";
-    else if (hovered.mcp === "manual") text = "Can't be wired up automatically. Start it, then connect it by hand below.";
-    else text = "Starts already connected to this lab: it can read it, run show commands and propose changes.";
-  } else if (installed.length === 0) {
-    mood = "sleeping";
-    title = "No agents found";
-    text = "Install one from the list, or connect one you run yourself, below.";
-  } else if (runningTotal > 0) {
-    mood = "hustle";
-    title = `${runningTotal} agent${runningTotal > 1 ? "s" : ""} running`;
-    text = "Click a running one to show it.";
-  }
+  const { mood, title, text } = agentHintText({ harnesses, hovered, connect, runningTotal, runningHovered, capabilities });
   const angry = mood === "alarm";
   return (
     <Stack
@@ -370,30 +374,6 @@ function StartAgent({ capabilities, onStartAgent }: {
 
 /** Pending proposals from the agent; nothing at all when there are none. `compact` is one line each, for
  * above a terminal: the change itself is drawn on the canvas. */
-function Proposals({ sessionId, onApplied, compact }: { sessionId: string; onApplied: () => void; compact?: boolean }) {
-  const { proposals } = useProposals();
-  const load = useCallback(() => { void refreshProposals(sessionId); }, [sessionId]);
-  const pending = pendingProposals(proposals);
-  if (pending.length === 0) return null;
-  if (compact) {
-    return (
-      <Stack spacing={0.5} sx={{ py: 0.5 }}>
-        {pending.map((proposal) => <ProposalBar key={proposal.id} proposal={proposal} onApplied={onApplied} />)}
-      </Stack>
-    );
-  }
-  return (
-    <Box>
-      <SectionLabel>Review · {pending.length}</SectionLabel>
-      <Stack spacing={1}>
-        {pending.map((proposal) => (
-          <ProposalCard key={proposal.id} proposal={proposal} onResolved={load} onApplied={onApplied} />
-        ))}
-      </Stack>
-    </Box>
-  );
-}
-
 /** Setup for any MCP tool, for agents run outside netlab-ui (an IDE, another terminal). */
 function ConnectTool({ mcp, harnesses }: { mcp: McpInfo; harnesses: Harness[] }) {
   const [client, setClient] = useState("claude");

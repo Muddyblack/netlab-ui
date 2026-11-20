@@ -22,34 +22,36 @@ rows:
             value: 1
         color_mode: background
         width: 4
-        height: 4
+        height: 3
       - type: stat
         title: CPU
         expr: rate(netlab_node_cpu_seconds_total{lab="$lab",node="$node"}[$__rate_interval]) * 100
         unit: percent
         width: 4
-        height: 4
+        height: 3
       - type: stat
         title: Memory
         expr: netlab_node_memory_bytes{lab="$lab",node="$node"}
         unit: bytes
         width: 4
-        height: 4
+        height: 3
       - type: stat
         title: Interfaces up
         expr: sum(netlab_if_oper_up{lab="$lab",node="$node",link!="mgmt"})
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: BGP sessions up
+        title: BGP up
+        description: Established BGP sessions on this node
         expr: sum(netlab_bgp_session_up{lab="$lab",node="$node"})
         width: 4
-        height: 4
+        height: 3
       - type: stat
-        title: IGP adjacencies up
+        title: IGP up
+        description: OSPF and IS-IS adjacencies that are up on this node
         expr: (sum(netlab_ospf_neighbor_up{lab="$lab",node="$node"}) or vector(0)) + (sum(netlab_isis_adjacency_up{lab="$lab",node="$node"}) or vector(0))
         width: 4
-        height: 4
+        height: 3
       - type: timeseries
         title: CPU
         expr: rate(netlab_node_cpu_seconds_total{lab="$lab",node="$node"}[$__rate_interval]) * 100
@@ -115,6 +117,7 @@ rows:
     panels:
       - type: table
         title: BGP
+        no_value: No BGP sessions on this node
         queries:
           - netlab_bgp_session_state{lab="$lab",node="$node"}
         rename:
@@ -133,6 +136,7 @@ rows:
         height: 7
       - type: table
         title: OSPF / IS-IS
+        no_value: No OSPF or IS-IS adjacencies on this node
         queries:
           - label_replace(netlab_ospf_neighbor_up{lab="$lab",node="$node"}, "protocol", "OSPF", "", "") or label_replace(netlab_isis_adjacency_up{lab="$lab",node="$node"}, "protocol", "IS-IS", "", "")
         rename:
@@ -153,12 +157,14 @@ rows:
         height: 7
       - type: timeseries
         title: BGP prefixes received per peer
+        no_value: No BGP on this node
         expr: sum without (afi, safi) (netlab_bgp_prefixes_received{lab="$lab",node="$node"})
         legend: '{{peer_node}} {{peer}}'
         width: 12
         height: 7
       - type: timeseries
         title: BGP UPDATEs per peer
+        no_value: No BGP on this node
         description: Spikes = prefix churn (route injection, flaps, policy changes)
         queries:
           - expr: rate(netlab_bgp_updates_received_total{lab="$lab",node="$node"}[$__rate_interval])
@@ -169,6 +175,7 @@ rows:
         height: 7
       - type: timeseries
         title: OSPF LSAs by type
+        no_value: No OSPF on this node
         description: Router LSAs = routers in the area, network LSAs = multi-access segments, summary = inter-area
         expr: sum by (type) (netlab_ospf_lsas_by_type{lab="$lab",node="$node"})
         legend: '{{type}}'
@@ -177,6 +184,7 @@ rows:
         height: 7
       - type: timeseries
         title: OSPF retransmissions and neighbor changes
+        no_value: No OSPF on this node
         description: Per neighbor, last 5 minutes. Retransmissions = LSAs not acknowledged in time (loss, CPU, MTU)
         queries:
           - expr: increase(netlab_ospf_neighbor_retransmissions_total{lab="$lab",node="$node"}[5m])
@@ -187,6 +195,7 @@ rows:
         height: 7
       - type: timeseries
         title: Routes
+        no_value: No routing data for this node
         expr: netlab_routes{lab="$lab",node="$node",table="rib"}
         legend: '{{afi}} {{protocol}}'
         width: 24

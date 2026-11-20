@@ -34,6 +34,50 @@ interface UiEvent {
   link?: { label: string; url: string };
 }
 
+interface UiContext {
+  sessionId: string;
+  actions: PaletteAction[];
+  capture: (node: string, interfaceName: string) => void;
+}
+
+/** What each kind of agent event opens or highlights. After it, the agent's message is shown (except where noted). */
+const UI_HANDLERS: Record<NonNullable<UiEvent["kind"]>, (event: UiEvent, ctx: UiContext) => void> = {
+  run: (event, { actions }) => {
+    // one thing at a time: what the agent opened before makes way
+    if (event.id !== "action:monitoring") openMonitoringDialog(null);
+    actions.find((action) => action.id === event.id)?.run();
+  },
+  spotlight: (event) => setSpotlight({ label: AGENT_SPOTLIGHT_LABEL, nodes: event.nodes ?? [] }),
+  monitoring: (event, { sessionId }) => openMonitoringDialog({ sessionId, tab: event.tab, faultTest: event.faultTest }),
+  nodeConfigs: (event, { sessionId }) => {
+    if (event.node) openNodeConfigsDialog({ sessionId, node: event.node });
+  },
+  openFile: (event) => {
+    if (event.path) openLabFile(event.path);
+  },
+  link: (event) => {
+    const [a = "", b = ""] = event.nodes ?? [];
+    setSpotlight({ label: AGENT_SPOTLIGHT_LABEL, nodes: event.nodes ?? [], links: [[a, b]] });
+  },
+  capture: (event, { capture }) => {
+    if (event.node && event.interface) capture(event.node, event.interface);
+  },
+  explain: () => undefined,
+  clear: () => {
+    clearAgentGuide();
+    setSpotlight(null);
+  }
+};
+
+function actOnUiEvent(event: UiEvent, ctx: UiContext): void {
+  if (!event.kind || !Object.hasOwn(UI_HANDLERS, event.kind)) return;
+  UI_HANDLERS[event.kind](event, ctx);
+  if (event.kind === "clear") return;
+  // only web links: the agent's text never becomes a script URL
+  const link = event.kind === "explain" && /^https?:\/\//.test(event.link?.url ?? "") ? event.link : undefined;
+  showAgentGuide(event.message ?? "", event.title, link);
+}
+
 /** Let an attached AI agent show the user the UI, live (MCP `ui_*` tools): tell the
  * backend what this window can open, and act on the agent's `ui` events. */
 export function useAgentGuide(
@@ -67,51 +111,7 @@ export function useAgentGuide(
     return api.subscribeEvents((raw) => {
       const event = raw as UiEvent;
       if (event.type !== "ui" || event.sessionId !== sessionId) return;
-      const message = event.message ?? "";
-      switch (event.kind) {
-        case "run":
-          // one thing at a time: what the agent opened before makes way
-          if (event.id !== "action:monitoring") openMonitoringDialog(null);
-          actionsRef.current.find((action) => action.id === event.id)?.run();
-          showAgentGuide(message, event.title);
-          break;
-        case "spotlight":
-          setSpotlight({ label: AGENT_SPOTLIGHT_LABEL, nodes: event.nodes ?? [] });
-          showAgentGuide(message, event.title);
-          break;
-        case "monitoring":
-          openMonitoringDialog({ sessionId, tab: event.tab, faultTest: event.faultTest });
-          showAgentGuide(message, event.title);
-          break;
-        case "nodeConfigs":
-          if (event.node) openNodeConfigsDialog({ sessionId, node: event.node });
-          showAgentGuide(message, event.title);
-          break;
-        case "openFile":
-          if (event.path) openLabFile(event.path);
-          showAgentGuide(message, event.title);
-          break;
-        case "link":
-          setSpotlight({ label: AGENT_SPOTLIGHT_LABEL, nodes: event.nodes ?? [], links: [[event.nodes?.[0] ?? "", event.nodes?.[1] ?? ""]] });
-          showAgentGuide(message, event.title);
-          break;
-        case "capture":
-          if (event.node && event.interface) captureInterfaceRef.current(event.node, event.interface);
-          showAgentGuide(message, event.title);
-          break;
-        case "explain":
-          // only web links: the agent's text never becomes a script URL
-          showAgentGuide(
-            message,
-            event.title,
-            /^https?:\/\//.test(event.link?.url ?? "") ? event.link : undefined
-          );
-          break;
-        case "clear":
-          clearAgentGuide();
-          setSpotlight(null);
-          break;
-      }
+      actOnUiEvent(event, { sessionId, actions: actionsRef.current, capture: captureInterfaceRef.current });
     });
   }, [enabled, sessionId]);
 }

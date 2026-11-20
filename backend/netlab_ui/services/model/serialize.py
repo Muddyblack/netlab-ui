@@ -81,7 +81,8 @@ _KNOWN_GROUP = {"members", "module"}
 def from_dict(data: dict[str, Any] | None) -> Topology:
     data = dict(data or {})
     topo = Topology(
-        name=data.get("name", "lab"),
+        name=str(data["name"]) if data.get("name") else "lab",
+        name_implicit=not data.get("name"),
         provider=data.get("provider"),
         defaults=dict(data.get("defaults") or {}),
     )
@@ -308,7 +309,7 @@ def to_dict(topo: Topology) -> dict[str, Any]:
     else:
         groups_value = None
 
-    keyed_values: dict[str, Any] = {"name": topo.name}
+    keyed_values: dict[str, Any] = {} if topo.name_implicit else {"name": topo.name}
     if topo.provider:
         keyed_values["provider"] = topo.provider
     if topo.defaults:

@@ -27,13 +27,16 @@ from typing import Any
 
 from netlab_ui.services import annotations as ann_store
 from netlab_ui.services.model import serialize
-from netlab_ui.services.model.topology import Group, Link, Node, Topology
+from netlab_ui.services.model.topology import Group, Link, Node, Topology, default_lab_name
 
 
 def load_topology(path: str) -> Topology:
     p = Path(path)
     if p.exists():
-        return serialize.from_yaml(p.read_text())
+        topo = serialize.from_yaml(p.read_text())
+        if topo.name_implicit:
+            topo.name = default_lab_name(path)  # what netlab calls it; never written back
+        return topo
     return Topology(name=p.stem)
 
 
@@ -476,8 +479,9 @@ def _set_lab_settings(path: str, cmd: dict[str, Any]) -> bool:
     topo = load_topology(path)
 
     name = cmd.get("name")
-    if name:
+    if name and name != topo.name:
         topo.name = name
+        topo.name_implicit = False
 
     mgmt = cmd.get("mgmt")
     if isinstance(mgmt, dict):

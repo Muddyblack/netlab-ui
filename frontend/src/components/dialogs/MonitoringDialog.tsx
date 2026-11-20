@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Autocomplete,
@@ -29,6 +29,7 @@ import {
   createFilterOptions
 } from "@mui/material";
 import { openWebTab } from "../../host/webTabStore";
+import { useIsPhone } from "../../hooks/useIsPhone";
 import { MonitoringOptions, type MonitoringOptionChange } from "./MonitoringOptions";
 import { MonitoringScopeEditor } from "./MonitoringScopeEditor";
 import { SetupSection } from "./SetupSection";
@@ -212,6 +213,51 @@ function DashboardMenu({ port, dash, nodes, live }: {
   );
 }
 
+/** Sessions and adjacencies the topology defines that are not up, or a line saying all are. */
+function MissingList({ missing }: { missing: MonitoringSummary["missing"] }) {
+  if (missing.length === 0) {
+    return (
+      <Stack direction="row" spacing={0.75} alignItems="center">
+        <CheckCircleOutlineIcon fontSize="small" color="success" />
+        <Typography variant="body2" color="text.secondary">
+          Every session and adjacency the topology defines is up.
+        </Typography>
+      </Stack>
+    );
+  }
+  return (
+    <Alert severity="warning" variant="outlined">
+      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        Defined in the topology but not up
+      </Typography>
+      {missing.slice(0, 10).map((item) => (
+        <Typography
+          key={`${item.protocol}-${item.node}-${item.peer}-${item.detail}`}
+          variant="body2"
+        >
+          {item.protocol} · {item.node}{item.peer ? ` → ${item.peer}` : ""}
+          {item.detail ? ` (${item.detail})` : ""}
+        </Typography>
+      ))}
+      {missing.length > 10 && (
+        <Typography variant="body2">… and {missing.length - 10} more</Typography>
+      )}
+    </Alert>
+  );
+}
+
+/** Says when the numbers cover only part of the lab (a monitoring scope, or nodes with host metrics only). */
+function CoverageNote({ state }: { state: MonitoringState }) {
+  if (state.nodesMonitored >= state.nodesTotal && state.nodesHostOnly === 0) return null;
+  return (
+    <Typography variant="caption" color="text.secondary" component="div">
+      Monitoring {state.nodesMonitored} of {state.nodesTotal} nodes
+      {state.nodesHostOnly > 0 ? `, ${state.nodesHostOnly} of them host metrics only` : ""}: the numbers above
+      are for those. Change it under Setup.
+    </Typography>
+  );
+}
+
 function HealthTab({ state, summary, updatedAt }: {
   state: MonitoringState;
   summary: MonitoringSummary | null;
@@ -238,45 +284,14 @@ function HealthTab({ state, summary, updatedAt }: {
       {summary ? (
         <>
           {/* What is down comes first: it's the reason to look. */}
-          {summary.missing.length > 0 ? (
-            <Alert severity="warning" variant="outlined">
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                Defined in the topology but not up
-              </Typography>
-              {summary.missing.slice(0, 10).map((item) => (
-                <Typography
-                  key={`${item.protocol}-${item.node}-${item.peer}-${item.detail}`}
-                  variant="body2"
-                >
-                  {item.protocol} · {item.node}{item.peer ? ` → ${item.peer}` : ""}
-                  {item.detail ? ` (${item.detail})` : ""}
-                </Typography>
-              ))}
-              {summary.missing.length > 10 && (
-                <Typography variant="body2">… and {summary.missing.length - 10} more</Typography>
-              )}
-            </Alert>
-          ) : (
-            <Stack direction="row" spacing={0.75} alignItems="center">
-              <CheckCircleOutlineIcon fontSize="small" color="success" />
-              <Typography variant="body2" color="text.secondary">
-                Every session and adjacency the topology defines is up.
-              </Typography>
-            </Stack>
-          )}
+          <MissingList missing={summary.missing} />
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <HealthTile label="Nodes up" up={summary.nodesUp} expected={summary.nodes} />
             {protocols.map((item) => (
               <HealthTile key={item.label} label={item.label} up={item.up} expected={item.expected} />
             ))}
           </Stack>
-          {(state.nodesMonitored < state.nodesTotal || state.nodesHostOnly > 0) && (
-            <Typography variant="caption" color="text.secondary" component="div">
-              Monitoring {state.nodesMonitored} of {state.nodesTotal} nodes
-              {state.nodesHostOnly > 0 ? `, ${state.nodesHostOnly} of them host metrics only` : ""}: the numbers above
-              are for those. Change it under Setup.
-            </Typography>
-          )}
+          <CoverageNote state={state} />
           {updatedAt !== null && (
             <Typography variant="caption" color="text.secondary">
               Updated {ago(updatedAt, now)} · refreshes every 10 s
@@ -449,30 +464,121 @@ function precisionLabel(exact: unknown, upAt: unknown): string {
   return upAt ? "sampled (0.5 s)" : "";
 }
 
-function FaultsTab({
-  sessionId,
-  state,
-  prefill,
-  onError
-}: {
-  sessionId: string;
-  state: MonitoringState;
-  prefill?: FaultTestPrefill;
-  onError: (text: string) => void;
+type FaultEnd = "a" | "b" | "both";
+type FaultLink = MonitoringState["links"][number];
+type ScenarioStart = Parameters<typeof api.startScenario>[0];
+
+/** The interfaces a quick test takes down: one end of the link, the other, or both. */
+function faultEnds(chosen: FaultLink | undefined, end: FaultEnd) {
+  if (!chosen) return [];
+  return [
+    ...(end !== "b" ? [{ node: chosen.a_node, ifname: chosen.a_ifname }] : []),
+    ...(end !== "a" && chosen.b_node ? [{ node: chosen.b_node, ifname: chosen.b_ifname }] : [])
+  ];
+}
+
+/** The lab's fault test runs, polled (fast while one runs), and starting one. */
+function useFaultRuns(sessionId: string, onError: (text: string) => void) {
+  const [runs, setRuns] = useState<ScenarioRun[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      setRuns(await api.listScenarios(sessionId));
+    } catch (err) {
+      onError(errorText(err));
+    }
+  }, [sessionId, onError]);
+  const running = runs.find((run) => run.status === "running");
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), running ? 1500 : 10000);
+    return () => window.clearInterval(timer);
+  }, [load, running]);
+  const start = async (request: Omit<ScenarioStart, "sessionId">) => {
+    setBusy(true);
+    try {
+      await api.startScenario({ sessionId, ...request });
+      await load();
+    } catch (err) {
+      onError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { runs, running, busy, load, start };
+}
+
+/** One of the lab's own fault tests (monitoring.faults): what it does, its last verdict, and Run. */
+function DefinedFaultRow({ fault, last, disabled, onRun }: {
+  fault: FaultTests["faults"][number];
+  last: ScenarioRun | undefined;
+  disabled: boolean;
+  onRun: () => void;
 }) {
-  const links = state.links ?? [];
+  const verdict = last?.summary.verdict?.result;
+  return (
+    <Stack
+      direction="row"
+      spacing={1.5}
+      alignItems="center"
+      sx={{ px: 1.25, py: 0.75, border: 1, borderColor: "divider", borderRadius: 1 }}
+    >
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          {fault.name}
+          {fault.description && (
+            <Typography component="span" variant="body2" color="text.secondary">
+              {" "}
+              — {fault.description}
+            </Typography>
+          )}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {fault.links.join(", ")} · {fault.cycles}× down {fault.down}s / up {fault.up}s
+          {fault.validateAfter
+            ? ` · validate ${fault.validateAfter.length ? fault.validateAfter.join(", ") : "all"}`
+            : ""}
+          {fault.expectRecovery !== null && fault.expectRecovery !== undefined
+            ? ` · recovery ≤ ${fault.expectRecovery} s`
+            : ""}
+        </Typography>
+      </Box>
+      {verdict && (verdict === "passed" || verdict === "failed") && (
+        <VerdictChip
+          value={verdict}
+          title={`Last run ${new Date(last.startedAt * 1000).toLocaleString()}`}
+        />
+      )}
+      <Button
+        size="small"
+        variant="outlined"
+        startIcon={<PlayArrowIcon />}
+        disabled={disabled}
+        onClick={onRun}
+      >
+        Run
+      </Button>
+    </Stack>
+  );
+}
+
+/** The quick test: pick a link (and which end), the schedule, and run it once. An AI agent can fill it in. */
+function QuickTest({ links, prefill, hasDefined, validationTests, running, busy, onStart, onStop }: {
+  links: FaultLink[];
+  prefill?: FaultTestPrefill;
+  hasDefined: boolean;
+  validationTests: number;
+  running: ScenarioRun | undefined;
+  busy: boolean;
+  onStart: (request: Omit<ScenarioStart, "sessionId">) => Promise<void>;
+  onStop: () => void;
+}) {
   const [link, setLink] = useState(links[0]?.link ?? "");
-  const [end, setEnd] = useState<"a" | "b" | "both">("a");
+  const [end, setEnd] = useState<FaultEnd>("a");
   const [cycles, setCycles] = useState(3);
   const [down, setDown] = useState(10);
   const [up, setUp] = useState(30);
-  const [runs, setRuns] = useState<ScenarioRun[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [defined, setDefined] = useState<FaultTests>({ faults: [], validationTests: [] });
   const [validate, setValidate] = useState(false);
-  useEffect(() => {
-    void api.listFaultTests(sessionId).then(setDefined, () => undefined);
-  }, [sessionId]);
   // Filled in by an AI agent: highlight Run until the user starts it
   const [suggested, setSuggested] = useState(false);
   useEffect(() => {
@@ -484,67 +590,243 @@ function FaultsTab({
     setUp(prefill.up);
     setSuggested(true);
   }, [prefill]);
-
-  const load = useCallback(async () => {
-    try {
-      setRuns(await api.listScenarios(sessionId));
-    } catch (err) {
-      onError(errorText(err));
-    }
-  }, [sessionId, onError]);
-
-  const running = runs.find((run) => run.status === "running");
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), running ? 1500 : 10000);
-    return () => window.clearInterval(timer);
-  }, [load, running]);
   useEffect(() => {
     if (!links.some((item) => item.link === link) && links[0]) setLink(links[0].link);
   }, [links, link]);
 
   const chosen = links.find((item) => item.link === link);
-  const ends = chosen
-    ? [
-        ...(end !== "b" ? [{ node: chosen.a_node, ifname: chosen.a_ifname }] : []),
-        ...(end !== "a" && chosen.b_node ? [{ node: chosen.b_node, ifname: chosen.b_ifname }] : [])
-      ]
-    : [];
+  const ends = faultEnds(chosen, end);
   const start = async () => {
-    setBusy(true);
     setSuggested(false);
-    try {
-      await api.startScenario({
-        sessionId,
-        links: ends,
-        cycles,
-        downSeconds: down,
-        upSeconds: up,
-        settleSeconds: Math.max(60, up * 2),
-        validateAfter: validate ? [] : null
-      });
-      await load();
-    } catch (err) {
-      onError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
+    await onStart({
+      links: ends,
+      cycles,
+      downSeconds: down,
+      upSeconds: up,
+      settleSeconds: Math.max(60, up * 2),
+      validateAfter: validate ? [] : null
+    });
   };
-  const runNamed = async (name: string) => {
-    setBusy(true);
-    try {
-      await api.startScenario({ sessionId, name });
-      await load();
-    } catch (err) {
-      onError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  return (
+    <>
+    <Typography variant="overline" color="text.secondary" sx={{ mb: -1.5 }}>
+      {hasDefined ? "Quick test" : "Test a link"}
+    </Typography>
+    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+      <Autocomplete
+        size="small"
+        options={links.map((item) => item.link)}
+        value={link || null}
+        onChange={(_event, value) => setLink(value ?? "")}
+        filterOptions={firstMatches}
+        disableClearable={Boolean(link)}
+        sx={{ minWidth: 220, flex: "1 1 220px" }}
+        renderInput={(params) => <TextField {...params} label="Link" placeholder="Type to find a link" />}
+      />
+      {chosen?.b_node && (
+        <TextField
+          select
+          size="small"
+          label="Take down"
+          value={end}
+          onChange={(event) => setEnd(event.target.value as FaultEnd)}
+          sx={{ minWidth: 140 }}
+        >
+          <MenuItem value="a">
+            {chosen.a_node} {chosen.a_ifname}
+          </MenuItem>
+          <MenuItem value="b">
+            {chosen.b_node} {chosen.b_ifname}
+          </MenuItem>
+          <MenuItem value="both">both ends</MenuItem>
+        </TextField>
+      )}
+      <TextField
+        size="small"
+        type="number"
+        label="Cycles"
+        value={cycles}
+        onChange={(event) => setCycles(Number(event.target.value))}
+        sx={{ width: 84 }}
+        slotProps={{ htmlInput: { min: 1, max: 100 } }}
+      />
+      <TextField
+        size="small"
+        type="number"
+        label="Down (s)"
+        value={down}
+        onChange={(event) => setDown(Number(event.target.value))}
+        sx={{ width: 96 }}
+        slotProps={{ htmlInput: { min: 1 } }}
+      />
+      <TextField
+        size="small"
+        type="number"
+        label="Up (s)"
+        value={up}
+        onChange={(event) => setUp(Number(event.target.value))}
+        sx={{ width: 90 }}
+        slotProps={{ htmlInput: { min: 1 } }}
+      />
+      {running ? (
+        <Button
+          variant="outlined"
+          color="error"
+          startIcon={<StopIcon />}
+          onClick={onStop}
+        >
+          Stop
+        </Button>
+      ) : (
+        <Button
+          variant="contained"
+          startIcon={<PlayArrowIcon />}
+          disabled={busy || ends.length === 0}
+          onClick={() => void start()}
+          sx={
+            suggested
+              ? { outline: 3, outlineColor: "primary.light", outlineOffset: 2 }
+              : undefined
+          }
+        >
+          Run
+        </Button>
+      )}
+    </Stack>
+    {validationTests > 0 && (
+      <FormControlLabel
+        sx={{ mt: -1 }}
+        control={
+          <Checkbox
+            size="small"
+            checked={validate}
+            onChange={(event) => setValidate(event.target.checked)}
+          />
+        }
+        label={
+          <Typography variant="body2" color="text.secondary">
+            Run the lab&apos;s netlab validate tests after each recovery (
+            {validationTests})
+          </Typography>
+        }
+      />
+    )}
+    {!hasDefined && (
+      <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+        Tip: write repeatable fault tests into the topology (<code>monitoring.faults</code>), with
+        netlab validate checks and a pass/fail limit — they show up here with a Run button.
+      </Typography>
+    )}
+    {suggested && !running && (
+      <Typography variant="caption" color="primary">
+        Set up by your AI agent — check the link and timing, then press Run.
+      </Typography>
+    )}
+    </>
+  );
+}
+
+/** The newest run: what it tested, its verdict and reasons, progress while it runs, and the recovery times. */
+function LatestRun({ run: latest }: { run: ScenarioRun }) {
+  return (
+    <Box>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="baseline"
+        sx={{ mb: 0.75 }}
+        flexWrap="wrap"
+        useFlexGap
+      >
+        <Typography variant="subtitle2">
+          {latest.name ? `${latest.name} · ` : ""}
+          {latest.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {latest.cycles}× down {latest.downSeconds}s / up {latest.upSeconds}s ·{" "}
+          {new Date(latest.startedAt * 1000).toLocaleString()}
+        </Typography>
+        <VerdictChip value={verdictOf(latest)} />
+      </Stack>
+      {(latest.summary.verdict?.reasons ?? []).length > 0 && (
+        <Alert severity="error" variant="outlined" sx={{ mb: 1, py: 0 }}>
+          {(latest.summary.verdict?.reasons ?? []).map((reason) => (
+            <Typography key={reason} variant="body2">
+              {reason}
+            </Typography>
+          ))}
+        </Alert>
+      )}
+      {latest.status === "running" && (
+        <Box sx={{ mb: 1 }}>
+          <LinearProgress
+            variant="determinate"
+            value={(100 * Math.max(0, latest.results.length - 1)) / latest.cycles}
+          />
+          <Typography variant="caption" color="text.secondary">
+            {latest.message}
+          </Typography>
+        </Box>
+      )}
+      {latest.status !== "running" && latest.message && latest.status !== "done" && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {latest.message}
+        </Alert>
+      )}
+      {latest.results.length > 0 && <ScenarioResults run={latest} />}
+      {latest.summary.recovery && (
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          {latest.summary.recovery.min === latest.summary.recovery.max
+            ? `Recovery ${recovery(latest.summary.recovery.min)}`
+            : `Recovery ${recovery(latest.summary.recovery.min)} – ${recovery(latest.summary.recovery.max)} ` +
+              `(avg ${recovery(latest.summary.recovery.avg)})`}
+          {latest.summary.notRecovered > 0
+            ? ` · ${latest.summary.notRecovered} not recovered`
+            : ""}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/** Up to five runs before the newest one, one line each. */
+function EarlierRuns({ runs, latest }: { runs: ScenarioRun[]; latest: ScenarioRun | undefined }) {
+  return (
+    <Box>
+      <Typography variant="overline" color="text.secondary">
+        Earlier runs
+      </Typography>
+      {runs.slice(latest === runs[0] ? 1 : 0, 6).map((run) => (
+        <Typography key={run.id} variant="body2" color="text.secondary">
+          {new Date(run.startedAt * 1000).toLocaleString()} · {run.name ? `${run.name} · ` : ""}
+          {run.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")} · {run.cycles}× ·{" "}
+          recovery avg {recovery(run.summary.recovery?.avg)} · {verdictOf(run)}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
+function FaultsTab({
+  sessionId,
+  state,
+  prefill,
+  onError
+}: {
+  sessionId: string;
+  state: MonitoringState;
+  prefill?: FaultTestPrefill;
+  onError: (text: string) => void;
+}) {
+  const links = useMemo(() => state.links ?? [], [state.links]); // a fresh [] each render re-ran QuickTest's link check
+  const [defined, setDefined] = useState<FaultTests>({ faults: [], validationTests: [] });
+  useEffect(() => {
+    void api.listFaultTests(sessionId).then(setDefined, () => undefined);
+  }, [sessionId]);
+  const { runs, running, busy, load, start } = useFaultRuns(sessionId, onError);
   const latest = running ?? runs[0];
   const live = Object.values(state.running).some(Boolean);
-  const lastVerdict = (name: string) =>
-    runs.find((run) => run.name === name && run.status !== "running");
+  const lastVerdict = (name: string) => runs.find((run) => run.name === name && run.status !== "running");
 
   if (!live)
     return (
@@ -564,244 +846,30 @@ function FaultsTab({
             This lab&apos;s fault tests
           </Typography>
           <Stack spacing={0.75}>
-            {defined.faults.map((fault) => {
-              const last = lastVerdict(fault.name);
-              const verdict = last?.summary.verdict?.result;
-              return (
-                <Stack
-                  key={fault.name}
-                  direction="row"
-                  spacing={1.5}
-                  alignItems="center"
-                  sx={{ px: 1.25, py: 0.75, border: 1, borderColor: "divider", borderRadius: 1 }}
-                >
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {fault.name}
-                      {fault.description && (
-                        <Typography component="span" variant="body2" color="text.secondary">
-                          {" "}
-                          — {fault.description}
-                        </Typography>
-                      )}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {fault.links.join(", ")} · {fault.cycles}× down {fault.down}s / up {fault.up}s
-                      {fault.validateAfter
-                        ? ` · validate ${fault.validateAfter.length ? fault.validateAfter.join(", ") : "all"}`
-                        : ""}
-                      {fault.expectRecovery !== null && fault.expectRecovery !== undefined
-                        ? ` · recovery ≤ ${fault.expectRecovery} s`
-                        : ""}
-                    </Typography>
-                  </Box>
-                  {verdict && (verdict === "passed" || verdict === "failed") && (
-                    <VerdictChip
-                      value={verdict}
-                      title={`Last run ${new Date(last.startedAt * 1000).toLocaleString()}`}
-                    />
-                  )}
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<PlayArrowIcon />}
-                    disabled={busy || Boolean(running)}
-                    onClick={() => void runNamed(fault.name)}
-                  >
-                    Run
-                  </Button>
-                </Stack>
-              );
-            })}
-          </Stack>
-        </Box>
-      )}
-      <Typography variant="overline" color="text.secondary" sx={{ mb: -1.5 }}>
-        {defined.faults.length > 0 ? "Quick test" : "Test a link"}
-      </Typography>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Autocomplete
-          size="small"
-          options={links.map((item) => item.link)}
-          value={link || null}
-          onChange={(_event, value) => setLink(value ?? "")}
-          filterOptions={firstMatches}
-          disableClearable={Boolean(link)}
-          sx={{ minWidth: 220, flex: "1 1 220px" }}
-          renderInput={(params) => <TextField {...params} label="Link" placeholder="Type to find a link" />}
-        />
-        {chosen?.b_node && (
-          <TextField
-            select
-            size="small"
-            label="Take down"
-            value={end}
-            onChange={(event) => setEnd(event.target.value as "a" | "b" | "both")}
-            sx={{ minWidth: 140 }}
-          >
-            <MenuItem value="a">
-              {chosen.a_node} {chosen.a_ifname}
-            </MenuItem>
-            <MenuItem value="b">
-              {chosen.b_node} {chosen.b_ifname}
-            </MenuItem>
-            <MenuItem value="both">both ends</MenuItem>
-          </TextField>
-        )}
-        <TextField
-          size="small"
-          type="number"
-          label="Cycles"
-          value={cycles}
-          onChange={(event) => setCycles(Number(event.target.value))}
-          sx={{ width: 84 }}
-          slotProps={{ htmlInput: { min: 1, max: 100 } }}
-        />
-        <TextField
-          size="small"
-          type="number"
-          label="Down (s)"
-          value={down}
-          onChange={(event) => setDown(Number(event.target.value))}
-          sx={{ width: 96 }}
-          slotProps={{ htmlInput: { min: 1 } }}
-        />
-        <TextField
-          size="small"
-          type="number"
-          label="Up (s)"
-          value={up}
-          onChange={(event) => setUp(Number(event.target.value))}
-          sx={{ width: 90 }}
-          slotProps={{ htmlInput: { min: 1 } }}
-        />
-        {running ? (
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<StopIcon />}
-            onClick={() => void api.cancelScenario(running.id).then(load)}
-          >
-            Stop
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            startIcon={<PlayArrowIcon />}
-            disabled={busy || ends.length === 0}
-            onClick={() => void start()}
-            sx={
-              suggested
-                ? { outline: 3, outlineColor: "primary.light", outlineOffset: 2 }
-                : undefined
-            }
-          >
-            Run
-          </Button>
-        )}
-      </Stack>
-      {defined.validationTests.length > 0 && (
-        <FormControlLabel
-          sx={{ mt: -1 }}
-          control={
-            <Checkbox
-              size="small"
-              checked={validate}
-              onChange={(event) => setValidate(event.target.checked)}
-            />
-          }
-          label={
-            <Typography variant="body2" color="text.secondary">
-              Run the lab&apos;s netlab validate tests after each recovery (
-              {defined.validationTests.length})
-            </Typography>
-          }
-        />
-      )}
-      {defined.faults.length === 0 && (
-        <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-          Tip: write repeatable fault tests into the topology (<code>monitoring.faults</code>), with
-          netlab validate checks and a pass/fail limit — they show up here with a Run button.
-        </Typography>
-      )}
-      {suggested && !running && (
-        <Typography variant="caption" color="primary">
-          Set up by your AI agent — check the link and timing, then press Run.
-        </Typography>
-      )}
-      {latest && (
-        <Box>
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="baseline"
-            sx={{ mb: 0.75 }}
-            flexWrap="wrap"
-            useFlexGap
-          >
-            <Typography variant="subtitle2">
-              {latest.name ? `${latest.name} · ` : ""}
-              {latest.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {latest.cycles}× down {latest.downSeconds}s / up {latest.upSeconds}s ·{" "}
-              {new Date(latest.startedAt * 1000).toLocaleString()}
-            </Typography>
-            <VerdictChip value={verdictOf(latest)} />
-          </Stack>
-          {(latest.summary.verdict?.reasons ?? []).length > 0 && (
-            <Alert severity="error" variant="outlined" sx={{ mb: 1, py: 0 }}>
-              {(latest.summary.verdict?.reasons ?? []).map((reason) => (
-                <Typography key={reason} variant="body2">
-                  {reason}
-                </Typography>
-              ))}
-            </Alert>
-          )}
-          {latest.status === "running" && (
-            <Box sx={{ mb: 1 }}>
-              <LinearProgress
-                variant="determinate"
-                value={(100 * Math.max(0, latest.results.length - 1)) / latest.cycles}
+            {defined.faults.map((fault) => (
+              <DefinedFaultRow
+                key={fault.name}
+                fault={fault}
+                last={lastVerdict(fault.name)}
+                disabled={busy || Boolean(running)}
+                onRun={() => void start({ name: fault.name })}
               />
-              <Typography variant="caption" color="text.secondary">
-                {latest.message}
-              </Typography>
-            </Box>
-          )}
-          {latest.status !== "running" && latest.message && latest.status !== "done" && (
-            <Alert severity="warning" sx={{ mb: 1 }}>
-              {latest.message}
-            </Alert>
-          )}
-          {latest.results.length > 0 && <ScenarioResults run={latest} />}
-          {latest.summary.recovery && (
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              {latest.summary.recovery.min === latest.summary.recovery.max
-                ? `Recovery ${recovery(latest.summary.recovery.min)}`
-                : `Recovery ${recovery(latest.summary.recovery.min)} – ${recovery(latest.summary.recovery.max)} ` +
-                  `(avg ${recovery(latest.summary.recovery.avg)})`}
-              {latest.summary.notRecovered > 0
-                ? ` · ${latest.summary.notRecovered} not recovered`
-                : ""}
-            </Typography>
-          )}
+            ))}
+          </Stack>
         </Box>
       )}
-      {runs.length > 1 && (
-        <Box>
-          <Typography variant="overline" color="text.secondary">
-            Earlier runs
-          </Typography>
-          {runs.slice(latest === runs[0] ? 1 : 0, 6).map((run) => (
-            <Typography key={run.id} variant="body2" color="text.secondary">
-              {new Date(run.startedAt * 1000).toLocaleString()} · {run.name ? `${run.name} · ` : ""}
-              {run.links.map((item) => `${item.node} ${item.ifname}`).join(" + ")} · {run.cycles}× ·{" "}
-              recovery avg {recovery(run.summary.recovery?.avg)} · {verdictOf(run)}
-            </Typography>
-          ))}
-        </Box>
-      )}
+      <QuickTest
+        links={links}
+        prefill={prefill}
+        hasDefined={defined.faults.length > 0}
+        validationTests={defined.validationTests.length}
+        running={running}
+        busy={busy}
+        onStart={start}
+        onStop={() => { if (running) void api.cancelScenario(running.id).then(load); }}
+      />
+      {latest && <LatestRun run={latest} />}
+      {runs.length > 1 && <EarlierRuns runs={runs} latest={latest} />}
     </Stack>
   );
 }
@@ -964,13 +1032,100 @@ function useMonitoringController(sessionId: string | null, request: MonitoringDi
   return { state, summary, busy, error, setError, tab, setTab, updatedAt, reload: load, showError, toggle, place, options, act, status, request };
 }
 
+type MonitoringController = ReturnType<typeof useMonitoringController>;
+
+/** The open tab's content, shared by the dialog and the side panel. */
+function MonitoringTabContent({ c, sessionId, prefill }: { c: MonitoringController; sessionId: string; prefill?: FaultTestPrefill }) {
+  const { state, summary, busy, tab, updatedAt, reload, showError, place, options, act } = c;
+  if (!state) return null;
+  if (tab === "health") return <HealthTab state={state} summary={summary} updatedAt={updatedAt} />;
+  if (tab === "faults") return <FaultsTab sessionId={sessionId} state={state} prefill={prefill} onError={showError} />;
+  return (
+    <SetupTab
+      sessionId={sessionId}
+      state={state}
+      busy={busy}
+      onPlace={(value) => void place(value)}
+      onAction={(action) => void act(action)}
+      onOptions={(change) => void options(change)}
+      onScopeChanged={() => void reload()}
+    />
+  );
+}
+
+/** The dialog's title row: lab state, a spinner while busy, and the switch that turns monitoring on or off. */
+function MonitoringTitleRow({ c }: { c: MonitoringController }) {
+  const { state, busy, toggle, status } = c;
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      <Typography variant="h6" component="span">
+        Monitoring
+      </Typography>
+      {status && (
+        <Chip
+          size="small"
+          color={status.color}
+          variant={status.color === "default" ? "outlined" : "filled"}
+          label={status.label}
+        />
+      )}
+      {busy && <CircularProgress size={14} />}
+      <Box sx={{ flex: 1 }} />
+      {state && (
+        <Tooltip
+          title={state.enabled ? "Stop monitoring this lab" : "Monitor this lab (every deploy)"}
+        >
+          <Stack direction="row" alignItems="center">
+            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
+              Monitor this lab
+            </Typography>
+            <Switch
+              checked={state.enabled}
+              disabled={busy || !state.pluginAvailable}
+              onChange={(_event, on) => void toggle(on)}
+              slotProps={{ input: { "aria-label": "Monitor this lab" } }}
+            />
+          </Stack>
+        </Tooltip>
+      )}
+    </Stack>
+  );
+}
+
+/** Before monitoring is on: loading, the plugin missing, or what switching it on gives. */
+function MonitoringIntro({ c }: { c: MonitoringController }) {
+  const { state, error } = c;
+  if (!state) {
+    return error ? null : (
+      <Stack alignItems="center" sx={{ py: 4 }}>
+        <CircularProgress size={24} />
+      </Stack>
+    );
+  }
+  if (!state.pluginAvailable) return <Alert severity="warning">This installation does not ship the monitoring plugin.</Alert>;
+  return (
+    <Stack spacing={1} sx={{ py: 2 }}>
+      <Typography variant="body1">
+        Metrics, routing-protocol state and dashboards for this lab — for every device type.
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Switch it on and netlab starts a small collector, a metrics store and Grafana with the
+        lab. You then see the lab&apos;s health against what the topology defines, run repeatable
+        link-failure tests and measure convergence.
+      </Typography>
+    </Stack>
+  );
+}
+
 export function MonitoringDialog() {
   const request = useMonitoringDialogRequest();
   const sessionId = request?.sessionId ?? null;
   const c = useMonitoringController(sessionId, request);
+  const phone = useIsPhone();
   if (!request || !sessionId) return null;
-  const { state, summary, busy, error, setError, tab, setTab, updatedAt, reload, showError, toggle, place, options, act, status } = c;
+  const { state, error, setError, tab, setTab } = c;
   const close = () => openMonitoringDialog(null);
+  const enabled = Boolean(state?.enabled);
 
   return (
     <Dialog
@@ -978,41 +1133,11 @@ export function MonitoringDialog() {
       onClose={close}
       maxWidth="md"
       fullWidth
-      slotProps={{ paper: { sx: { minHeight: 480 } } }}
+      fullScreen={phone} // checking a lab from a phone is what this dialog is for there
+      slotProps={{ paper: { sx: { minHeight: phone ? undefined : 480 } } }}
     >
       <DialogTitle sx={{ pr: 6, pb: 0 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Typography variant="h6" component="span">
-            Monitoring
-          </Typography>
-          {status && (
-            <Chip
-              size="small"
-              color={status.color}
-              variant={status.color === "default" ? "outlined" : "filled"}
-              label={status.label}
-            />
-          )}
-          {busy && <CircularProgress size={14} />}
-          <Box sx={{ flex: 1 }} />
-          {state && (
-            <Tooltip
-              title={state.enabled ? "Stop monitoring this lab" : "Monitor this lab (every deploy)"}
-            >
-              <Stack direction="row" alignItems="center">
-                <Typography variant="body2" color="text.secondary">
-                  Monitor this lab
-                </Typography>
-                <Switch
-                  checked={state.enabled}
-                  disabled={busy || !state.pluginAvailable}
-                  onChange={(_event, on) => void toggle(on)}
-                  slotProps={{ input: { "aria-label": "Monitor this lab" } }}
-                />
-              </Stack>
-            </Tooltip>
-          )}
-        </Stack>
+        <MonitoringTitleRow c={c} />
         <IconButton
           aria-label="Close"
           onClick={close}
@@ -1020,7 +1145,7 @@ export function MonitoringDialog() {
         >
           <CloseIcon />
         </IconButton>
-        {state?.enabled && (
+        {enabled && (
           <Tabs
             value={tab}
             onChange={(_event, value: TabId) => setTab(value)}
@@ -1032,7 +1157,7 @@ export function MonitoringDialog() {
           </Tabs>
         )}
       </DialogTitle>
-      <DialogContent dividers={Boolean(state?.enabled)} sx={{ pt: 2 }}>
+      <DialogContent dividers={enabled} sx={{ pt: 2 }}>
         {error && (
           <Alert
             severity="error"
@@ -1042,58 +1167,16 @@ export function MonitoringDialog() {
             {error}
           </Alert>
         )}
-        {!state && !error && (
-          <Stack alignItems="center" sx={{ py: 4 }}>
-            <CircularProgress size={24} />
-          </Stack>
-        )}
-        {state && !state.pluginAvailable && (
-          <Alert severity="warning">This installation does not ship the monitoring plugin.</Alert>
-        )}
-        {state && state.pluginAvailable && !state.enabled && (
-          <Stack spacing={1} sx={{ py: 2 }}>
-            <Typography variant="body1">
-              Metrics, routing-protocol state and dashboards for this lab — for every device type.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Switch it on and netlab starts a small collector, a metrics store and Grafana with the
-              lab. You then see the lab&apos;s health against what the topology defines, run repeatable
-              link-failure tests and measure convergence.
-            </Typography>
-          </Stack>
-        )}
-        {state?.enabled && tab === "health" && (
-          <HealthTab state={state} summary={summary} updatedAt={updatedAt} />
-        )}
-        {state?.enabled && tab === "faults" && (
-          <FaultsTab
-            sessionId={sessionId}
-            state={state}
-            prefill={request.faultTest}
-            onError={showError}
-          />
-        )}
-        {state?.enabled && tab === "setup" && (
-          <SetupTab
-            sessionId={sessionId}
-            state={state}
-            busy={busy}
-            onPlace={(value) => void place(value)}
-            onAction={(action) => void act(action)}
-            onOptions={(change) => void options(change)}
-            onScopeChanged={() => void reload()}
-          />
-        )}
+        {enabled ? <MonitoringTabContent c={c} sessionId={sessionId} prefill={request.faultTest} /> : <MonitoringIntro c={c} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-
 /** The same controls as the dialog, docked as a tab of the right-hand panel. */
 export function MonitoringPanel({ sessionId }: { sessionId: string }) {
   const c = useMonitoringController(sessionId, null);
-  const { state, summary, busy, error, setError, tab, setTab, updatedAt, reload, showError, toggle, place, options, act, status } = c;
+  const { state, busy, error, setError, tab, setTab, toggle, status } = c;
   return (
     <Box sx={{ p: 1.5, overflow: "auto", height: "100%" }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
@@ -1136,19 +1219,7 @@ export function MonitoringPanel({ sessionId }: { sessionId: string }) {
             <Tab value="faults" label="Fault tests" />
             <Tab value="setup" label="Setup" />
           </Tabs>
-          {tab === "health" && <HealthTab state={state} summary={summary} updatedAt={updatedAt} />}
-          {tab === "faults" && <FaultsTab sessionId={sessionId} state={state} prefill={undefined} onError={showError} />}
-          {tab === "setup" && (
-            <SetupTab
-              sessionId={sessionId}
-              state={state}
-              busy={busy}
-              onPlace={(value) => void place(value)}
-              onAction={(action) => void act(action)}
-              onOptions={(change) => void options(change)}
-              onScopeChanged={() => void reload()}
-            />
-          )}
+          <MonitoringTabContent c={c} sessionId={sessionId} />
         </>
       )}
     </Box>

@@ -79,7 +79,7 @@ export function LabHints({ sessionId, openTabs, activeTabId, workspaces, setWork
 
   if (readOnly) {
     return (
-      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ maxWidth: { xs: "calc(100vw - 32px)", sm: 640 } }}>
+      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ top: { xs: 56, sm: 24 }, maxWidth: { xs: "calc(100vw - 32px)", sm: 640 } }}>
         <Alert
           severity="info"
           variant="outlined"
@@ -107,7 +107,7 @@ export function LabHints({ sessionId, openTabs, activeTabId, workspaces, setWork
       setLockDismissed(true);
     };
     return (
-      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ maxWidth: { xs: "calc(100vw - 32px)", sm: 560 } }}>
+      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ top: { xs: 56, sm: 24 }, maxWidth: { xs: "calc(100vw - 32px)", sm: 560 } }}>
         <Alert
           severity="info"
           variant="outlined"

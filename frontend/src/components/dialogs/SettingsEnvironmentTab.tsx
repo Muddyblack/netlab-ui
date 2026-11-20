@@ -53,6 +53,65 @@ export interface SettingsEnvironmentTabProps {
   health: HealthStatus | null;
 }
 
+/** Which netlab the backend runs, and from where (all of it as resolved, read-only). */
+function ResolvedEnvironment({ environment }: { environment: NetlabEnvironment | null }) {
+  const env: Partial<NetlabEnvironment> = environment ?? {};
+  const toolEnv = Object.entries(env.toolEnv ?? {}).map(([k, v]) => `${k}=${v}`).join("  ");
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={650} gutterBottom>
+        Resolved Environment Details
+      </Typography>
+      <Card variant="outlined" sx={{ p: 2 }}>
+        <Stack spacing={1.25}>
+          <InfoRow label="Netlab executable" value={env.binPath || env.command} />
+          <InfoRow label="Netlab version" value={cleanVersion(env.netlabVersion)} />
+          <InfoRow label="Resolution source" value={SOURCE_LABELS[env.source ?? ""] ?? env.source} />
+          <InfoRow label="netsim package" value={env.netsimDir} />
+          <InfoRow label="netsim version" value={cleanVersion(env.netsimVersion)} />
+          <InfoRow label="Extra environment" value={toolEnv || undefined} />
+          <InfoRow label="Target Python" value={env.targetPython} />
+          <InfoRow label="Netlab config path" value={env.configPath} />
+        </Stack>
+      </Card>
+    </Box>
+  );
+}
+
+/** The netlab executable to use; empty means the first netlab on PATH. */
+function NetlabPathField({ value, onChange, busy, onSave }: {
+  value: string;
+  onChange: (value: string) => void;
+  busy: boolean;
+  onSave: () => void;
+}) {
+  return (
+    <Box>
+      <Typography variant="subtitle2" fontWeight={650} gutterBottom>
+        Netlab Executable Location
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        netlab and Ansible are not bundled with the UI backend. Select the netlab executable
+        you already use, including one installed by pipx or in another virtual environment.
+      </Typography>
+      <Stack direction="row" spacing={1}>
+        <TextField
+          size="small"
+          fullWidth
+          placeholder="Auto-detect netlab in PATH"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={busy}
+          helperText="Leave empty to use automatic PATH resolution"
+        />
+        <Button variant="contained" onClick={onSave} disabled={busy}>
+          Save
+        </Button>
+      </Stack>
+    </Box>
+  );
+}
+
 export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }: SettingsEnvironmentTabProps) {
   const [environment, setEnvironment] = useState<NetlabEnvironment | null>(null);
   const [envPath, setEnvPath] = useState("");
@@ -115,29 +174,7 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
       <ContainerSetupPanel active={active} />
       <HostSetupPanel active={active} />
 
-      <Box>
-        <Typography variant="subtitle2" fontWeight={650} gutterBottom>
-          Netlab Executable Location
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          netlab and Ansible are not bundled with the UI backend. Select the netlab executable
-          you already use, including one installed by pipx or in another virtual environment.
-        </Typography>
-        <Stack direction="row" spacing={1}>
-          <TextField
-            size="small"
-            fullWidth
-            placeholder="Auto-detect netlab in PATH"
-            value={envPath}
-            onChange={(e) => setEnvPath(e.target.value)}
-            disabled={envLoading}
-            helperText="Leave empty to use automatic PATH resolution"
-          />
-          <Button variant="contained" onClick={() => void saveEnvironment()} disabled={envLoading}>
-            Save
-          </Button>
-        </Stack>
-      </Box>
+      <NetlabPathField value={envPath} onChange={setEnvPath} busy={envLoading} onSave={() => void saveEnvironment()} />
 
       {environment?.found && (
         <ManagedNetlabCard
@@ -151,26 +188,7 @@ export function SettingsEnvironmentTab({ active, onEnvironmentChanged, health }:
 
       <Divider />
 
-      <Box>
-        <Typography variant="subtitle2" fontWeight={650} gutterBottom>
-          Resolved Environment Details
-        </Typography>
-        <Card variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={1.25}>
-            <InfoRow label="Netlab executable" value={environment?.binPath || environment?.command} />
-            <InfoRow label="Netlab version" value={cleanVersion(environment?.netlabVersion)} />
-            <InfoRow label="Resolution source" value={SOURCE_LABELS[environment?.source ?? ""] ?? environment?.source} />
-            <InfoRow label="netsim package" value={environment?.netsimDir} />
-            <InfoRow label="netsim version" value={cleanVersion(environment?.netsimVersion)} />
-            <InfoRow
-              label="Extra environment"
-              value={Object.entries(environment?.toolEnv ?? {}).map(([k, v]) => `${k}=${v}`).join("  ") || undefined}
-            />
-            <InfoRow label="Target Python" value={environment?.targetPython} />
-            <InfoRow label="Netlab config path" value={environment?.configPath} />
-          </Stack>
-        </Card>
-      </Box>
+      <ResolvedEnvironment environment={environment} />
 
       <Divider />
 

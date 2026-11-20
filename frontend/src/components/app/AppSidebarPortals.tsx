@@ -13,6 +13,7 @@ interface AppSidebarPortalsProps {
   addToast: (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
   leftSidebarToggleContainer: HTMLElement | null;
   isLeftSidebarOpen: boolean;
+  isPhone: boolean;
   handleToggleLeftSidebar: () => void;
   tabBarContainer: HTMLElement | null;
   openTabs: OpenTab[];
@@ -33,6 +34,7 @@ export function AppSidebarPortals({
   addToast,
   leftSidebarToggleContainer,
   isLeftSidebarOpen,
+  isPhone,
   handleToggleLeftSidebar,
   tabBarContainer,
   openTabs,
@@ -54,8 +56,9 @@ export function AppSidebarPortals({
             onClick={handleToggleLeftSidebar}
             data-testid="left-sidebar-toggle"
             sx={{
-              width: 20,
-              height: 48,
+              // A finger needs more than the 20px desktop handle.
+              width: isPhone ? 32 : 20,
+              height: isPhone ? 64 : 48,
               borderRadius: "0 4px 4px 0",
               border: 1,
               borderLeft: 0,
@@ -67,8 +70,8 @@ export function AppSidebarPortals({
             }}
           >
             {isLeftSidebarOpen
-              ? <ChevronLeftIcon sx={{ fontSize: 16 }} />
-              : <ChevronRightIcon sx={{ fontSize: 16 }} />}
+              ? <ChevronLeftIcon sx={{ fontSize: isPhone ? 22 : 16 }} />
+              : <ChevronRightIcon sx={{ fontSize: isPhone ? 22 : 16 }} />}
           </IconButton>
         </Tooltip>,
         leftSidebarToggleContainer

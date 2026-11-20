@@ -1,0 +1,28 @@
+diff --git a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-KS5ITECV.js b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-KS5ITECV.js
+index c3f9c18..36fcd53 100644
+--- a/node_modules/@containerlab/clab-ui/dist/chunks/chunk-KS5ITECV.js
++++ b/node_modules/@containerlab/clab-ui/dist/chunks/chunk-KS5ITECV.js
+@@ -340,8 +340,12 @@ function applyForceLayout(nodes, edges, options = {}) {
+ }
+ 
+ // src/components/canvas/layout/autoLayout.ts
+-import ELK from "elkjs/lib/elk.bundled.js";
+-var elk = new ELK();
++// netlab-ui: elkjs is 1.5 MB and only the auto layout uses it, so load it then instead of with the app.
++var elkInstance = null;
++function loadElk() {
++  elkInstance ??= import("elkjs/lib/elk.bundled.js").then((m) => new m.default());
++  return elkInstance;
++}
+ async function applyAutoLayout(nodes, edges, options = {}) {
+   const { padding = 80, nodeSpacing = 100 } = options;
+   const layoutNodes = nodes.filter(isLayoutableNode);
+@@ -448,7 +452,7 @@ async function applyAutoLayout(nodes, edges, options = {}) {
+       children: elkNodesWithLayers,
+       edges: elkEdges
+     };
+-    const laid = await elk.layout(graph);
++    const laid = await (await loadElk()).layout(graph);
+     for (const n of laid.children ?? []) {
+       if (n.x !== void 0 && n.y !== void 0) {
+         positions.set(n.id, { x: n.x, y: n.y });
