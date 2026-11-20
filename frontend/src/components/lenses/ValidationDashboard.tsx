@@ -25,6 +25,7 @@ import { useMemo, useState } from "react";
 
 import type { ValidationLens, ValidationTest } from "../../api/client";
 import type { ValidationIssue } from "../../hooks/useLabLifecycle";
+import { statusText } from "../../theme";
 
 type TestState = ValidationTest["state"];
 
@@ -47,7 +48,7 @@ const KIND_LABEL: Record<ValidationTest["kind"], string> = {
 function StateBadge({ state, size = 20 }: { state: TestState; size?: number }) {
   const meta = STATE_META[state];
   const Icon = meta.icon;
-  return <Icon sx={{ color: meta.color, fontSize: size }} titleAccess={meta.label} />;
+  return <Icon sx={{ color: statusText(meta.color), fontSize: size }} titleAccess={meta.label} />;
 }
 
 function SummaryTile({ count, label, color, active, onClick }: {
@@ -76,7 +77,7 @@ function SummaryTile({ count, label, color, active, onClick }: {
         "&:hover": { borderColor: color },
       }}
     >
-      <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.1, color }}>{count}</Typography>
+      <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.1, color: statusText(color) }}>{count}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ textTransform: "uppercase", letterSpacing: 0.3 }}>{label}</Typography>
     </Box>
   );

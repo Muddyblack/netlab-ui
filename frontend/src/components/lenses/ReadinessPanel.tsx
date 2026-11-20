@@ -17,6 +17,7 @@ import { alpha } from "@mui/material/styles";
 
 import type { ReadinessCheck, ReadinessResult } from "../../api/client";
 import { NodeSetChips } from "../common/NodeSetChips";
+import { statusText } from "../../theme";
 
 const STATUS_META: Record<string, { color: string; icon: typeof CheckCircleIcon }> = {
   pass: { color: "#22c55e", icon: CheckCircleIcon },
@@ -32,7 +33,7 @@ function CheckCard({ check, onSelectRef }: { check: ReadinessCheck; onSelectRef:
   return (
     <Paper variant="outlined" sx={{ p: 1.1, borderRadius: 2, borderLeft: `3px solid ${meta.color}` }}>
       <Stack direction="row" spacing={1} alignItems="flex-start">
-        <Box sx={{ width: 26, height: 26, borderRadius: 1.5, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(meta.color, 0.14), color: meta.color }}>
+        <Box sx={{ width: 26, height: 26, borderRadius: 1.5, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(meta.color, 0.14), color: statusText(meta.color) }}>
           <Icon sx={{ fontSize: 18 }} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -47,7 +48,7 @@ function CheckCard({ check, onSelectRef }: { check: ReadinessCheck; onSelectRef:
               ))}
             </Stack>
           )}
-          {check.hint && <Typography variant="caption" sx={{ color: meta.color, display: "block", mt: 0.6, fontWeight: 500 }}>{check.hint}</Typography>}
+          {check.hint && <Typography variant="caption" sx={{ color: statusText(meta.color), display: "block", mt: 0.6, fontWeight: 500 }}>{check.hint}</Typography>}
           {check.items.length === 0 && nodeRefs.length > 0 && (
             <Stack direction="row" spacing={0.5} sx={{ mt: 0.6 }} flexWrap="wrap" useFlexGap>
               <NodeSetChips names={nodeRefs.map((ref) => ref.slice(5))} onSelect={(name) => onSelectRef(`node:${name}`)} />
@@ -76,11 +77,11 @@ function ReadinessSummaryCard({ result, recheckButton }: { result: ReadinessResu
   return (
     <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(status.color, 0.4), bgcolor: alpha(status.color, 0.08) }}>
       <Stack direction="row" alignItems="center" spacing={1.25}>
-        <Box sx={{ width: 34, height: 34, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(status.color, 0.16), color: status.color }}>
+        <Box sx={{ width: 34, height: 34, borderRadius: "50%", display: "grid", placeItems: "center", flexShrink: 0, bgcolor: alpha(status.color, 0.16), color: statusText(status.color) }}>
           <StatusIcon sx={{ fontSize: 20 }} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: status.color, lineHeight: 1.25 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: statusText(status.color), lineHeight: 1.25 }}>
             {ready ? "Ready to deploy" : "Not ready"}
           </Typography>
           {summaryParts.length > 0 && (

@@ -153,7 +153,7 @@ export function SetupNotice({ health, onOpenSettings }: { health: HealthStatus |
           bottom: { xs: 16, sm: "auto" },
           left: "50%",
           transform: "translateX(-50%)",
-          zIndex: 1400,
+          zIndex: (theme) => theme.zIndex.modal - 1, // under dialogs: "Set up" opens one, and this covered its tabs
           width: { xs: "calc(100% - 32px)", sm: 480 }
         }}
       >

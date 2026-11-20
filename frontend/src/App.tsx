@@ -1,4 +1,3 @@
-import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { Box, GlobalStyles } from "@mui/material";
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
@@ -9,6 +8,7 @@ import "highlight.js/styles/github-dark.css";
 
 import type { OpenWebTab } from "./lifecycle/types";
 import { LabHints } from "./components/LabHints";
+import { AppTheme } from "./AppTheme";
 import { StartupGate } from "./components/StartupGate";
 import { AppToolbarActions } from "./app/AppToolbarActions";
 import { AppCanvasArea } from "./components/app/AppCanvasArea";
@@ -33,6 +33,14 @@ const PHONE_STYLES = {
     },
     // clab-ui's panel toggles are 20px wide: too small for a finger.
     "[data-testid='panel-toggle-btn']": { width: "32px !important", height: "64px !important" },
+    // The side panel is 500px wide (its minimum) and its handle sits 500px from the edge: on a 390px phone the
+    // first tabs and the close handle were off-screen, so the panel could be neither scrolled to its start nor
+    // closed. Fill the screen less the handle's 32px instead, and keep the handle on-screen next to it.
+    "[data-testid='context-panel'] .MuiDrawer-paper": { width: "calc(100% - 32px) !important" },
+    "*:has(> .MuiDrawer-anchorRight[data-testid='context-panel']) > *:has(> [data-testid='panel-toggle-btn'][aria-label='Close panel'])":
+      { right: "calc(100% - 32px) !important" },
+    "*:has(> .MuiDrawer-anchorLeft[data-testid='context-panel']) > *:has(> [data-testid='panel-toggle-btn'][aria-label='Close panel'])":
+      { left: "calc(100% - 32px) !important" },
     // The lab toolbar has ~20 buttons (800px). Keep what a phone is for (deploy, lock, fit, find node, settings)
     // and drop editing and desktop-only ones, so it fits a 390px screen without cut-off icons.
     [[
@@ -96,7 +104,7 @@ export default function App() {
   );
 
   return (
-    <MuiThemeProvider>
+    <AppTheme>
       <GlobalStyles styles={PHONE_STYLES} />
       <GlobalStyles styles={TOUCH_STYLES} />
       {c.startup.status !== "ready" ? (
@@ -261,6 +269,6 @@ export default function App() {
           />
         </Box>
       )}
-    </MuiThemeProvider>
+    </AppTheme>
   );
 }
