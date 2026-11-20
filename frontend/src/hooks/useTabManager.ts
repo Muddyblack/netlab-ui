@@ -24,12 +24,31 @@ interface Options {
   fetchFiles: () => Promise<void>;
   addToast: (message: string, severity?: RuntimeSnackbarState["severity"]) => void;
   runtimeRef: React.RefObject<ClabUiRuntime | null>;
+  /** The workspace's labs: an open lab's tab follows its name when it is renamed (lab settings). */
+  labFiles?: LabFileEntry[];
 }
 
-export function useTabManager({ host, fetchFiles, addToast, runtimeRef }: Options) {
+export function useTabManager({ host, fetchFiles, addToast, runtimeRef, labFiles }: Options) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+
+  // A lab renamed in lab settings kept its old name on its tab until it was closed and reopened.
+  useEffect(() => {
+    if (!labFiles?.length) return;
+    const names = new Map(labFiles.map((entry) => [entry.path, entry.labName]));
+    setOpenTabs((cur) => {
+      let changed = false;
+      const next = cur.map((tab) => {
+        if (tab.kind !== "topology") return tab;
+        const name = names.get(tab.topologyRef.yamlPath);
+        if (!name || name === tab.title) return tab;
+        changed = true;
+        return { ...tab, title: name, topologyRef: { ...tab.topologyRef, labName: name } };
+      });
+      return changed ? next : cur;
+    });
+  }, [labFiles]);
   const [restoreComplete, setRestoreComplete] = useState(false);
 
   // The live backend session, read through a ref: activations overlap (a
