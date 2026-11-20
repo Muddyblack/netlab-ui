@@ -172,9 +172,23 @@ function healthFlags(health: HealthStatus | null) {
     return { components, missingAnsible, hasProblem };
 }
 
+/** The containerlab version row, with a note when netlab wants a newer one. */
+function ContainerlabRows({ health }: { health: HealthStatus | null }) {
+    const outdated = olderThan(health?.containerlabVersion, health?.containerlabWantedVersion);
+    return (
+        <>
+            <VersionRow label="containerlab" value={cleanVersion(health?.containerlabVersion)} ok={health?.containerlab} error={outdated} />
+            {outdated && (
+                <Typography variant="caption" color="warning.main">
+                    netlab asks for containerlab {health?.containerlabWantedVersion}; this host has {cleanVersion(health?.containerlabVersion)}.
+                </Typography>
+            )}
+        </>
+    );
+}
+
 export function RuntimeInfo({ health }: { health: HealthStatus | null }) {
     const { components, missingAnsible, hasProblem } = healthFlags(health);
-    const containerlabOutdated = olderThan(health?.containerlabVersion, health?.containerlabWantedVersion);
     return (
         <Stack spacing={1}>
             <Typography variant="subtitle2">Environment</Typography>
@@ -182,12 +196,7 @@ export function RuntimeInfo({ health }: { health: HealthStatus | null }) {
                 <Stack spacing={1}>
                     <VersionRow label="netlab-ui" value={appVersionLabel(health?.appVersion)} ok />
                     <VersionRow label="netlab CLI" value={cleanVersion(health?.netlabVersion)} ok={health?.netlab} error={health?.netlabVersionSupported === false} />
-                    <VersionRow label="containerlab" value={cleanVersion(health?.containerlabVersion)} ok={health?.containerlab} error={containerlabOutdated} />
-                    {containerlabOutdated && (
-                        <Typography variant="caption" color="warning.main">
-                            netlab asks for containerlab {health?.containerlabWantedVersion}; this host has {cleanVersion(health?.containerlabVersion)}.
-                        </Typography>
-                    )}
+                    <ContainerlabRows health={health} />
                     <VersionRow label="libvirt / virsh" value={cleanVersion(health?.libvirtVersion)} ok={health?.libvirt} />
                     {health?.netlabVersionSupported === false && (
                         <Typography variant="caption" color="warning.main">

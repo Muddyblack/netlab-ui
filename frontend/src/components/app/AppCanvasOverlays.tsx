@@ -123,27 +123,40 @@ export function AppCanvasOverlays({
         portalContainer
       )}
 
-      {/* Session dock lives in the canvas overlay container but renders for
-          file tabs too (VS Code-style panel over the editor) so shells and
-          log streams survive tab switches. */}
-      {portalContainer && sessionId && !DEMO_MODE && sessionDock.tabs.length > 0 && createPortal(
-        <Suspense fallback={null}>
-          <SessionDock
-            sessionId={sessionId}
-            tabs={sessionDock.tabs}
-            activeKey={sessionDock.activeKey}
-            open={sessionDock.open}
-            onSelect={sessionDock.selectTab}
-            onClose={sessionDock.closeTab}
-            onToggleOpen={() => sessionDock.setOpen((value) => !value)}
-            onOpenShell={openShell}
-            onOpenMulti={() => sessionDock.openTab("multi", "nodes")}
-            onNewTerminal={sessionDock.openTerminal}
-            onPopOut={handleSessionPopOut}
-          />
-        </Suspense>,
-        portalContainer
-      )}
+      <SessionDockOverlay
+        portalContainer={portalContainer}
+        sessionId={sessionId}
+        sessionDock={sessionDock}
+        openShell={openShell}
+        handleSessionPopOut={handleSessionPopOut}
+      />
     </>
+  );
+}
+
+/* Session dock lives in the canvas overlay container but renders for file tabs too (VS Code-style panel over the
+   editor) so shells and log streams survive tab switches. */
+function SessionDockOverlay({ portalContainer, sessionId, sessionDock, openShell, handleSessionPopOut }: Pick<
+  AppCanvasOverlaysProps,
+  "portalContainer" | "sessionId" | "sessionDock" | "openShell" | "handleSessionPopOut"
+>) {
+  if (!portalContainer || !sessionId || DEMO_MODE || sessionDock.tabs.length === 0) return null;
+  return createPortal(
+    <Suspense fallback={null}>
+      <SessionDock
+        sessionId={sessionId}
+        tabs={sessionDock.tabs}
+        activeKey={sessionDock.activeKey}
+        open={sessionDock.open}
+        onSelect={sessionDock.selectTab}
+        onClose={sessionDock.closeTab}
+        onToggleOpen={() => sessionDock.setOpen((value) => !value)}
+        onOpenShell={openShell}
+        onOpenMulti={() => sessionDock.openTab("multi", "nodes")}
+        onNewTerminal={sessionDock.openTerminal}
+        onPopOut={handleSessionPopOut}
+      />
+    </Suspense>,
+    portalContainer
   );
 }
