@@ -65,7 +65,7 @@ export function UpdateNotice() {
       open
       anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       sx={{
-        bottom: { xs: 88, sm: 24 }, // a phone keeps the bottom centre free for transient toasts
+        bottom: { xs: 220, sm: 24 }, // on a phone, above the setup notice and the transient toasts
         left: { xs: 16, sm: "auto" },
         right: { xs: 16, sm: 24 }
       }}

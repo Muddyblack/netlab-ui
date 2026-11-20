@@ -144,11 +144,13 @@ export function SetupNotice({ health, onOpenSettings }: { health: HealthStatus |
 
   return (
     <>
-      {/* Top centre, under the app bar. The bottom edge is for transient toasts and the update notice. */}
+      {/* Top centre, under the app bar; on a phone at the bottom, where it does not cover the explorer's filter
+          and connection status (the update notice sits higher there). */}
       <Box
         sx={{
           position: "fixed",
-          top: 60,
+          top: { xs: "auto", sm: 60 },
+          bottom: { xs: 16, sm: "auto" },
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 1400,

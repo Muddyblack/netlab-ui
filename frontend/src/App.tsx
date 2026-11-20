@@ -57,6 +57,20 @@ const PHONE_STYLES = {
   }
 } as const;
 
+/**
+ * Touch screens have no hover, and clab-ui's explorer shows a row's "⋮" menu and a section's buttons (add folder,
+ * example labs) only on hover: on a phone or tablet they could not be reached at all. Show them, finger-sized.
+ */
+const TOUCH_STYLES = {
+  "@media (hover: none)": {
+    ".explorer-node-actions-trigger, .explorer-section-hover-actions": {
+      opacity: "1 !important",
+      pointerEvents: "auto !important"
+    },
+    ".explorer-node-actions-trigger": { width: "28px !important", height: "28px !important" }
+  }
+} as const;
+
 export default function App() {
   const c = useAppController();
 
@@ -84,6 +98,7 @@ export default function App() {
   return (
     <MuiThemeProvider>
       <GlobalStyles styles={PHONE_STYLES} />
+      <GlobalStyles styles={TOUCH_STYLES} />
       {c.startup.status !== "ready" ? (
         <StartupGate startup={c.startup} onRetry={c.checkStartup} />
       ) : (
