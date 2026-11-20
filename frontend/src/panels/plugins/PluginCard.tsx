@@ -202,59 +202,64 @@ export function PluginCard({
   const subtitle = plugin.description || plugin.title;
   const borderColor = borderColorFor(isExpanded, plugin.error);
 
+  // The docs buttons sit over the header, not inside it: AccordionSummary is a <button>, and a button inside a
+  // button is invalid HTML (React warns, and a click would also toggle the card).
   return (
-    <Accordion
-      disableGutters
-      elevation={0}
-      expanded={isExpanded}
-      onChange={(_, expanded) => onExpandedChange(expanded)}
-      sx={{
-        border: "1px solid",
-        borderColor,
-        borderRadius: "8px !important",
-        overflow: "hidden",
-        "&:before": { display: "none" },
-        "&.Mui-expanded": { my: 0 }
-      }}
-    >
-      <AccordionSummary
-        expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />}
+    <Box sx={{ position: "relative" }}>
+      <Accordion
+        disableGutters
+        elevation={0}
+        expanded={isExpanded}
+        onChange={(_, expanded) => onExpandedChange(expanded)}
         sx={{
-          px: 1,
-          minHeight: 48,
-          "& .MuiAccordionSummary-content": {
-            my: 0.5,
-            alignItems: "center",
-            minWidth: 0,
-            mr: 1,
-            display: "flex",
-            justifyContent: "space-between",
-          },
+          border: "1px solid",
+          borderColor,
+          borderRadius: "8px !important",
+          overflow: "hidden",
+          "&:before": { display: "none" },
+          "&.Mui-expanded": { my: 0 }
         }}
       >
-        <PluginSummaryHeader plugin={plugin} isEnabled={isEnabled} onToggleEnabled={onToggleEnabled} originLabel={originLabel} subtitle={subtitle} />
-        <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0 }}>
-          <DocumentationActionButtons
-            docsUrl={plugin.docs_url}
-            externalLabel={`Open ${plugin.id} netlab docs`}
-            manualLabel={`Open ${plugin.id} plugin docs`}
-            onOpenExternal={() => onOpenDocs("web")}
-            onOpenManual={() => onOpenDocs("markdown")}
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon sx={{ fontSize: 18 }} />}
+          sx={{
+            px: 1,
+            minHeight: 48,
+            "& .MuiAccordionSummary-content": {
+              my: 0.5,
+              alignItems: "center",
+              minWidth: 0,
+              mr: 1,
+              pr: 8, // room for the docs buttons laid over the header
+              display: "flex",
+              justifyContent: "space-between",
+            },
+          }}
+        >
+          <PluginSummaryHeader plugin={plugin} isEnabled={isEnabled} onToggleEnabled={onToggleEnabled} originLabel={originLabel} subtitle={subtitle} />
+        </AccordionSummary>
+        <AccordionDetails sx={{ pt: 0, pb: 1.25, px: 1.5 }}>
+          <PluginCardDetails
+            plugin={plugin}
+            hooks={hooks}
+            requires={requires}
+            executeAfter={executeAfter}
+            shadows={shadows}
+            isLoadingReference={isLoadingReference}
+            argumentsList={argumentsList}
+            isCustom={isCustom}
           />
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails sx={{ pt: 0, pb: 1.25, px: 1.5 }}>
-        <PluginCardDetails
-          plugin={plugin}
-          hooks={hooks}
-          requires={requires}
-          executeAfter={executeAfter}
-          shadows={shadows}
-          isLoadingReference={isLoadingReference}
-          argumentsList={argumentsList}
-          isCustom={isCustom}
+        </AccordionDetails>
+      </Accordion>
+      <Box sx={{ position: "absolute", top: 0, right: 36, height: 48, display: "flex", alignItems: "center" }}>
+        <DocumentationActionButtons
+          docsUrl={plugin.docs_url}
+          externalLabel={`Open ${plugin.id} netlab docs`}
+          manualLabel={`Open ${plugin.id} plugin docs`}
+          onOpenExternal={() => onOpenDocs("web")}
+          onOpenManual={() => onOpenDocs("markdown")}
         />
-      </AccordionDetails>
-    </Accordion>
+      </Box>
+    </Box>
   );
 }
