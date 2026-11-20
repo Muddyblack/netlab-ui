@@ -205,6 +205,23 @@ function lifecycleFollowUps(
   return [];
 }
 
+type CanvasSession = Parameters<typeof refreshTopologySnapshot>[1];
+
+/**
+ * Re-request the canvas snapshot from a background trigger (files changed, container state flipped, plugin edit).
+ * Such a refresh can be queued for a lab whose session was replaced meanwhile (tab switch, a lab copied and opened):
+ * the backend then answers 404 for the old session, which used to surface as an uncaught error. The new session
+ * refreshes itself, so that 404 is ignored; anything else is logged.
+ */
+async function refreshSnapshotQuietly(session: CanvasSession): Promise<void> {
+  try {
+    await refreshTopologySnapshot({ externalChange: true }, session);
+  } catch (err) {
+    if (/\b404\b/.test(err instanceof Error ? err.message : String(err))) return;
+    console.warn("Topology refresh failed:", err);
+  }
+}
+
 export function useAppController() {
   const canvasNodes = useNodes();
   const canvasNodesRef = useRef(canvasNodes);
@@ -555,7 +572,7 @@ export function useAppController() {
   runtimeSessionRef.current = runtime.session;
 
   const refreshCanvas = useCallback(() => {
-    if (runtime?.session) void refreshTopologySnapshot({ externalChange: true }, runtime.session);
+    if (runtime?.session) void refreshSnapshotQuietly(runtime.session);
   }, [runtime]);
   refreshCanvasRef.current = refreshCanvas;
 
@@ -565,7 +582,7 @@ export function useAppController() {
     activateLabTab, handleOpenLab, handleActivateLabTab, handleCloseLab,
     handleOpenFileTab, handleFileTabChange, handleFileTabSave, handleFileTabReload, refreshOpenFiles,
     handleCreateLab: createLab, getOrCreateSession, topologyPathForSession, restoreTabSession
-  } = useTabManager({ host, fetchFiles, addToast, runtimeRef });
+  } = useTabManager({ host, fetchFiles, addToast, runtimeRef, labFiles });
 
   const handleCreateLab = useCallback(async (name: string) => {
     const forAi = newLabForAiRef.current;
@@ -940,7 +957,7 @@ export function useAppController() {
         // reload. Re-request the snapshot whenever a container state flips.
         const signature = containers.map((c) => `${c.name}=${c.state}`).sort().join(",");
         if (lastStateSignature !== null && signature !== lastStateSignature) {
-          void refreshTopologySnapshot({ externalChange: true }, runtime.session);
+          void refreshSnapshotQuietly(runtime.session);
         }
         lastStateSignature = signature;
       } catch (err) {
@@ -1177,13 +1194,11 @@ export function useAppController() {
   useAgentGuide(Boolean(assistantCapabilities), sessionId, quickActions, (node, ifname) => host.openCapture(node, ifname));
 
   const handlePluginPanelChanged = useCallback(async () => {
-    if (runtime?.session) {
-      await refreshTopologySnapshot({ externalChange: true }, runtime.session);
-      refreshCanvas();
-    }
+    // One snapshot request (it used to fetch it twice: here and again through refreshCanvas).
+    if (runtime?.session) await refreshSnapshotQuietly(runtime.session);
     await refreshMultiserverEnabled();
     await refreshOpenFiles();
-  }, [runtime, refreshCanvas, refreshMultiserverEnabled, refreshOpenFiles]);
+  }, [runtime, refreshMultiserverEnabled, refreshOpenFiles]);
   handlePluginPanelChangedRef.current = handlePluginPanelChanged;
 
   useEffect(() => {
