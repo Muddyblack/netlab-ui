@@ -54,6 +54,9 @@ export function LinkActionsList({ selectedNodeCount, onSelect }: LinkActionsList
         return (
           <Button
             key={action.kind}
+            // Not clab-ui's default "contained": its inherit-color fill (white on slate) wins over the card colors
+            // below, which made these cards grey-on-grey in the light theme.
+            variant="text"
             color="inherit"
             onClick={() => onSelect(action.kind)}
             sx={{

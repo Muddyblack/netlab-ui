@@ -1,7 +1,9 @@
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import CloseIcon from "@mui/icons-material/Close";
-import { Alert, Button, IconButton, Snackbar } from "@mui/material";
-import { useEffect, useState } from "react";
+import FolderOffOutlinedIcon from "@mui/icons-material/FolderOffOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import { Box, Button, Fade, IconButton, Paper, Snackbar } from "@mui/material";
+import { cloneElement, useEffect, useState, type ReactElement } from "react";
 import { api } from "../api/client";
 import type { OpenTab, WorkspaceEntry } from "../lifecycle/types";
 
@@ -79,55 +81,85 @@ export function LabHints({ sessionId, openTabs, activeTabId, workspaces, setWork
 
   if (readOnly) {
     return (
-      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ top: { xs: 56, sm: 24 }, maxWidth: { xs: "calc(100vw - 32px)", sm: 640 } }}>
-        <Alert
-          severity="info"
-          variant="outlined"
-          sx={{ bgcolor: "background.paper", alignItems: "center" }}
-          action={
-            <>
-              <Button color="inherit" size="small" disabled={busy} onClick={() => void addWorkspace()}>
-                Add folder as workspace
-              </Button>
-              <IconButton aria-label="Dismiss" color="inherit" size="small" onClick={() => setClosedFor(yamlPath)}>
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
-            </>
-          }
-        >
-          This lab is outside your workspaces, so it is read-only. Add its folder to edit it here.
-        </Alert>
-      </Snackbar>
+      <HintPill
+        icon={<FolderOffOutlinedIcon />}
+        text="Read-only: outside your workspaces"
+        title="The backend only writes inside a workspace. Add this lab's folder as one to edit it here."
+        action="Add folder"
+        busy={busy}
+        onAction={() => void addWorkspace()}
+        onDismiss={() => setClosedFor(yamlPath)}
+      />
     );
   }
 
   if (isLocked && !lockDismissed) {
-    const dismiss = () => {
-      rememberLockHint();
-      setLockDismissed(true);
-    };
     return (
-      <Snackbar open anchorOrigin={{ vertical: "top", horizontal: "center" }} sx={{ top: { xs: 56, sm: 24 }, maxWidth: { xs: "calc(100vw - 32px)", sm: 560 } }}>
-        <Alert
-          severity="info"
-          variant="outlined"
-          sx={{ bgcolor: "background.paper", alignItems: "center" }}
-          action={
-            <>
-              <Button color="inherit" size="small" onClick={() => useTopoViewerStore.setState({ isLocked: false })}>
-                Unlock to edit
-              </Button>
-              <IconButton aria-label="Dismiss" color="inherit" size="small" onClick={dismiss}>
-                <CloseIcon fontSize="inherit" />
-              </IconButton>
-            </>
-          }
-        >
-          This lab is locked so nothing moves by accident. Unlock it (the lock in the toolbar) to edit.
-        </Alert>
-      </Snackbar>
+      <HintPill
+        icon={<LockOutlinedIcon />}
+        text="Locked, so nothing moves by accident"
+        title="Every lab opens locked. Unlock it here or with the red lock in the toolbar."
+        action="Unlock"
+        onAction={() => useTopoViewerStore.setState({ isLocked: false })}
+        onDismiss={() => {
+          rememberLockHint();
+          setLockDismissed(true);
+        }}
+      />
     );
   }
 
   return null;
+}
+
+/** A small, quiet pill above the bottom edge (the setup notice owns the top): one line, readable in both themes, one action and a close. */
+function HintPill({ icon, text, title, action, busy, onAction, onDismiss }: {
+  icon: ReactElement<{ sx?: object }>;
+  text: string;
+  title: string;
+  action: string;
+  busy?: boolean;
+  onAction: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <Snackbar
+      open
+      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      slots={{ transition: Fade }}
+      // Under dialogs (a Snackbar sits above them by default), over the canvas.
+      sx={{ bottom: { xs: 72, sm: 72 }, maxWidth: "calc(100vw - 32px)", zIndex: (theme) => theme.zIndex.modal - 1 }}
+    >
+      <Paper
+        elevation={3}
+        title={title}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0.75,
+          pl: 1.25,
+          pr: 0.5,
+          py: 0.25,
+          borderRadius: 999,
+          border: 1,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          color: "text.primary",
+          fontSize: "0.8rem",
+          minWidth: 0,
+        }}
+      >
+        {cloneElement(icon, { sx: { fontSize: 16, color: "error.main", flex: "none" } })}
+        <Box component="span" sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+          {text}
+        </Box>
+        <Button size="small" disabled={busy} onClick={onAction} sx={{ minWidth: 0, px: 1, py: 0, fontSize: "0.75rem", flex: "none" }}>
+          {action}
+        </Button>
+        <IconButton aria-label="Dismiss" size="small" onClick={onDismiss} sx={{ p: 0.25, color: "text.secondary", flex: "none" }}>
+          <CloseIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Paper>
+    </Snackbar>
+  );
 }

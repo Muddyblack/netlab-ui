@@ -1,4 +1,3 @@
-import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { Box, GlobalStyles } from "@mui/material";
 import "@fontsource/roboto/300.css";
 import "@fontsource/roboto/400.css";
@@ -9,6 +8,7 @@ import "highlight.js/styles/github-dark.css";
 
 import type { OpenWebTab } from "./lifecycle/types";
 import { LabHints } from "./components/LabHints";
+import { AppTheme } from "./AppTheme";
 import { StartupGate } from "./components/StartupGate";
 import { AppToolbarActions } from "./app/AppToolbarActions";
 import { AppCanvasArea } from "./components/app/AppCanvasArea";
@@ -96,7 +96,7 @@ export default function App() {
   );
 
   return (
-    <MuiThemeProvider>
+    <AppTheme>
       <GlobalStyles styles={PHONE_STYLES} />
       <GlobalStyles styles={TOUCH_STYLES} />
       {c.startup.status !== "ready" ? (
@@ -261,6 +261,6 @@ export default function App() {
           />
         </Box>
       )}
-    </MuiThemeProvider>
+    </AppTheme>
   );
 }

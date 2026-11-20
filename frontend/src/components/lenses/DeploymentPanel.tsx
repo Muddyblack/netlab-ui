@@ -23,6 +23,7 @@ import { useState } from "react";
 
 import type { DeploymentNodeDetail, DeploymentOverview } from "../../api/client";
 import { NodeSetChips } from "../common/NodeSetChips";
+import { statusText } from "../../theme";
 import { DeploymentLogDialog } from "./DeploymentLogDialog";
 
 const STATE_META: Record<string, { color: string; label: string }> = {
@@ -75,7 +76,7 @@ function StageTimeline({ deployment, onShowLog }: { deployment: DeploymentOvervi
               >
                 <Stack alignItems="center" spacing={0.4}>
                   <Box sx={{ width: 12, height: 12, borderRadius: "50%", bgcolor: color, boxShadow: active ? `0 0 0 4px ${alpha(color, 0.18)}` : "none" }} />
-                  <Typography variant="caption" sx={{ color, fontSize: "0.64rem", textAlign: "center", lineHeight: 1.15, whiteSpace: "nowrap" }}>{meta.label}</Typography>
+                  <Typography variant="caption" sx={{ color: statusText(color), fontSize: "0.64rem", textAlign: "center", lineHeight: 1.15, whiteSpace: "nowrap" }}>{meta.label}</Typography>
                 </Stack>
               </ButtonBase>
             </Tooltip>
@@ -95,7 +96,7 @@ function NodeInspector({ detail }: { detail: DeploymentNodeDetail }) {
     <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderLeft: `3px solid ${meta.color}` }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
         <Typography variant="subtitle2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{detail.node}</Typography>
-        <Chip size="small" variant="outlined" label={meta.label} sx={{ color: meta.color, borderColor: alpha(meta.color, 0.6), bgcolor: alpha(meta.color, 0.08) }} />
+        <Chip size="small" variant="outlined" label={meta.label} sx={{ color: statusText(meta.color), borderColor: alpha(meta.color, 0.6), bgcolor: alpha(meta.color, 0.08) }} />
       </Stack>
       {detail.currentTask && (
         <Box sx={{ mt: 1 }}>
@@ -123,7 +124,7 @@ function NodeInspector({ detail }: { detail: DeploymentNodeDetail }) {
           <Typography variant="overline" color="text.secondary">Recent activity</Typography>
           <Stack spacing={0.5} sx={{ mt: 0.25 }}>
             {events.map((event) => {
-              const eventColor = event.status === "failed" || event.status === "fatal" || event.status === "unreachable" ? STATE_META.failed.color : "text.secondary";
+              const eventColor = event.status === "failed" || event.status === "fatal" || event.status === "unreachable" ? statusText(STATE_META.failed.color) : "text.secondary";
               return (
                 <Box key={event.sequence} sx={{ px: 0.8, py: 0.55, borderRadius: 1, bgcolor: "action.hover", minWidth: 0 }}>
                   <Stack direction="row" justifyContent="space-between" spacing={1}>
@@ -203,7 +204,7 @@ function DeploymentStatusHeader({ deployment, loading, onRefresh, onRerun, onSho
   return (
     <Paper variant="outlined" sx={{ p: 1.25, borderRadius: 2, borderColor: alpha(statusColor, 0.45), bgcolor: alpha(statusColor, 0.07) }}>
       <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-        <StatusIcon sx={{ color: statusColor, fontSize: 21 }} />
+        <StatusIcon sx={{ color: statusText(statusColor), fontSize: 21 }} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{deployment.action ? `netlab ${deployment.action}` : "Deployment"}</Typography>
           <Typography variant="caption" color="text.secondary">
@@ -228,7 +229,7 @@ function DeploymentSummaryChips({ summaryEntries }: { summaryEntries: [string, n
     <Stack direction="row" gap={0.5} flexWrap="wrap">
       {summaryEntries.map(([state, count]) => {
         const meta = STATE_META[state];
-        return <Chip key={state} size="small" label={`${meta?.label ?? state} ${count}`} sx={{ color: meta?.color, borderColor: alpha(meta?.color ?? "#64748b", 0.55), bgcolor: alpha(meta?.color ?? "#64748b", 0.08) }} variant="outlined" />;
+        return <Chip key={state} size="small" label={`${meta?.label ?? state} ${count}`} sx={{ color: statusText(meta?.color ?? "#64748b"), borderColor: alpha(meta?.color ?? "#64748b", 0.55), bgcolor: alpha(meta?.color ?? "#64748b", 0.08) }} variant="outlined" />;
       })}
     </Stack>
   );
@@ -238,9 +239,9 @@ function FailedNodesCard({ failedNodes, onSelectNode }: { failedNodes: string[];
   const shownFailedNodes = failedNodes.slice(0, 200);
   return (
     <Paper variant="outlined" sx={{ p: 1.1, borderRadius: 2 }}>
-      <Typography variant="overline" sx={{ color: STATE_META.failed.color }}>Failed nodes · {failedNodes.length}</Typography>
+      <Typography variant="overline" sx={{ color: statusText(STATE_META.failed.color) }}>Failed nodes · {failedNodes.length}</Typography>
       <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
-        <NodeSetChips names={shownFailedNodes} onSelect={onSelectNode} sx={{ color: STATE_META.failed.color, borderColor: alpha(STATE_META.failed.color, 0.5) }} />
+        <NodeSetChips names={shownFailedNodes} onSelect={onSelectNode} sx={{ color: statusText(STATE_META.failed.color), borderColor: alpha(STATE_META.failed.color, 0.5) }} />
         {failedNodes.length > shownFailedNodes.length && <Chip size="small" label={`+${failedNodes.length - shownFailedNodes.length} more`} />}
       </Stack>
     </Paper>
