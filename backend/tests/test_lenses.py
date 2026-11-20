@@ -748,3 +748,20 @@ def test_validation_lens_overlays_run_results():
     failed = next(test for test in validation_lens["tests"] if test["name"] == "ping_core")
     assert failed["state"] == "failed"
     assert failed["evidence"] == ["FAIL: ping_core"]
+
+
+def test_empty_lab_gets_empty_lenses_without_running_netlab(tmp_path, monkeypatch):
+    """A new lab has no nodes; netlab would refuse it, so the lenses are empty instead of a failed request."""
+    import asyncio
+
+    from netlab_ui.services.lenses import service
+
+    async def no_netlab(_path):
+        raise AssertionError("netlab must not run for a topology without nodes")
+
+    monkeypatch.setattr(service.runner, "create", no_netlab)
+    path = tmp_path / "newlab" / "topology.yml"
+    path.parent.mkdir()
+    path.write_text("provider: clab\ndefaults:\n  device: frr\n")
+    bundle = asyncio.run(service.bundle_for(str(path), 3))
+    assert bundle["revision"] == 3 and bundle["services"] == []

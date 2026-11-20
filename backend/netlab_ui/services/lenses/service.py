@@ -22,11 +22,17 @@ def _source_document(path: Path) -> dict[str, Any]:
 async def bundle_for(topology_path: str, revision: int) -> dict[str, Any]:
     path = Path(topology_path)
     source_bytes = path.read_bytes()
-    artifact = await runner.create(path)
+    source = _source_document(path)
+    if not source.get("nodes"):
+        # A new, empty lab: netlab refuses a topology without nodes, which the canvas showed as a failed
+        # request. There is nothing to analyse yet, so the lenses are simply empty.
+        transformed: dict[str, Any] = {"name": source.get("name") or path.parent.name, "nodes": {}, "links": []}
+    else:
+        transformed = (await runner.create(path))["snapshot"]
     return build_bundle(
-        artifact["snapshot"],
+        transformed,
         revision=revision,
         source_hash=hashlib.sha256(source_bytes).hexdigest(),
-        source=_source_document(path),
+        source=source,
         validation_results=validation_results.current(topology_path),
     )
