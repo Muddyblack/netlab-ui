@@ -95,6 +95,9 @@ class IncludeRef:
 @dataclass
 class Topology:
     name: str = "lab"
+    # True when the file has no ``name:``. netlab then names the lab after its directory (see
+    # ``default_lab_name``), and saving must not write a ``name:`` that would change that.
+    name_implicit: bool = False
     provider: str | None = None
     defaults: dict[str, Any] = field(default_factory=dict)
     nodes: list[Node] = field(default_factory=list)
@@ -126,3 +129,15 @@ class Topology:
         (``defaults.device: linux``), which the parser keeps in ``attrs``."""
         value = self.defaults.get(key)
         return value if value is not None else self.attrs.get(f"defaults.{key}")
+
+
+def default_lab_name(topology_path: str) -> str:
+    """The name netlab gives a topology without ``name:``: its directory's name, letters and digits only
+    and no leading digits (netlab's ``make_id``, then underscores removed), at most 12 characters, ``default`` if
+    nothing is left."""
+    import os
+    import re
+
+    directory = os.path.basename(os.path.dirname(os.path.realpath(topology_path)))
+    ident = re.sub(r"^[0-9]*", "", re.sub(r"[^A-Za-z0-9_]", "_", directory))
+    return (ident.replace("_", "") or "default")[:12]
