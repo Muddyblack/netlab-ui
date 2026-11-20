@@ -1,4 +1,3 @@
-import { setSketchClient } from "../host/sketchStore";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsLocked, useNodes, useTopoViewerActions } from "@containerlab/clab-ui";
 import {
@@ -15,23 +14,9 @@ import {
   type TopologySessionClient,
   type TopologySnapshot,
 } from "@containerlab/clab-ui/session";
-import { createApiClabUiHost, type AppClabUiHost } from "../host/createHost";
-import { createDemoClabUiHost } from "../host/createDemoHost";
-import { clearDirCache } from "../host/fileProvider";
-import { type DeploymentProgress } from "../components/CanvasDeploymentProgress";
 import { api, HttpError, type AssistantCapabilities, type DeployDiffResult, type DeployPlan, type NetlabProjection } from "../api/client";
 import { DEMO_MODE, defaultRuntimeSnackbar, type OpenLabTab, type RuntimeSnackbarState, type WorkspaceEntry } from "../lifecycle/types";
-import { readLastOpenLabPath, readOpenTabSession, resolveOpenLabTab } from "../lifecycle/persistence";
-import { loadUserState } from "../api/userState";
-import { rememberAgents } from "../components/agents/agentNames";
-import { persistAgentsPanelOpen, readAgentsPanelOpen } from "../components/agents/preferences";
 import { matchesTerminalShortcut, quickOpenShortcut, terminalShortcutLabel, useTerminalShortcut } from "./terminalShortcut";
-import { useProposalWatcher } from "../components/agents/proposalsStore";
-import { useIsPhone } from "../hooks/useIsPhone";
-import { type SettingsTab } from "../components/dialogs/SettingsDialog";
-import type { TopologyRef } from "../hooks/useTabManager";
-import { runningLabMatches } from "../host/runningMatch";
-import { useAgentGuide } from "./useAgentGuide";
 
 import {
   useAppData,
@@ -65,6 +50,25 @@ import {
   registerWebTabOpener,
   openPanelTab,
   requestCopyLab,
+  setSketchClient,
+  createApiClabUiHost,
+  type AppClabUiHost,
+  createDemoClabUiHost,
+  clearDirCache,
+  type DeploymentProgress,
+  readLastOpenLabPath,
+  readOpenTabSession,
+  resolveOpenLabTab,
+  loadUserState,
+  rememberAgents,
+  persistAgentsPanelOpen,
+  readAgentsPanelOpen,
+  useProposalWatcher,
+  useIsPhone,
+  type SettingsTab,
+  type TopologyRef,
+  runningLabMatches,
+  useAgentGuide
 } from "./appControllerDeps";
 
 type Toast = (message: string, severity?: RuntimeSnackbarState["severity"]) => void;

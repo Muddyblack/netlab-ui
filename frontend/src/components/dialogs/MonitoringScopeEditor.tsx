@@ -161,6 +161,29 @@ function useScopeEditor(sessionId: string, enabled: boolean, onChanged: () => vo
 }
 
 /** Which nodes monitoring covers. Click a node to cycle it; selectors are under "Advanced". */
+/** Apply (a running stack restarts with the new scope) or save for the next deploy, or revert the edit. */
+function ScopeSaveButtons({ canApply, blocked, busy, onSave, onRevert }: {
+  canApply: boolean;
+  blocked: boolean;
+  busy: boolean;
+  onSave: (apply: boolean) => void;
+  onRevert?: () => void;
+}) {
+  return (
+    <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+      <Tooltip title={canApply ? "Restarts monitoring (about 15 s); the lab is untouched." : "Takes effect on the next deploy."}>
+        <span>
+          <Button size="small" variant="contained" disabled={blocked} onClick={() => onSave(canApply)}>
+            {canApply ? "Apply" : "Save"}
+          </Button>
+        </span>
+      </Tooltip>
+      {canApply && <Button size="small" disabled={blocked} onClick={() => onSave(false)}>Save only</Button>}
+      {onRevert && <Button size="small" color="inherit" disabled={busy} onClick={onRevert}>Revert</Button>}
+    </Stack>
+  );
+}
+
 export function MonitoringScopeEditor({ sessionId, enabled, onChanged }: {
   sessionId: string;
   enabled: boolean;
@@ -220,19 +243,13 @@ export function MonitoringScopeEditor({ sessionId, enabled, onChanged }: {
       </Typography>
       <Messages problem={problem} shown={shown} notes={notes} />
       {dirty && (
-        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-          <Tooltip title={canApply ? "Restarts monitoring (about 15 s); the lab is untouched." : "Takes effect on the next deploy."}>
-            <span>
-              <Button size="small" variant="contained" disabled={blocked} onClick={() => void save(canApply)}>
-                {canApply ? "Apply" : "Save"}
-              </Button>
-            </span>
-          </Tooltip>
-          {canApply && (
-            <Button size="small" disabled={blocked} onClick={() => void save(false)}>Save only</Button>
-          )}
-          {saved && <Button size="small" color="inherit" disabled={busy} onClick={() => setDraft(toDraft(saved))}>Revert</Button>}
-        </Stack>
+        <ScopeSaveButtons
+          canApply={canApply}
+          blocked={blocked}
+          busy={busy}
+          onSave={(apply) => void save(apply)}
+          onRevert={saved ? () => setDraft(toDraft(saved)) : undefined}
+        />
       )}
       <Box sx={{ mt: 1.5 }}>
         <Link component="button" type="button" variant="caption" underline="hover" onClick={() => setAdvanced((open) => !open)}>

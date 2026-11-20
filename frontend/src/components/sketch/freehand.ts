@@ -1,4 +1,5 @@
 import * as clabUi from "@containerlab/clab-ui";
+import { getStroke } from "perfect-freehand";
 
 /** One pen stroke in flow coordinates, while it is being drawn or rendered for the agent. */
 export interface Stroke {
@@ -94,3 +95,20 @@ export function strokeOfNode(node: CanvasNode): Stroke {
 
 export const distToStroke = (stroke: Stroke, x: number, y: number): number =>
   stroke.points.reduce((best, [px, py]) => Math.min(best, Math.hypot(px - x, py - y)), Infinity);
+
+const OUTLINE = { thinning: 0.6, smoothing: 0.5, streamline: 0.5 } as const;
+
+/** The SVG path of a stroke's outline (perfect-freehand), with rounded corners. */
+export function pathOf(stroke: Stroke, last: boolean): string {
+  const outline = getStroke(stroke.points, { ...OUTLINE, size: stroke.size, simulatePressure: false, last });
+  if (outline.length < 2) return "";
+  const [first, ...rest] = outline;
+  // Quadratic midpoints round the polygon's corners; straight segments leave visible facets on a slow stroke.
+  let d = `M${first[0].toFixed(1)},${first[1].toFixed(1)}`;
+  for (let i = 0; i < rest.length; i++) {
+    const [x0, y0] = rest[i];
+    const [x1, y1] = rest[(i + 1) % rest.length];
+    d += `Q${x0.toFixed(1)},${y0.toFixed(1)} ${((x0 + x1) / 2).toFixed(1)},${((y0 + y1) / 2).toFixed(1)}`;
+  }
+  return `${d}Z`;
+}
