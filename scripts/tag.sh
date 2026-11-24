@@ -110,7 +110,7 @@ back_out() {
     if (( rc != 0 )); then
         echo "" >&2
         echo "Release aborted; going back to ${START_BRANCH:-the previous branch}." >&2
-        git checkout -- "$VERSION_FILE" 2>/dev/null || true
+        git restore --staged --worktree -- "$VERSION_FILE" 2>/dev/null || true
         [[ -n "$START_BRANCH" ]] && git switch "$START_BRANCH" 2>/dev/null || true
         git branch -D "$RELEASE_BRANCH" >/dev/null 2>&1 || true
     fi
