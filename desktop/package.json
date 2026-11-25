@@ -21,9 +21,9 @@
     "build:win": "electron-builder --win"
   },
   "devDependencies": {
-    "electron": "^45.3.2",
+    "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
-    "oxlint": "^1.93.0"
+    "oxlint": "^1.94.0"
   },
   "overrides": {
     "app-builder-lib": {
