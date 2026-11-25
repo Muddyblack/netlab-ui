@@ -84,7 +84,7 @@ export function LabHints({ sessionId, openTabs, activeTabId, workspaces, setWork
       <HintPill
         icon={<FolderOffOutlinedIcon />}
         text="Read-only: outside your workspaces"
-        title="The backend only writes inside a workspace. Add this lab's folder as one to edit it here."
+        title="netlab-ui only writes inside your workspaces. Add this lab's folder as one to edit it here (or remove it again later in Settings → Workspaces)."
         action="Add folder"
         busy={busy}
         onAction={() => void addWorkspace()}

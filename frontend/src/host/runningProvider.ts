@@ -94,6 +94,16 @@ function ownershipText(
   };
 }
 
+/** Lab files are listed from the workspaces only, so a running lab without one was
+ * started from a folder outside all of them. Say so before it is opened. */
+function outsideText(knownFile: LabFileEntry | undefined, directory: string): { badge: string; line: string } {
+  if (knownFile || !directory) return { badge: "", line: "" };
+  return {
+    badge: "not in a workspace",
+    line: "\nNot in a workspace: opening it adds this folder as one (view-only when several users share this netlab-ui)",
+  };
+}
+
 function buildRunningLabNode(
   labKey: string,
   labInfo: RunningLabsStatus[string],
@@ -144,11 +154,13 @@ function buildRunningLabNode(
   const labStatus = labInfo.status || "Unknown status";
   const ownership = ownershipText(labInfo, knownFile, label);
   const { badges, ownerLine } = ownership;
+  const outside = outsideText(knownFile, directory);
   return {
     id: `running-lab:local:${labName}`,
-    label: ownership.label,
-    description: [badges, noContainers ? `no containers — ${labStatus}` : directory].filter(Boolean).join(" · "),
-    tooltip: `${labStatus}\n${directory}${ownerLine}`,
+    // Like the ownership badges, it has to ride in the label to be seen.
+    label: [ownership.label, outside.badge].filter(Boolean).join(" · "),
+    description: [badges, outside.badge, noContainers ? `no containers — ${labStatus}` : directory].filter(Boolean).join(" · "),
+    tooltip: `${labStatus}\n${directory}${ownerLine}${outside.line}`,
     contextValue: "containerlabLabDeployed",
     endpointId: "local",
     collapsibleState: nodes.length > 0 ? 1 : 0,
