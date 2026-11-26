@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from netlab_ui.app.contract import snapshot
+from netlab_ui.app.lab import common
 from netlab_ui.app.main import app
 from netlab_ui.services import annotations as ann_store
 from netlab_ui.services.model import serialize
@@ -162,7 +163,34 @@ def test_snapshot_serves_fixture_when_empty(client, topo_path, monkeypatch):
     assert "yamlContent" in snap and "annotations" in snap
 
 
-def test_a_running_lab_outside_the_workspaces_opens_for_viewing_only(client, topo_path, tmp_path, monkeypatch):
+def test_opening_a_running_lab_outside_the_workspaces_adds_its_folder(client, topo_path, tmp_path, monkeypatch):
+    elsewhere = tmp_path.parent / f"{tmp_path.name}-adopted"
+    elsewhere.mkdir()
+    path = str(elsewhere / "topology.yml")
+    (elsewhere / "topology.yml").write_text("name: away\nnodes: [r1]\n")
+
+    async def registry():
+        return {"away": {"name": "away", "dir": str(elsewhere), "status": "Running"}}
+
+    monkeypatch.setattr(runner, "status_cached", registry)
+    # Reading a file of it does not add anything; opening the lab does.
+    assert client.get("/api/runtime/file-explorer/file", params={"path": path}).status_code == 200
+    assert str(elsewhere) not in [w["path"] for w in client.get("/api/lab/workspaces").json()["workspaces"]]
+    res = client.post("/api/topology/sessions", json={"topologyPath": path, "mode": "edit"})
+    assert res.status_code == 200 and res.json()["mode"] == "edit"
+    assert str(elsewhere.resolve()) in [w["path"] for w in client.get("/api/lab/workspaces").json()["workspaces"]]
+    move = {"type": "move", "id": "r1", "position": {"x": 1, "y": 1}}
+    assert (
+        client.post("/api/topology/command", json={"sessionId": res.json()["sessionId"], "command": move}).status_code
+        == 200
+    )
+    assert (
+        client.put("/api/runtime/file-explorer/file", json={"path": path, "content": "name: away\n"}).status_code == 200
+    )
+
+
+def test_a_running_lab_outside_the_workspaces_is_view_only_for_several_users(client, topo_path, tmp_path, monkeypatch):
+    monkeypatch.setattr(common, "adopts_running_labs", lambda: False)  # several users log in
     elsewhere = tmp_path.parent / f"{tmp_path.name}-elsewhere"
     elsewhere.mkdir()
     (elsewhere / "topology.yml").write_text("name: away\nnodes: [r1]\n")
@@ -1354,3 +1382,12 @@ def test_resolved_placement_honors_server_id_in_template(client, topo_path):
     body = client.get(f"/api/topology/multiserver?sessionId={sid}").json()
     placement = {s["name"]: s["resolvedNodes"] for s in body["servers"]}
     assert placement == {"alpha": ["s1"], "beta": ["s2"]}
+
+
+def test_running_labs_are_adopted_unless_several_users_log_in(monkeypatch):
+    monkeypatch.setattr(common.auth, "configured_users", lambda: {})
+    assert common.adopts_running_labs()
+    monkeypatch.setattr(common.auth, "configured_users", lambda: {"admin": "pw"})
+    assert common.adopts_running_labs()
+    monkeypatch.setattr(common.auth, "configured_users", lambda: {"alice": "a", "bob": "b"})
+    assert not common.adopts_running_labs()

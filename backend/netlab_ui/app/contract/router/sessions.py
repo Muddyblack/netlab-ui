@@ -40,8 +40,9 @@ async def create_session(body: CreateSession):
     # unit library) derives its paths from `session.topology_path`. Pin it to a
     # configured workspace here so no later writer has to re-validate. The one
     # exception is a lab netlab is running (listed under "Running Labs"): it opens
-    # wherever it lives, but only for viewing.
-    path, in_workspace = await common.resolve_openable_path(body.topologyPath)
+    # wherever it lives. Its folder becomes a workspace (editable) unless several
+    # users share this netlab-ui, in which case it opens for viewing only.
+    path, in_workspace = await common.resolve_openable_path(body.topologyPath, adopt=True)
     session = store.create(str(path), body.mode if in_workspace else "view")
     return {"sessionId": session.id, "topologyRef": session.topology_path, "mode": session.mode}
 
@@ -101,7 +102,9 @@ async def apply_command(body: CommandRequest):
     session = session_or_404(body.sessionId)
     if session.mode == "view":
         raise HTTPException(
-            403, "this lab is outside your workspaces and open for viewing only; copy it into a workspace to edit it"
+            403,
+            "this lab is outside your workspaces and open for viewing only; to edit it, add its folder as a "
+            "workspace (Add folder in the hint above the canvas, or Settings → Workspaces) or copy it into one",
         )
 
     # Route through the per-session host: it owns undo/redo history + revision,

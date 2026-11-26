@@ -7,7 +7,9 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
+from netlab_ui.app import auth
 from netlab_ui.app.sessions.store import store
+from netlab_ui.services import events
 from netlab_ui.services import workspaces as ws_store
 from netlab_ui.services.netlab import runner
 
@@ -50,13 +52,26 @@ def resolve_workspace_path(path: str) -> Path:
     raise HTTPException(403, "path is outside the configured workspaces")
 
 
-async def resolve_openable_path(path: str) -> tuple[Path, bool]:
+def adopts_running_labs() -> bool:
+    """Does opening a running lab outside every workspace make its folder a workspace?
+
+    Yes, unless several people log in to this netlab-ui. The folder is one the user
+    already ran ``netlab up`` in, so editing it there is what they expect; the list of
+    workspaces is shared by everyone, though, so with several users a lab someone else
+    started stays view-only until somebody adds its folder on purpose (one click, the
+    hint above the canvas)."""
+    return len(auth.configured_users()) <= 1
+
+
+async def resolve_openable_path(path: str, *, adopt: bool = False) -> tuple[Path, bool]:
     """Like :func:`resolve_workspace_path`, but a lab netlab itself is running may be
     opened wherever it lives. Returns ``(path, inside_workspace)``.
 
     Running labs come from netlab's own registry (``netlab status --all``), so the
     directory is one this user already started a lab in, never a client-supplied
-    root. The caller opens such a lab read-only (see ``create_session``).
+    root. With ``adopt`` (opening the lab, see ``create_session``) and
+    :func:`adopts_running_labs`, that directory is added as a workspace and the lab
+    is editable; otherwise the caller opens it read-only.
     """
     target = os.path.normpath(os.path.realpath(os.path.expanduser(path)))
     for ws in ws_store.load():
@@ -74,6 +89,11 @@ async def resolve_openable_path(path: str) -> tuple[Path, bool]:
             continue  # realpath("") would be the working directory
         base = os.path.normpath(os.path.realpath(os.path.expanduser(str(lab["dir"]))))
         if target == base or target.startswith(base + os.sep):
+            if adopt and adopts_running_labs():
+                ws_store.add(base)
+                events.poke_watcher()
+                events.hub.publish({"type": "workspaces"})
+                return Path(target), True
             return Path(target), False
     raise HTTPException(403, "path is outside the configured workspaces")
 
